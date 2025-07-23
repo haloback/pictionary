@@ -1,46 +1,123 @@
-# Getting Started with Create React App
+# 🎨 Ultimate Asynchronous Pictionary Web App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern, mobile-responsive Pictionary game where players can draw and guess asynchronously. One player draws, shares a unique link, and the other player guesses whenever convenient!
 
-## Available Scripts
+## ✨ Features
 
-In the project directory, you can run:
+- **Asynchronous Gameplay**: Players don't need to be online at the same time
+- **Unique Shareable Links**: Each game gets a unique URL to share
+- **Multi-Input Drawing**: Support for touch (mobile) and mouse (desktop)
+- **200+ Words**: Physical objects across 3 difficulty levels
+- **Game Modes**: 
+  - 🏆 Best of X (3, 5, 7, or 9 rounds)
+  - 🪙 Wager Mode (bet coins on drawings)
+- **Modern UI**: Bright gradients, smooth animations, and clean design
+- **Score Tracking**: Real-time score display for both players
+- **Auto-Complete**: Suggestions while guessing
+- **Mobile Responsive**: Works perfectly on all devices
 
-### `npm start`
+## 🚀 Getting Started
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Prerequisites
+- Node.js (v14 or higher)
+- npm or yarn
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### Installation
 
-### `npm test`
+1. Clone the repository:
+```bash
+git clone [your-repo-url]
+cd pictionary-app
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+2. Install dependencies:
+```bash
+npm install
+```
 
-### `npm run build`
+3. Start the development server:
+```bash
+npm start
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 🎮 How to Play
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. **Player 1 (Drawer)**:
+   - Enter your name
+   - Choose game mode and difficulty
+   - Draw the given word
+   - Share the generated link with your friend
 
-### `npm run eject`
+2. **Player 2 (Guesser)**:
+   - Open the shared link
+   - Enter your name
+   - View the drawing and make guesses (max 5 attempts)
+   - See if you guessed correctly!
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## 🛠 Tech Stack
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- **Frontend**: React with TypeScript
+- **Styling**: CSS with modern gradients and animations
+- **State Management**: Zustand with persistence
+- **Routing**: React Router
+- **Animations**: Framer Motion
+- **Drawing**: HTML5 Canvas API
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## 📱 Features in Detail
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+### Drawing Tools
+- Multiple brush sizes (thin, medium, thick)
+- 6 color palette
+- Undo functionality
+- Clear canvas option
+- 2-minute timer
 
-## Learn More
+### Game Features
+- Local storage persistence
+- Game history tracking
+- Player statistics
+- Share via WhatsApp or Email
+- Copy link to clipboard
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## 🏗 Project Structure
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```
+src/
+├── components/
+│   ├── Canvas/         # Drawing canvas component
+│   └── UI/            # ShareLink, ScoreBoard components
+├── pages/             # Main app pages
+├── store/             # Zustand store
+├── types/             # TypeScript interfaces
+├── utils/             # Word bank and utilities
+└── styles/            # CSS files
+```
+
+## 📝 Available Scripts
+
+- `npm start` - Run development server
+- `npm build` - Build for production
+- `npm test` - Run tests
+- `npm eject` - Eject from Create React App
+
+## 🎨 Customization
+
+You can customize:
+- Word bank in `src/utils/wordBank.ts`
+- Colors and styling in CSS files
+- Game modes in `src/store/gameStore.ts`
+- Drawing tools in `src/components/Canvas/DrawingCanvas.tsx`
+
+## 📄 License
+
+This project is private and proprietary.
+
+## 🤝 Contributing
+
+This is a private repository. Please contact the owner for contribution guidelines.
+
+---
+
+Built with ❤️ using React and TypeScript
