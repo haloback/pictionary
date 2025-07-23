@@ -1,0 +1,135 @@
+.share-link-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.share-link-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 30px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  color: white;
+  text-align: center;
+}
+
+.share-link-card h2 {
+  margin: 0 0 20px 0;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.share-link-card p {
+  margin: 0 0 30px 0;
+  font-size: 18px;
+  opacity: 0.95;
+}
+
+.link-box {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 15px;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.link-input {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 15px;
+  font-size: 16px;
+  background: white;
+  color: #333;
+  font-family: monospace;
+}
+
+.copy-button {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  border-radius: 15px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.copy-button.copied {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.share-options {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.share-button {
+  padding: 14px 28px;
+  border: none;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white;
+}
+
+.share-button.whatsapp {
+  background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+}
+
+.share-button.email {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.continue-button {
+  padding: 16px 40px;
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+  .share-link-card {
+    padding: 30px 20px;
+  }
+  
+  .share-link-card h2 {
+    font-size: 24px;
+  }
+  
+  .link-box {
+    flex-direction: column;
+  }
+  
+  .share-options {
+    flex-direction: column;
+  }
+  
+  .share-button {
+    width: 100%;
+  }
+}

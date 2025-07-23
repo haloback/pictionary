@@ -1,0 +1,115 @@
+.scoreboard {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 25px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin-bottom: 20px;
+}
+
+.scoreboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.round-info {
+  text-align: center;
+  color: white;
+}
+
+.round-label {
+  font-size: 16px;
+  opacity: 0.9;
+  margin-right: 10px;
+}
+
+.round-count {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.players-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+}
+
+.player-card {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 20px;
+  min-width: 150px;
+  text-align: center;
+  color: white;
+}
+
+.player-card.player1 {
+  border: 3px solid #4ecdc4;
+}
+
+.player-card.player2 {
+  border: 3px solid #f093fb;
+}
+
+.player-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.player-coins,
+.player-wins {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 20px;
+}
+
+.coin-icon {
+  font-size: 24px;
+  animation: coin-spin 3s linear infinite;
+}
+
+@keyframes coin-spin {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+.coin-amount,
+.wins-count {
+  font-weight: 700;
+  font-size: 24px;
+}
+
+.wins-label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.vs-divider {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .players-score {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .player-card {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .vs-divider {
+    transform: rotate(90deg);
+    margin: 10px 0;
+  }
+}
