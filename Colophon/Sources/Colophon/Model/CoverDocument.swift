@@ -1,0 +1,399 @@
+import CoreGraphics
+import Foundation
+
+enum Genre: String, Codable, CaseIterable, Identifiable {
+    case thriller, mystery, horror, romance, fantasy, scienceFiction, literary, historical, youngAdult, cozy, nonfiction, memoir
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .thriller: return "Thriller"
+        case .mystery: return "Mystery & Crime"
+        case .horror: return "Horror"
+        case .romance: return "Romance"
+        case .fantasy: return "Fantasy"
+        case .scienceFiction: return "Science Fiction"
+        case .literary: return "Literary Fiction"
+        case .historical: return "Historical"
+        case .youngAdult: return "Young Adult"
+        case .cozy: return "Cozy & Women's Fiction"
+        case .nonfiction: return "Nonfiction"
+        case .memoir: return "Memoir"
+        }
+    }
+}
+
+struct BookInfo: Codable, Hashable {
+    var title: String = ""
+    var subtitle: String = ""
+    var author: String = ""
+    var series: String = ""
+    var tagline: String = ""
+    var genre: Genre = .literary
+}
+
+struct CanvasSpec: Codable, Hashable {
+    var width: Int = 1600
+    var height: Int = 2560
+
+    /// height / width. Kindle's ideal is 1.6.
+    var aspect: Double { Double(height) / Double(max(1, width)) }
+    var size: CGSize { CGSize(width: width, height: height) }
+}
+
+enum BlendMode: String, Codable, CaseIterable, Identifiable {
+    case normal, multiply, screen, overlay, softLight, hardLight, colorDodge, colorBurn
+    case darken, lighten, difference, exclusion, hue, saturation, color, luminosity
+
+    var id: String { rawValue }
+
+    var cg: CGBlendMode {
+        switch self {
+        case .normal: return .normal
+        case .multiply: return .multiply
+        case .screen: return .screen
+        case .overlay: return .overlay
+        case .softLight: return .softLight
+        case .hardLight: return .hardLight
+        case .colorDodge: return .colorDodge
+        case .colorBurn: return .colorBurn
+        case .darken: return .darken
+        case .lighten: return .lighten
+        case .difference: return .difference
+        case .exclusion: return .exclusion
+        case .hue: return .hue
+        case .saturation: return .saturation
+        case .color: return .color
+        case .luminosity: return .luminosity
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .softLight: return "Soft Light"
+        case .hardLight: return "Hard Light"
+        case .colorDodge: return "Color Dodge"
+        case .colorBurn: return "Color Burn"
+        default: return rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+        }
+    }
+}
+
+enum FadeEdge: String, Codable, CaseIterable, Identifiable {
+    case none, top, bottom, left, right, topAndBottom, vignette
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .none: return "None"
+        case .top: return "Fade Top"
+        case .bottom: return "Fade Bottom"
+        case .left: return "Fade Left"
+        case .right: return "Fade Right"
+        case .topAndBottom: return "Fade Top & Bottom"
+        case .vignette: return "Soft Oval"
+        }
+    }
+}
+
+struct ShadowStyle: Codable, Hashable {
+    var color = RGBA(0, 0, 0, 0.55)
+    /// Blur radius as a fraction of canvas height.
+    var radius: Double = 0.012
+    var dx: Double = 0
+    var dy: Double = 0.004
+}
+
+enum Cutout: String, Codable, CaseIterable, Identifiable {
+    case none, subject, background
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .none: return "Whole Image"
+        case .subject: return "Subject Only"
+        case .background: return "Background Only"
+        }
+    }
+}
+
+enum ShapeKind: String, Codable, CaseIterable, Identifiable {
+    case rectangle, roundedRect, ellipse, arch, diamond, triangle, hexagon, rule, frame, diagonalBand, ring, chevron
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .rectangle: return "Rectangle"
+        case .roundedRect: return "Rounded Rectangle"
+        case .ellipse: return "Circle / Oval"
+        case .arch: return "Arch"
+        case .diamond: return "Diamond"
+        case .triangle: return "Triangle"
+        case .hexagon: return "Hexagon"
+        case .rule: return "Rule"
+        case .frame: return "Frame"
+        case .diagonalBand: return "Diagonal Band"
+        case .ring: return "Ring"
+        case .chevron: return "Chevron"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .rectangle: return "rectangle"
+        case .roundedRect: return "rectangle.roundedtop"
+        case .ellipse: return "circle"
+        case .arch: return "door.left.hand.closed"
+        case .diamond: return "diamond"
+        case .triangle: return "triangle"
+        case .hexagon: return "hexagon"
+        case .rule: return "minus"
+        case .frame: return "square.dashed"
+        case .diagonalBand: return "line.diagonal"
+        case .ring: return "circle.circle"
+        case .chevron: return "chevron.down"
+        }
+    }
+    /// Shapes that make sense as a window to cut an image into.
+    static let clipShapes: [ShapeKind] = [.rectangle, .roundedRect, .ellipse, .arch, .diamond, .hexagon, .triangle]
+}
+
+struct ImageContent: Codable, Hashable {
+    var assetID: UUID
+    var cutout: Cutout = .none
+    /// 1 = aspect-fill the frame. Larger values crop in.
+    var zoom: Double = 1
+    /// Which part of the image stays visible when cropped (0...1).
+    var focusX: Double = 0.5
+    var focusY: Double = 0.5
+    var flipped: Bool = false
+}
+
+enum FillStyle: String, Codable, CaseIterable, Identifiable {
+    case solid, linear, radial, meshBlend, paintSmear, watercolor, smoke, marble, grain
+    case sunburst, stripes, bokeh, starfield, bauhaus, goldenBlocks, halftone, scrim
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .solid: return "Solid"
+        case .linear: return "Linear Blend"
+        case .radial: return "Radial Glow"
+        case .meshBlend: return "Mesh Blend"
+        case .paintSmear: return "Paint Smear"
+        case .watercolor: return "Watercolor"
+        case .smoke: return "Smoke"
+        case .marble: return "Marble"
+        case .grain: return "Grained Color"
+        case .sunburst: return "Sunburst"
+        case .stripes: return "Stripes"
+        case .bokeh: return "Bokeh"
+        case .starfield: return "Starfield"
+        case .bauhaus: return "Bauhaus Shapes"
+        case .goldenBlocks: return "Golden Blocks"
+        case .halftone: return "Halftone"
+        case .scrim: return "Legibility Scrim"
+        }
+    }
+}
+
+struct FillContent: Codable, Hashable {
+    var style: FillStyle
+    var colors: [RGBA]
+    /// Direction in degrees. 90 points down (darker at the bottom for scrims).
+    var angle: Double = 90
+    var seed: Int = 7
+    /// Style-specific amount: smear length, stripe width, scrim strength...
+    var intensity: Double = 0.5
+}
+
+struct ShapeContent: Codable, Hashable {
+    var kind: ShapeKind
+    var fill: RGBA?
+    var stroke: RGBA?
+    /// Stroke width as a fraction of canvas width.
+    var strokeWidth: Double = 0.004
+    /// Corner radius as a fraction of the shorter side.
+    var cornerRadius: Double = 0.08
+}
+
+enum TextRole: String, Codable, CaseIterable, Identifiable {
+    case title, subtitle, author, series, tagline, custom
+    var id: String { rawValue }
+    var label: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+    /// Contrast a role needs: titles are large type (3:1), small lines need 4.5:1.
+    var minimumContrast: Double {
+        switch self {
+        case .title: return 3.0
+        default: return 4.5
+        }
+    }
+}
+
+enum TextAlign: String, Codable, CaseIterable, Identifiable {
+    case left, center, right
+    var id: String { rawValue }
+}
+
+enum LetterCase: String, Codable, CaseIterable, Identifiable {
+    case asTyped, upper, lower, title
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .asTyped: return "As Typed"
+        case .upper: return "UPPERCASE"
+        case .lower: return "lowercase"
+        case .title: return "Title Case"
+        }
+    }
+}
+
+struct TextContent: Codable, Hashable {
+    var text: String
+    var role: TextRole = .custom
+    var fontName: String = "Didot"
+    /// Used when autoFit is off: font size as a fraction of canvas height.
+    var fontSize: Double = 0.05
+    /// Scale the type to fill its frame exactly.
+    var autoFit: Bool = true
+    /// Letter spacing in ems.
+    var tracking: Double = 0
+    /// Baseline-to-baseline distance in ems.
+    var lineHeight: Double = 1.04
+    var alignment: TextAlign = .center
+    var letterCase: LetterCase = .asTyped
+    var color: RGBA = .nearWhite
+    var gradientTo: RGBA?
+    var strokeColor: RGBA?
+    /// Stroke width as a fraction of the font size.
+    var strokeWidth: Double = 0.025
+    var glowColor: RGBA?
+    /// Glow radius as a fraction of the font size.
+    var glowRadius: Double = 0.25
+    /// Re-draws the photo's subject over the text so the type sits behind it.
+    var behindSubject: Bool = false
+}
+
+enum LayerContent: Codable, Hashable {
+    case image(ImageContent)
+    case fill(FillContent)
+    case shape(ShapeContent)
+    case text(TextContent)
+}
+
+struct EffectInstance: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var presetID: String
+    var amount: Double = 1
+}
+
+struct Layer: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var name: String
+    var content: LayerContent
+    var frame: NRect = .full
+    var rotation: Double = 0
+    var opacity: Double = 1
+    var blend: BlendMode = .normal
+    var isVisible: Bool = true
+    var isLocked: Bool = false
+    /// Cut the layer into a shape: arch windows, circular medallions, diamonds...
+    var clipShape: ShapeKind?
+    var fade: FadeEdge = .none
+    var fadeAmount: Double = 0.35
+    var shadow: ShadowStyle?
+    var effects: [EffectInstance] = []
+
+    var textContent: TextContent? {
+        get { if case .text(let t) = content { return t }; return nil }
+        set { if let n = newValue { content = .text(n) } }
+    }
+
+    var imageContent: ImageContent? {
+        get { if case .image(let i) = content { return i }; return nil }
+        set { if let n = newValue { content = .image(n) } }
+    }
+
+    var fillContent: FillContent? {
+        get { if case .fill(let f) = content { return f }; return nil }
+        set { if let n = newValue { content = .fill(n) } }
+    }
+
+    var shapeContent: ShapeContent? {
+        get { if case .shape(let s) = content { return s }; return nil }
+        set { if let n = newValue { content = .shape(n) } }
+    }
+
+    var kindSymbol: String {
+        switch content {
+        case .image(let i): return i.cutout == .subject ? "person.crop.rectangle" : "photo"
+        case .fill: return "paintbrush.pointed"
+        case .shape(let s): return s.kind.symbol
+        case .text: return "textformat"
+        }
+    }
+
+    var kindLabel: String {
+        switch content {
+        case .image: return "Image"
+        case .fill(let f): return f.style.label
+        case .shape(let s): return s.kind.label
+        case .text(let t): return t.role.label
+        }
+    }
+
+    static func text(_ text: String, role: TextRole, frame: NRect, font: String, color: RGBA) -> Layer {
+        Layer(name: role.label, content: .text(TextContent(text: text, role: role, fontName: font, color: color)), frame: frame)
+    }
+
+    static func image(_ id: UUID, frame: NRect = .full, name: String = "Photo") -> Layer {
+        Layer(name: name, content: .image(ImageContent(assetID: id)), frame: frame)
+    }
+
+    static func fill(_ style: FillStyle, colors: [RGBA], frame: NRect = .full, angle: Double = 90, seed: Int = 7, intensity: Double = 0.5) -> Layer {
+        Layer(name: style.label, content: .fill(FillContent(style: style, colors: colors, angle: angle, seed: seed, intensity: intensity)), frame: frame)
+    }
+
+    static func shape(_ kind: ShapeKind, fill: RGBA?, stroke: RGBA? = nil, strokeWidth: Double = 0.004, frame: NRect) -> Layer {
+        Layer(name: kind.label, content: .shape(ShapeContent(kind: kind, fill: fill, stroke: stroke, strokeWidth: strokeWidth)), frame: frame)
+    }
+}
+
+struct CoverDocument: Codable {
+    var version: Int = 1
+    var book = BookInfo()
+    var canvas = CanvasSpec()
+    var background = RGBA.ink
+    /// Bottom to top.
+    var layers: [Layer] = []
+    /// Encoded images keyed by UUID string. Imports are downsampled to 4000px.
+    var assets: [String: Data] = [:]
+    /// Order of imported images, so "the first photo" is stable.
+    var assetOrder: [UUID] = []
+    /// The colors this design is built from.
+    var palette: [RGBA] = []
+    var archetypeName: String = ""
+
+    func assetData(_ id: UUID) -> Data? { assets[id.uuidString] }
+
+    mutating func addAsset(_ data: Data) -> UUID {
+        let id = UUID()
+        assets[id.uuidString] = data
+        assetOrder.append(id)
+        return id
+    }
+
+    func index(of id: UUID) -> Int? { layers.firstIndex { $0.id == id } }
+
+    func layer(_ id: UUID?) -> Layer? {
+        guard let id else { return nil }
+        return layers.first { $0.id == id }
+    }
+
+    func textLayer(role: TextRole) -> Layer? {
+        layers.last { $0.textContent?.role == role }
+    }
+
+    /// Image layers that are the "main photo" (not cutouts), bottom first.
+    var photoLayers: [Layer] {
+        layers.filter { $0.imageContent != nil && $0.imageContent?.cutout == Cutout.none }
+    }
+}

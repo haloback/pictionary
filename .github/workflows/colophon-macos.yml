@@ -1,0 +1,35 @@
+name: Colophon (macOS app)
+
+on:
+  push:
+    paths:
+      - "Colophon/**"
+      - ".github/workflows/colophon-macos.yml"
+  pull_request:
+    paths:
+      - "Colophon/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: Colophon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -c release
+      - name: Test
+        run: swift test
+      - name: Package Colophon.app
+        run: |
+          chmod +x scripts/make-app.sh
+          scripts/make-app.sh release
+          cd build && ditto -c -k --keepParent Colophon.app Colophon.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Colophon-macOS
+          path: Colophon/build/Colophon.zip
