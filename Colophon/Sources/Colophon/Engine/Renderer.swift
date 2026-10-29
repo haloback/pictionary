@@ -107,7 +107,7 @@ final class CoverRenderer {
         case .shape(let s):
             image = ShapeRenderer.render(s, size: CGSize(width: w, height: h), canvasWidth: canvas.width)
         case .text(let t):
-            if let (img, p) = TextRenderer.render(t, box: CGSize(width: w, height: h), canvasHeight: canvas.height) {
+            if case let (img, p)? = TextRenderer.render(t, box: CGSize(width: w, height: h), canvasHeight: canvas.height) {
                 image = img
                 pad = p
             }

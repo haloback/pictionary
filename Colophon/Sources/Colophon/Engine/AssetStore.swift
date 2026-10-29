@@ -36,7 +36,7 @@ final class AssetStore {
         let out = NSMutableData()
         let alphaless: [CGImageAlphaInfo] = [.none, .noneSkipFirst, .noneSkipLast]
         let type = alphaless.contains(img.alphaInfo) ? UTType.jpeg : UTType.png
-        guard let dest = CGImageDestinationCreateWithData(out, type.identifier as CFString, 1, nil) else { return nil }
+        guard let dest = CGImageDestinationCreateWithData(out as CFMutableData, type.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data

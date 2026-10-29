@@ -51,7 +51,14 @@ enum Gfx {
     static func linearGradient(_ ctx: CGContext, _ rect: CGRect, _ colors: [RGBA], angle: Double, locations: [CGFloat]? = nil) {
         guard !colors.isEmpty else { return }
         let cols = colors.count == 1 ? [colors[0], colors[0]] : colors
-        guard let g = CGGradient(colorsSpace: sRGB, colors: cols.map(\.cgColor) as CFArray, locations: locations) else { return }
+        let cgColors = cols.map(\.cgColor) as CFArray
+        let gradient: CGGradient?
+        if let locations {
+            gradient = CGGradient(colorsSpace: sRGB, colors: cgColors, locations: locations)
+        } else {
+            gradient = CGGradient(colorsSpace: sRGB, colors: cgColors, locations: nil)
+        }
+        guard let g = gradient else { return }
         let rad = angle * .pi / 180
         // y is flipped because the context is bottom-left.
         let v = CGVector(dx: cos(rad), dy: -sin(rad))
