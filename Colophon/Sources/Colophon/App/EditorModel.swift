@@ -11,6 +11,7 @@ struct Variation: Identifiable {
     let id = UUID()
     var document: CoverDocument
     var thumbnail: CGImage?
+    var favorite = false
 }
 
 enum InspectorTab: String, CaseIterable, Identifiable {
@@ -26,6 +27,10 @@ enum InspectorTab: String, CaseIterable, Identifiable {
         case .book: return "book.closed"
         }
     }
+}
+
+enum LayerAlign {
+    case left, centerX, right, top, middle, bottom
 }
 
 enum GuideStyle: String, CaseIterable, Identifiable {
@@ -67,6 +72,10 @@ final class EditorModel {
     var effectBase: CGImage?
     var effectBaseVersion = 0
     var toast: String?
+
+    var showFavoritesOnly = false
+    var showSeries = false
+    var copiedTextStyle: TextContent?
 
     @ObservationIgnored private var undoStack: [CoverDocument] = []
     @ObservationIgnored private var redoStack: [CoverDocument] = []
@@ -138,22 +147,7 @@ final class EditorModel {
     /// Keeps text layers in sync with the brief.
     func updateBook(_ b: BookInfo) {
         let old = document.book
-        mutate(undoKey: "book") { d in
-            d.book = b
-            for i in d.layers.indices {
-                guard let t = d.layers[i].textContent else { continue }
-                switch t.role {
-                case .title where b.title != old.title:
-                    let stacked = t.text.contains("\n") && t.text.split(separator: "\n").count == old.title.split(separator: " ").count
-                    d.layers[i].textContent?.text = TitleBreaker.auto(b.title, stacked: stacked)
-                case .author where b.author != old.author: d.layers[i].textContent?.text = b.author
-                case .subtitle where b.subtitle != old.subtitle: d.layers[i].textContent?.text = b.subtitle
-                case .series where b.series != old.series: d.layers[i].textContent?.text = b.series
-                case .tagline where b.tagline != old.tagline: d.layers[i].textContent?.text = b.tagline
-                default: break
-                }
-            }
-        }
+        mutate(undoKey: "book") { d in BookSync.apply(b, old: old, to: &d) }
     }
 
     // MARK: Rendering
@@ -489,6 +483,90 @@ final class EditorModel {
         }
     }
 
+    // MARK: Workflow tools
+
+    func toggleFavorite(_ id: UUID) {
+        if let i = variations.firstIndex(where: { $0.id == id }) { variations[i].favorite.toggle() }
+    }
+
+    func copyTextStyle() {
+        guard let t = selectedLayer?.textContent else { return }
+        copiedTextStyle = t
+        toast = "Copied the style of \"\(t.text.replacingOccurrences(of: "\n", with: " ").prefix(24))\""
+    }
+
+    func pasteTextStyle() {
+        guard let s = selection, let style = copiedTextStyle, selectedLayer?.textContent != nil else { return }
+        mutate { d in
+            guard let i = d.index(of: s), let current = d.layers[i].textContent else { return }
+            var t = style
+            t.text = current.text
+            t.role = current.role
+            d.layers[i].textContent = t
+        }
+    }
+
+    /// Lines a layer up with the safe margins or the center.
+    func align(_ edge: LayerAlign) {
+        guard let s = selection else { return }
+        let m = Preflight.safeMargin + 0.02
+        mutate { d in
+            guard let i = d.index(of: s) else { return }
+            var f = d.layers[i].frame
+            switch edge {
+            case .left: f.x = m
+            case .centerX: f.x = (1 - f.w) / 2
+            case .right: f.x = 1 - m - f.w
+            case .top: f.y = m
+            case .middle: f.y = (1 - f.h) / 2
+            case .bottom: f.y = 1 - m - f.h
+            }
+            d.layers[i].frame = f
+        }
+    }
+
+    func pickColorFromScreen() {
+        NSColorSampler().show { [weak self] color in
+            guard let color else { return }
+            let c = RGBA(nsColor: color)
+            Task { @MainActor in
+                guard let self else { return }
+                if self.selection != nil {
+                    self.applyColor(c)
+                } else {
+                    self.mutate { d in d.palette.append(c) }
+                }
+                self.toast = "Picked \(c.hex)"
+            }
+        }
+    }
+
+    func importFont() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.font]
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose .ttf or .otf font files to use on this cover"
+        guard panel.runModal() == .OK else { return }
+        var names: [String] = []
+        var added: [String: Data] = [:]
+        for url in panel.urls {
+            guard let data = try? Data(contentsOf: url), let name = FontCatalog.register(data) else { continue }
+            added[name] = data
+            names.append(name)
+        }
+        guard !names.isEmpty else {
+            toast = "Couldn't read that font file"
+            return
+        }
+        mutate { d in
+            for (k, v) in added { d.fonts[k] = v }
+            if let s = selection, let i = d.index(of: s), d.layers[i].textContent != nil {
+                d.layers[i].textContent?.fontName = names[0]
+            }
+        }
+        toast = names.count == 1 ? "Added \(FontCatalog.displayName(names[0]))" : "Added \(names.count) fonts"
+    }
+
     // MARK: Files
 
     func save() {
@@ -534,6 +612,7 @@ final class EditorModel {
             selection = nil
             screen = doc.layers.isEmpty ? .start : .editor
             isDirty = false
+            for data in doc.fonts.values { FontCatalog.register(data) }
             for id in doc.assetOrder {
                 let d = doc.assetData(id)
                 Task.detached(priority: .utility) { AssetStore.shared.warm(id, data: d) }

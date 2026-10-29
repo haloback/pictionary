@@ -100,6 +100,18 @@ enum FontCatalog {
 
     static var installed: [String] { NSFontManager.shared.availableFonts }
 
+    /// Makes an imported font file usable by this app. Returns its PostScript name.
+    @discardableResult
+    static func register(_ data: Data) -> String? {
+        guard let provider = CGDataProvider(data: data as CFData), let cg = CGFont(provider),
+              let name = cg.postScriptName as String? else { return nil }
+        if NSFont(name: name, size: 12) == nil {
+            var error: Unmanaged<CFError>?
+            CTFontManagerRegisterGraphicsFont(cg, &error)
+        }
+        return name
+    }
+
     static func family(_ postscript: String) -> String {
         NSFont(name: postscript, size: 12)?.familyName ?? postscript
     }

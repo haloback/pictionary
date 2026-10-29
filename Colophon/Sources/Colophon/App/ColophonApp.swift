@@ -65,6 +65,9 @@ struct AppCommands: Commands {
             Button("Delete Layer") { model.deleteSelected() }.keyboardShortcut(.delete, modifiers: .command)
             Button("Bring Forward") { model.moveSelected(by: 1) }.keyboardShortcut("]")
             Button("Send Backward") { model.moveSelected(by: -1) }.keyboardShortcut("[")
+            Divider()
+            Button("Copy Text Style") { model.copyTextStyle() }.keyboardShortcut("c", modifiers: [.command, .option])
+            Button("Paste Text Style") { model.pasteTextStyle() }.keyboardShortcut("v", modifiers: [.command, .option])
         }
         CommandMenu("Design") {
             Button("Generate Cover Ideas") { model.generateVariations() }.keyboardShortcut("g", modifiers: [.command, .shift])
@@ -72,6 +75,10 @@ struct AppCommands: Commands {
             Divider()
             Button("Add Text") { model.addText() }.keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Add Photo…") { model.chooseImages() }.keyboardShortcut("i", modifiers: [.command, .shift])
+            Button("Import Font…") { model.importFont() }
+            Button("Pick Color from Screen") { model.pickColorFromScreen() }.keyboardShortcut("k", modifiers: [.command, .shift])
+            Divider()
+            Button("Make Series Covers…") { model.showSeries = true }
             Button("Lift Subject from Photo") {
                 if let id = model.selectedLayer?.imageContent != nil ? model.selection : model.document.photoLayers.first?.id { model.liftSubject(id) }
             }.keyboardShortcut("l", modifiers: [.command, .shift])

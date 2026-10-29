@@ -8,7 +8,7 @@ struct VariationsView: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: columns, maximum: columns * 1.4), spacing: 22)], spacing: 28) {
-                ForEach(model.variations) { v in
+                ForEach(model.variations.filter { !model.showFavoritesOnly || $0.favorite }) { v in
                     VariationCard(variation: v)
                 }
                 if model.isGenerating && model.variations.isEmpty {
@@ -38,6 +38,11 @@ struct VariationsView: View {
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Slider(value: $columns, in: 150...320).frame(width: 110).help("Thumbnail size")
+                Toggle(isOn: Binding(get: { model.showFavoritesOnly }, set: { model.showFavoritesOnly = $0 })) {
+                    Label("Favorites", systemImage: model.showFavoritesOnly ? "heart.fill" : "heart")
+                }
+                .help("Show only the covers you've hearted")
+                .disabled(!model.variations.contains { $0.favorite })
                 Button { model.screen = .start } label: { Label("Edit Brief", systemImage: "square.and.pencil") }
                 Button { model.generateVariations() } label: { Label("New Batch", systemImage: "arrow.triangle.2.circlepath") }
                     .disabled(model.isGenerating)
@@ -66,6 +71,20 @@ private struct VariationCard: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 3))
+            .overlay(alignment: .topTrailing) {
+                if hover || variation.favorite {
+                    Button { model.toggleFavorite(variation.id) } label: {
+                        Image(systemName: variation.favorite ? "heart.fill" : "heart")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(variation.favorite ? Theme.accent : Color.white)
+                            .padding(7)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                    .accessibilityLabel(variation.favorite ? "Remove from favorites" : "Add to favorites")
+                }
+            }
             .shadow(color: .black.opacity(hover ? 0.45 : 0.28), radius: hover ? 18 : 8, y: hover ? 10 : 4)
             .scaleEffect(hover ? 1.02 : 1)
             .overlay(alignment: .bottom) {

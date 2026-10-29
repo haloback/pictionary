@@ -191,3 +191,51 @@ final class RenderingTests: XCTestCase {
         XCTAssertTrue(issues.contains { $0.severity == .fail })
     }
 }
+
+final class FeatureTests: XCTestCase {
+    private func sampleDoc() -> CoverDocument {
+        var base = CoverDocument()
+        base.book = BookInfo(title: "The Salt Orchard", author: "Ines Valcourt", series: "Orchard Cycle", genre: .literary)
+        return CoverComposer.variations(base: base, count: 1, seed: 3)[0]
+    }
+
+    func testMockupsRender() {
+        let doc = sampleDoc()
+        for k in MockupKind.allCases {
+            let img = MockupRenderer.render(k, doc: doc)
+            XCTAssertNotNil(img, k.rawValue)
+            XCTAssertEqual(img?.width, Int(k.pixelSize.width), k.rawValue)
+        }
+    }
+
+    func testSeriesRetitleKeepsDesign() {
+        let doc = sampleDoc()
+        let next = SeriesKit.retitle(doc, title: "Winter Graft", number: 2)
+        XCTAssertEqual(next.book.title, "Winter Graft")
+        XCTAssertEqual(next.layers.count, doc.layers.count)
+        let title = next.textLayer(role: .title)?.textContent?.text.replacingOccurrences(of: "\n", with: " ")
+        XCTAssertEqual(title?.lowercased(), "winter graft")
+        XCTAssertEqual(next.book.series, "Orchard Cycle, Book 2")
+        XCTAssertNotNil(SeriesKit.lineup([doc, next], coverHeight: 160))
+    }
+
+    func testAdjustmentsRender() {
+        var doc = CoverDocument()
+        var l = Layer.fill(.meshBlend, colors: [RGBA(hex: "1B2A4A"), RGBA(hex: "F2A541")])
+        l.adjust = Adjustments(exposure: 0.4, contrast: 0.3, saturation: -0.5, warmth: 0.6, sharpness: 0.5, blur: 0.2)
+        doc.layers = [l]
+        XCTAssertNotNil(CoverRenderer.shared.render(doc, size: CGSize(width: 100, height: 160)))
+    }
+
+    func testOlderProjectsStillOpen() throws {
+        // A layer and document missing newer keys (adjust, fonts) must still decode.
+        let json = """
+        {"book":{"title":"Old","subtitle":"","author":"A","series":"","tagline":"","genre":"literary"},
+         "layers":[{"name":"T","content":{"text":{"_0":{"text":"Old","role":"title","fontName":"Didot","fontSize":0.05,"autoFit":true,"tracking":0,"lineHeight":1,"alignment":"center","letterCase":"upper","color":{"r":1,"g":1,"b":1,"a":1},"strokeWidth":0.02,"glowRadius":0.2,"behindSubject":false}}},"frame":{"x":0.1,"y":0.1,"w":0.8,"h":0.2}}]}
+        """
+        let doc = try JSONDecoder().decode(CoverDocument.self, from: Data(json.utf8))
+        XCTAssertEqual(doc.layers.count, 1)
+        XCTAssertTrue(doc.layers[0].adjust.isIdentity)
+        XCTAssertTrue(doc.fonts.isEmpty)
+    }
+}

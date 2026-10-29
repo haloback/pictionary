@@ -182,7 +182,12 @@ struct ColorInspector: View {
                 }
 
                 PanelSection("Harmony") {
-                    RGBAPicker(label: "Base", color: $base, supportsOpacity: false)
+                    HStack {
+                        RGBAPicker(label: "Base", color: $base, supportsOpacity: false)
+                        Button { model.pickColorFromScreen() } label: { Label("Pick", systemImage: "eyedropper") }
+                            .controlSize(.small)
+                            .help("Pick any color on screen. It's applied to the selected layer, or added to the palette.")
+                    }
                     HStack(spacing: 6) {
                         ForEach(model.document.palette.prefix(6).indices, id: \.self) { i in
                             Button { base = model.document.palette[i] } label: { Swatch(color: model.document.palette[i], size: 16) }.buttonStyle(.plain)
@@ -435,6 +440,12 @@ struct BookInspector: View {
                     Button { model.chooseImages() } label: { Label("Add Photo or Artwork…", systemImage: "photo.badge.plus") }
                         .controlSize(.small)
                 }
+                PanelSection("Series") {
+                    Text("Give every book in a series the same design. Type the titles and Colophon exports matching covers plus a lineup image.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button { model.showSeries = true } label: { Label("Make Series Covers…", systemImage: "books.vertical") }
+                        .controlSize(.small)
+                }
                 PanelSection("Start Over") {
                     Button { model.generateVariations() } label: { Label("Design New Covers from This Brief", systemImage: "sparkles") }
                     Text("Your current design stays one undo away after you pick a new one.")
@@ -460,6 +471,7 @@ struct ExportSheet: View {
     @State private var progress = 0
     @State private var running = false
     @State private var written: [URL] = []
+    @State private var mockups: Set<MockupKind> = [.book3D, .social]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -481,6 +493,14 @@ struct ExportSheet: View {
             }
             .padding(12)
             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.radius))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Marketing Images").font(.system(size: 12, weight: .semibold))
+                ForEach(MockupKind.allCases) { k in
+                    Toggle(k.label, isOn: Binding(get: { mockups.contains(k) }, set: { on in if on { mockups.insert(k) } else { mockups.remove(k) } }))
+                }
+            }
+            .padding(12)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.radius))
             HStack {
                 Picker("Format", selection: $format) { ForEach(ExportFormat.allCases) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented)
@@ -491,7 +511,7 @@ struct ExportSheet: View {
                 }
             }
             if running {
-                ProgressView(value: Double(progress), total: Double(max(1, selected.count)))
+                ProgressView(value: Double(progress), total: Double(max(1, selected.count + mockups.count)))
             }
             if !written.isEmpty {
                 HStack {
@@ -507,11 +527,11 @@ struct ExportSheet: View {
                 Button("Export…") { export() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(selected.isEmpty || running)
+                    .disabled((selected.isEmpty && mockups.isEmpty) || running)
             }
         }
         .padding(22)
-        .frame(width: 500)
+        .frame(width: 520)
     }
 
     private func export() {
@@ -524,18 +544,143 @@ struct ExportSheet: View {
         let specs = StoreSpec.all.filter { selected.contains($0.id) }
         let doc = model.document
         let fmt = format, q = quality
+        let kinds = MockupKind.allCases.filter { mockups.contains($0) }
         running = true
         progress = 0
         written = []
         Task.detached(priority: .userInitiated) {
             let access = folder.startAccessingSecurityScopedResource()
-            let urls = Exporter.export(doc, specs: specs, format: fmt, quality: q, folder: folder) { n in
+            var urls = Exporter.export(doc, specs: specs, format: fmt, quality: q, folder: folder) { n in
                 Task { @MainActor in progress = n }
             }
+            let base = Exporter.safeFileName(doc.book.title.isEmpty ? "Cover" : doc.book.title)
+            for (n, kind) in kinds.enumerated() {
+                guard let img = MockupRenderer.render(kind, doc: doc) else { continue }
+                let f: ExportFormat = kind.needsAlpha ? .png : fmt
+                let url = folder.appendingPathComponent("\(base) - \(kind.fileSuffix).\(f.ext)")
+                if Exporter.write(img, to: url, format: f, quality: q) { urls.append(url) }
+                let done = specs.count + n + 1
+                Task { @MainActor in progress = done }
+            }
+            let finished = urls
             if access { folder.stopAccessingSecurityScopedResource() }
             await MainActor.run {
-                written = urls
+                written = finished
                 running = false
+            }
+        }
+    }
+}
+
+
+// MARK: - Series
+
+struct SeriesSheet: View {
+    @Environment(EditorModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var titles = ""
+    @State private var running = false
+    @State private var progress = 0
+    @State private var written: [URL] = []
+    @State private var preview: CGImage?
+
+    private var titleList: [String] {
+        titles.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Series Covers").font(.system(size: 18, weight: .semibold))
+                Text("One title per line, in reading order. Each cover keeps this design: same layout, type, colors and effects. Only the title and the book number change.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            TextEditor(text: $titles)
+                .font(.system(size: 13))
+                .frame(height: 130)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            if let preview {
+                Image(decorative: preview, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 180)
+                    .frame(maxWidth: .infinity)
+            }
+            if running {
+                ProgressView(value: Double(progress), total: Double(max(1, titleList.count + 1)))
+            }
+            if !written.isEmpty {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text("\(written.count) files exported").font(.system(size: 12))
+                    Spacer()
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(written) }
+                }
+            }
+            HStack {
+                Button("Preview Lineup") { makePreview() }.disabled(titleList.isEmpty || running)
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Export…") { export() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(titleList.isEmpty || running)
+            }
+        }
+        .padding(22)
+        .frame(width: 560)
+        .onAppear {
+            if titles.isEmpty { titles = model.document.book.title }
+        }
+    }
+
+    private func docs() -> [CoverDocument] {
+        let base = model.document
+        return titleList.enumerated().map { i, t in SeriesKit.retitle(base, title: t, number: i + 1) }
+    }
+
+    private func makePreview() {
+        let list = docs()
+        Task.detached(priority: .userInitiated) {
+            let img = SeriesKit.lineup(list, coverHeight: 320)
+            await MainActor.run { preview = img }
+        }
+    }
+
+    private func export() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        let list = docs()
+        let spec = model.targetStore
+        running = true
+        progress = 0
+        written = []
+        Task.detached(priority: .userInitiated) {
+            var urls: [URL] = []
+            for (i, d) in list.enumerated() {
+                let name = Exporter.safeFileName("\(i + 1) - \(d.book.title)")
+                var sized = d
+                sized.canvas = CanvasSpec(width: spec.width, height: spec.height)
+                if let img = CoverRenderer.shared.render(sized, size: CGSize(width: spec.width, height: spec.height), quality: .full) {
+                    let url = folder.appendingPathComponent("\(name).jpg")
+                    if Exporter.write(img, to: url, format: .jpeg, quality: 0.92) { urls.append(url) }
+                }
+                let done = i + 1
+                await MainActor.run { progress = done }
+            }
+            if let lineup = SeriesKit.lineup(list) {
+                let url = folder.appendingPathComponent("Series Lineup.png")
+                if Exporter.write(lineup, to: url, format: .png, quality: 1) { urls.append(url) }
+            }
+            let finished = urls
+            await MainActor.run {
+                written = finished
+                running = false
+                progress = list.count + 1
             }
         }
     }

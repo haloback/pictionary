@@ -23,6 +23,7 @@ struct ContentView: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.toast)
         .tint(Theme.accent)
-        .sheet(isPresented: $model.showExport) { ExportSheet() }
+        .sheet(isPresented: $model.showExport) { ExportSheet().environment(model) }
+        .sheet(isPresented: $model.showSeries) { SeriesSheet().environment(model) }
     }
 }

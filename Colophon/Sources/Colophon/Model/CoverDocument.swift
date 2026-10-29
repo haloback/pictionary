@@ -285,6 +285,18 @@ struct EffectInstance: Codable, Hashable, Identifiable {
     var amount: Double = 1
 }
 
+/// Photo-style corrections. Each runs from -1 to 1; 0 leaves the layer untouched.
+struct Adjustments: Codable, Hashable {
+    var exposure: Double = 0
+    var contrast: Double = 0
+    var saturation: Double = 0
+    var warmth: Double = 0
+    var sharpness: Double = 0
+    var blur: Double = 0
+
+    var isIdentity: Bool { self == Adjustments() }
+}
+
 struct Layer: Codable, Hashable, Identifiable {
     var id = UUID()
     var name: String
@@ -301,6 +313,33 @@ struct Layer: Codable, Hashable, Identifiable {
     var fadeAmount: Double = 0.35
     var shadow: ShadowStyle?
     var effects: [EffectInstance] = []
+    var adjust = Adjustments()
+
+    init(id: UUID = UUID(), name: String, content: LayerContent, frame: NRect = .full) {
+        self.id = id
+        self.name = name
+        self.content = content
+        self.frame = frame
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Layer"
+        content = try c.decode(LayerContent.self, forKey: .content)
+        frame = try c.decodeIfPresent(NRect.self, forKey: .frame) ?? .full
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1
+        blend = try c.decodeIfPresent(BlendMode.self, forKey: .blend) ?? .normal
+        isVisible = try c.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+        isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        clipShape = try c.decodeIfPresent(ShapeKind.self, forKey: .clipShape)
+        fade = try c.decodeIfPresent(FadeEdge.self, forKey: .fade) ?? .none
+        fadeAmount = try c.decodeIfPresent(Double.self, forKey: .fadeAmount) ?? 0.35
+        shadow = try c.decodeIfPresent(ShadowStyle.self, forKey: .shadow)
+        effects = try c.decodeIfPresent([EffectInstance].self, forKey: .effects) ?? []
+        adjust = try c.decodeIfPresent(Adjustments.self, forKey: .adjust) ?? Adjustments()
+    }
 
     var textContent: TextContent? {
         get { if case .text(let t) = content { return t }; return nil }
@@ -371,6 +410,24 @@ struct CoverDocument: Codable {
     /// The colors this design is built from.
     var palette: [RGBA] = []
     var archetypeName: String = ""
+    /// Font files the user imported, keyed by PostScript name, so the project opens anywhere.
+    var fonts: [String: Data] = [:]
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        book = try c.decodeIfPresent(BookInfo.self, forKey: .book) ?? BookInfo()
+        canvas = try c.decodeIfPresent(CanvasSpec.self, forKey: .canvas) ?? CanvasSpec()
+        background = try c.decodeIfPresent(RGBA.self, forKey: .background) ?? .ink
+        layers = try c.decodeIfPresent([Layer].self, forKey: .layers) ?? []
+        assets = try c.decodeIfPresent([String: Data].self, forKey: .assets) ?? [:]
+        assetOrder = try c.decodeIfPresent([UUID].self, forKey: .assetOrder) ?? []
+        palette = try c.decodeIfPresent([RGBA].self, forKey: .palette) ?? []
+        archetypeName = try c.decodeIfPresent(String.self, forKey: .archetypeName) ?? ""
+        fonts = try c.decodeIfPresent([String: Data].self, forKey: .fonts) ?? [:]
+    }
 
     func assetData(_ id: UUID) -> Data? { assets[id.uuidString] }
 

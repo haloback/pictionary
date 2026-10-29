@@ -25,6 +25,7 @@ final class CoverRenderer {
         var canvasW: Int
         var canvasH: Int
         var effects: [EffectInstance]
+        var adjust: Adjustments
         var clip: ShapeKind?
         var fade: FadeEdge
         var fadeAmount: Double
@@ -86,7 +87,7 @@ final class CoverRenderer {
         let frame = layer.frame.pixels(in: canvas)
         let w = max(1, Int(frame.width.rounded())), h = max(1, Int(frame.height.rounded()))
         let key = RasterKey(content: layer.content, w: w, h: h, canvasW: Int(canvas.width), canvasH: Int(canvas.height),
-                            effects: layer.effects, clip: layer.clipShape, fade: layer.fade, fadeAmount: layer.fadeAmount,
+                            effects: layer.effects, adjust: layer.adjust, clip: layer.clipShape, fade: layer.fade, fadeAmount: layer.fadeAmount,
                             quality: quality.rawValue, cutout: cutoutOverride)
         lock.lock()
         if let hit = cache[key] {
@@ -114,6 +115,9 @@ final class CoverRenderer {
         }
         guard var img = image else { return nil }
 
+        if !layer.adjust.isIdentity {
+            img = applyAdjustments(layer.adjust, to: img, canvas: canvas) ?? img
+        }
         if !layer.effects.isEmpty {
             img = applyEffects(layer.effects, to: img, canvas: canvas, seed: Int(layer.id.uuid.0) << 8 | Int(layer.id.uuid.1)) ?? img
         }
@@ -166,6 +170,28 @@ final class CoverRenderer {
             ci = FX.mix(ci, processed, e.amount.clamped01)
         }
         // Keep the layer's own transparency (cutouts, text).
+        ci = ci.cropped(to: original.extent).applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: original])
+        return Gfx.render(ci, extent: original.extent)
+    }
+
+    private func applyAdjustments(_ a: Adjustments, to img: CGImage, canvas: CGSize) -> CGImage? {
+        let original = CIImage(cgImage: img)
+        var ci = original
+        let scale = canvas.height / 1000
+        if a.exposure != 0 { ci = ci.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure * 1.5]) }
+        if a.contrast != 0 || a.saturation != 0 {
+            ci = FX.controls(ci, saturation: 1 + a.saturation, contrast: 1 + a.contrast * 0.5)
+        }
+        if a.warmth != 0 {
+            let w = a.warmth * 0.12
+            ci = FX.matrix(ci, r: (1 + w, 0, 0), g: (0, 1 + w * 0.2, 0), b: (0, 0, 1 - w))
+        }
+        if a.sharpness > 0 {
+            ci = ci.applyingFilter("CISharpenLuminance", parameters: ["inputSharpness": a.sharpness * 1.5])
+        } else if a.sharpness < 0 {
+            ci = FX.blur(ci, CGFloat(-a.sharpness) * 2 * scale)
+        }
+        if a.blur > 0 { ci = FX.blur(ci, CGFloat(a.blur) * 30 * scale) }
         ci = ci.cropped(to: original.extent).applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: original])
         return Gfx.render(ci, extent: original.extent)
     }

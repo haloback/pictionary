@@ -123,6 +123,12 @@ struct LayersSidebar: View {
         Divider()
         Button("Bring Forward") { model.selection = layer.id; model.moveSelected(by: 1) }
         Button("Send Backward") { model.selection = layer.id; model.moveSelected(by: -1) }
+        if layer.textContent != nil {
+            Divider()
+            Button("Copy Style") { model.selection = layer.id; model.copyTextStyle() }
+            Button("Paste Style") { model.selection = layer.id; model.pasteTextStyle() }
+                .disabled(model.copiedTextStyle == nil)
+        }
         if layer.imageContent != nil {
             Divider()
             Button("Lift Subject to New Layer") { model.liftSubject(layer.id) }

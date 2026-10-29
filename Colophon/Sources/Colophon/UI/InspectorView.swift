@@ -71,6 +71,9 @@ struct LayerInspector: View {
                     case .fill: FillSection(layer: b)
                     case .shape: ShapeSection(layer: b)
                     }
+                    if b.wrappedValue.textContent == nil {
+                        AdjustSection(layer: b)
+                    }
                     AppearanceSection(layer: b)
                     GeometrySection(layer: b)
                 }
@@ -133,7 +136,7 @@ private struct TextSection: View {
             }
             .buttonStyle(.plain)
             .popover(isPresented: $showFonts, arrowEdge: .leading) {
-                FontPicker(selection: t.fontName, sample: t.wrappedValue.text)
+                FontPicker(selection: t.fontName, sample: t.wrappedValue.text).environment(model)
             }
             FieldRow("Case") {
                 Picker("", selection: t.letterCase) { ForEach(LetterCase.allCases) { Text($0.label).tag($0) } }.labelsHidden()
@@ -211,6 +214,7 @@ private struct TextSection: View {
 }
 
 private struct FontPicker: View {
+    @Environment(EditorModel.self) private var model
     @Binding var selection: String
     let sample: String
     @State private var query = ""
@@ -223,6 +227,15 @@ private struct FontPicker: View {
                 Toggle("All installed", isOn: $showAll).toggleStyle(.switch).controlSize(.mini)
             }
             .padding(10)
+            HStack {
+                Button { model.importFont() } label: { Label("Import Font…", systemImage: "plus") }
+                    .help("Add a .ttf or .otf file. It is saved inside the project.")
+                Spacer()
+                Text("Embedded in the project").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+            .controlSize(.small)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
             Divider()
             List {
                 if showAll {
@@ -230,6 +243,11 @@ private struct FontPicker: View {
                         row(name, label: FontCatalog.displayName(name))
                     }
                 } else {
+                    if !model.document.fonts.isEmpty {
+                        Section("Your Fonts") {
+                            ForEach(model.document.fonts.keys.sorted(), id: \.self) { name in row(name, label: FontCatalog.displayName(name)) }
+                        }
+                    }
                     ForEach(FontCatalog.Mood.allCases) { mood in
                         let items = FontCatalog.curated.filter { $0.mood == mood && FontCatalog.isAvailable($0.id) && (query.isEmpty || $0.label.localizedCaseInsensitiveContains(query)) }
                         if !items.isEmpty {
@@ -408,6 +426,7 @@ private struct AppearanceSection: View {
 }
 
 private struct GeometrySection: View {
+    @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
 
     var body: some View {
@@ -419,6 +438,15 @@ private struct GeometrySection: View {
             HStack(spacing: 8) {
                 num("W", $layer.frame.w)
                 num("H", $layer.frame.h)
+            }
+            HStack(spacing: 2) {
+                alignButton(.left, "align.horizontal.left", "Align to left margin")
+                alignButton(.centerX, "align.horizontal.center", "Center horizontally")
+                alignButton(.right, "align.horizontal.right", "Align to right margin")
+                Divider().frame(height: 16).padding(.horizontal, 4)
+                alignButton(.top, "align.vertical.top", "Align to top margin")
+                alignButton(.middle, "align.vertical.center", "Center vertically")
+                alignButton(.bottom, "align.vertical.bottom", "Align to bottom margin")
             }
             ValueSlider(label: "Rotation", value: $layer.rotation, range: -180...180) { String(format: "%.0f°", $0) }
             HStack {
@@ -432,6 +460,13 @@ private struct GeometrySection: View {
         }
     }
 
+    private func alignButton(_ a: LayerAlign, _ symbol: String, _ help: String) -> some View {
+        Button { model.align(a) } label: { Image(systemName: symbol).frame(width: 26, height: 20) }
+            .buttonStyle(.borderless)
+            .help(help)
+            .accessibilityLabel(help)
+    }
+
     private func num(_ label: String, _ v: Binding<Double>) -> some View {
         HStack(spacing: 4) {
             Text(label).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 14)
@@ -441,6 +476,24 @@ private struct GeometrySection: View {
             Text("%").font(.system(size: 10)).foregroundStyle(.tertiary)
         }
     }
+}
+
+private struct AdjustSection: View {
+    @Binding var layer: Layer
+
+    var body: some View {
+        PanelSection("Adjust", trailing: layer.adjust.isIdentity ? nil : AnyView(
+            Button("Reset") { layer.adjust = Adjustments() }.buttonStyle(.link).font(.system(size: 11)))) {
+            ValueSlider(label: "Exposure", value: $layer.adjust.exposure, range: -1...1, format: signed)
+            ValueSlider(label: "Contrast", value: $layer.adjust.contrast, range: -1...1, format: signed)
+            ValueSlider(label: "Saturation", value: $layer.adjust.saturation, range: -1...1, format: signed)
+            ValueSlider(label: "Warmth", value: $layer.adjust.warmth, range: -1...1, format: signed)
+            ValueSlider(label: "Sharpness", value: $layer.adjust.sharpness, range: -1...1, format: signed)
+            ValueSlider(label: "Blur", value: $layer.adjust.blur, range: 0...1)
+        }
+    }
+
+    private func signed(_ v: Double) -> String { String(format: "%+.0f", v * 100) }
 }
 
 extension Array {
