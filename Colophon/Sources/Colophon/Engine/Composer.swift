@@ -70,7 +70,7 @@ enum CoverComposer {
             if images.isEmpty && !a.worksWithoutImage { continue }
             order.append(a)
         }
-        if let only { order = [only] }
+        if let archetype { order = [archetype] }
 
         var rng = SeededRNG(seed: seed)
         var docs: [CoverDocument] = []
