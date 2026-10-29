@@ -316,6 +316,36 @@ private struct ImageSection: View {
             Button { focusOnSubject() } label: { Label("Center on Subject", systemImage: "viewfinder") }
                 .controlSize(.small)
         }
+        PanelSection("Refine Cutout") {
+            Text(ic.wrappedValue.cutout == .none
+                 ? "Paint on the cover to erase parts of this picture, or restore them."
+                 : "Fix the automatic cutout edge: erase what shouldn't be there, restore what was missed.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                brushButton(.erase, "Erase", "eraser")
+                brushButton(.restore, "Restore", "paintbrush.pointed")
+                Spacer()
+                if !ic.wrappedValue.maskEdits.isEmpty {
+                    Button("Clear \(ic.wrappedValue.maskEdits.count)") { model.clearMaskEdits(layer.id) }
+                        .help("Remove all brush edits on this picture")
+                }
+            }
+            .controlSize(.small)
+            ValueSlider(label: "Brush", value: Binding(get: { model.brushSize }, set: { model.brushSize = $0 }), range: 0.01...0.2)
+        }
+    }
+
+    private func brushButton(_ tool: CanvasTool, _ title: String, _ symbol: String) -> some View {
+        let on = model.tool == tool
+        return Button {
+            model.selection = layer.id
+            model.tool = on ? .select : tool
+        } label: {
+            Label(title, systemImage: symbol)
+        }
+        .buttonStyle(.bordered)
+        .tint(on ? Theme.accent : nil)
+        .help(on ? "Stop painting (Esc)" : "Paint on the cover to \(title.lowercased())")
     }
 
     private func focusOnSubject() {

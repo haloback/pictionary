@@ -239,3 +239,65 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(doc.fonts.isEmpty)
     }
 }
+
+final class PrintAndRemixTests: XCTestCase {
+    private func sampleDoc() -> CoverDocument {
+        var base = CoverDocument()
+        base.book = BookInfo(title: "The Salt Orchard", author: "Ines Valcourt", genre: .literary)
+        return CoverComposer.variations(base: base, count: 1, seed: 5)[0]
+    }
+
+    func testSpineWidthFollowsPageCount() {
+        var s = PrintSettings()
+        s.pageCount = 300
+        s.paper = .cream
+        XCTAssertEqual(s.spineWidth, 0.75, accuracy: 0.0001)
+        XCTAssertEqual(s.fullWidth, 6 * 2 + 0.75 + 0.25, accuracy: 0.0001)
+        XCTAssertEqual(s.fullHeight, 9.25, accuracy: 0.0001)
+        s.pageCount = 60
+        XCTAssertFalse(s.spineHasText)
+    }
+
+    func testWrapRendersAtSheetSize() throws {
+        var doc = sampleDoc()
+        doc.paperback.blurb = "A woman inherits an orchard by the sea and learns why nothing there has ever been allowed to bloom."
+        doc.paperback.quote = "Luminous and unsettling."
+        let img = try XCTUnwrap(PrintWrap.render(doc, dpi: 40, guides: true))
+        XCTAssertEqual(img.width, Int((doc.paperback.fullWidth * 40).rounded()))
+        XCTAssertEqual(img.height, Int((doc.paperback.fullHeight * 40).rounded()))
+        XCTAssertTrue(PrintWrap.blurbFits(doc))
+    }
+
+    func testPDFExport() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("colophon-test-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(PrintWrap.exportPDF(sampleDoc(), to: url))
+        let size = try XCTUnwrap(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
+        XCTAssertGreaterThan(size, 10_000)
+    }
+
+    func testRemixKeepsStructureAndVaries() {
+        let doc = sampleDoc()
+        let remixes = Remixer.remix(doc, count: 6, seed: 9)
+        XCTAssertEqual(remixes.count, 6)
+        for r in remixes {
+            XCTAssertNotNil(r.textLayer(role: .title))
+            XCTAssertFalse(r.archetypeName.isEmpty)
+            XCTAssertNotNil(CoverRenderer.shared.render(r, size: CGSize(width: 100, height: 160)))
+        }
+        XCTAssertGreaterThan(Set(remixes.map(\.archetypeName)).count, 2)
+    }
+
+    func testEraseBrushClearsPixels() throws {
+        let ctx = try XCTUnwrap(Gfx.context(100, 100))
+        ctx.setFillColor(RGBA(hex: "E4572E").cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        let img = try XCTUnwrap(ctx.makeImage())
+        let stroke = MaskStroke(restore: false, radius: 0.2, points: [NPoint(x: 0.5, y: 0.5)])
+        let out = try XCTUnwrap(MaskPainter.apply([stroke], to: img, base: nil, invertBase: false))
+        let center = PixelSampler.pixels(out, maxSide: 100)
+        let i = (50 * center.w + 50) * 4
+        XCTAssertLessThan(center.data[i + 3], 20, "center should be erased")
+        XCTAssertGreaterThan(center.data[3], 240, "corner should remain")
+    }
+}

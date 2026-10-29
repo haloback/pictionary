@@ -11,7 +11,8 @@ enum VisionServices {
             try handler.perform([request])
             guard let obs = request.results?.first else { return nil }
             let buffer = try obs.generateScaledMaskForImage(forInstances: obs.allInstances, from: handler)
-            let ci = CIImage(cvPixelBuffer: buffer)
+            // Spread the single mask channel into gray so every consumer reads the same value.
+            let ci = FX.matrix(CIImage(cvPixelBuffer: buffer), r: (1, 0, 0), g: (1, 0, 0), b: (1, 0, 0))
             return Gfx.ci.createCGImage(ci, from: ci.extent, format: .RGBA8, colorSpace: Gfx.sRGB)
         } catch {
             return nil

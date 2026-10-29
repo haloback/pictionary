@@ -61,6 +61,8 @@ struct EditorView: View {
 
             Button { model.generateVariations() } label: { Label("New Ideas", systemImage: "sparkles") }
                 .help("Design a new batch of covers from this brief")
+            Button { model.remixCurrent() } label: { Label("More Like This", systemImage: "square.stack.3d.down.right") }
+                .help("Variations of this cover: same layout and edits, new type, color, look or crop")
             Button { model.autoPolish() } label: { Label("Polish", systemImage: "wand.and.rays") }
                 .help("Fix type color, shadows and scrims so everything is legible")
         }
@@ -69,6 +71,8 @@ struct EditorView: View {
                 Label("Guides", systemImage: "squareshape.split.3x3")
             }
             .help("Golden-section guides and safe area")
+            Button { model.showPaperback = true } label: { Label("Paperback", systemImage: "book") }
+                .help("Print wraparound: back, spine and front as a print-ready PDF")
             Button { model.showExport = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
                 .help("Export store-ready files for Kindle, Google Play, Apple Books and more")
             Button { model.showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }

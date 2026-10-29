@@ -29,6 +29,10 @@ enum InspectorTab: String, CaseIterable, Identifiable {
     }
 }
 
+enum CanvasTool: String {
+    case select, erase, restore
+}
+
 enum LayerAlign {
     case left, centerX, right, top, middle, bottom
 }
@@ -74,6 +78,11 @@ final class EditorModel {
     var toast: String?
 
     var showFavoritesOnly = false
+    var showPaperback = false
+    var tool: CanvasTool = .select
+    /// Brush diameter as a fraction of the cover's width.
+    var brushSize: Double = 0.05
+    var isRemix = false
     var showSeries = false
     var copiedTextStyle: TextContent?
 
@@ -261,6 +270,7 @@ final class EditorModel {
 
     func generateVariations(only archetype: Archetype? = nil) {
         isGenerating = true
+        isRemix = false
         screen = .variations
         variations = []
         var base = document
@@ -285,6 +295,30 @@ final class EditorModel {
     private func setThumbnail(_ id: UUID, _ img: CGImage?) {
         if let i = variations.firstIndex(where: { $0.id == id }) { variations[i].thumbnail = img }
     }
+
+    /// Variations of the cover being edited: same layout and edits, new decisions.
+    func remixCurrent() {
+        guard !document.layers.isEmpty else { return }
+        isGenerating = true
+        isRemix = true
+        screen = .variations
+        let base = document
+        let seed = Int.random(in: 1...999_999)
+        variations = [Variation(document: { var d = base; d.archetypeName = "Your current cover"; return d }(), thumbnail: preview)]
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let docs = Remixer.remix(base, count: 11, seed: seed)
+            let items = docs.map { Variation(document: $0, thumbnail: nil) }
+            await self?.appendVariations(items)
+            for item in items {
+                let doc = item.document
+                let img = CoverRenderer.shared.render(doc, size: CGSize(width: 360, height: (360 * doc.canvas.aspect).rounded()), quality: .preview)
+                await self?.setThumbnail(item.id, img)
+            }
+            await self?.finishGenerating()
+        }
+    }
+
+    private func appendVariations(_ v: [Variation]) { variations.append(contentsOf: v) }
 
     func adopt(_ v: Variation) {
         if screen == .editor || !document.layers.isEmpty { undoStack.append(document) }
@@ -481,6 +515,51 @@ final class EditorModel {
                 d.layers[i].effects.append(EffectInstance(presetID: "wash.\(EffectLibrary.slug(ColorBook.vivid.min { $0.color.distance(to: c) < $1.color.distance(to: c) }!.name)).color", amount: 0.6))
             }
         }
+    }
+
+    // MARK: Cutout brush
+
+    /// Converts a point on the cover (0...1) into the image's own space for a layer,
+    /// with the brush radius in that space.
+    func imagePoint(_ l: Layer, canvasX: Double, canvasY: Double) -> (NPoint, Double)? {
+        guard let ic = l.imageContent,
+              let img = AssetStore.shared.image(ic.assetID, data: document.assetData(ic.assetID), resolution: .thumbnail) else { return nil }
+        let cw = Double(document.canvas.width), ch = Double(document.canvas.height)
+        let W = l.frame.w * cw, H = l.frame.h * ch
+        var px = (canvasX - l.frame.x) * cw
+        let py = (canvasY - l.frame.y) * ch
+        let iw = Double(img.width), ih = Double(img.height)
+        let s = max(W / iw, H / ih) * max(1, ic.zoom)
+        let dw = iw * s, dh = ih * s
+        let ox = -(dw - W) * ic.focusX.clamped01, oy = -(dh - H) * ic.focusY.clamped01
+        if ic.flipped { px = W - px }
+        let radius = (brushSize * cw / 2) / s / min(iw, ih)
+        return (NPoint(x: (px - ox) / dw, y: (py - oy) / dh), radius)
+    }
+
+    @ObservationIgnored private var strokeKey = ""
+
+    func beginStroke(layer id: UUID, canvasX: Double, canvasY: Double) {
+        guard let l = document.layer(id), case let (p, r)? = imagePoint(l, canvasX: canvasX, canvasY: canvasY) else { return }
+        strokeKey = "brush-\(UUID().uuidString)"
+        let stroke = MaskStroke(restore: tool == .restore, radius: r, points: [p])
+        mutate(undoKey: strokeKey) { d in
+            if let i = d.index(of: id) { d.layers[i].imageContent?.maskEdits.append(stroke) }
+        }
+    }
+
+    func extendStroke(layer id: UUID, canvasX: Double, canvasY: Double) {
+        guard let l = document.layer(id), case let (p, r)? = imagePoint(l, canvasX: canvasX, canvasY: canvasY),
+              let last = l.imageContent?.maskEdits.last?.points.last else { return }
+        guard hypot(p.x - last.x, p.y - last.y) > r * 0.25 else { return }
+        mutate(undoKey: strokeKey) { d in
+            guard let i = d.index(of: id), let n = d.layers[i].imageContent?.maskEdits.count, n > 0 else { return }
+            d.layers[i].imageContent?.maskEdits[n - 1].points.append(p)
+        }
+    }
+
+    func clearMaskEdits(_ id: UUID) {
+        mutate { d in if let i = d.index(of: id) { d.layers[i].imageContent?.maskEdits = [] } }
     }
 
     // MARK: Workflow tools

@@ -4,6 +4,8 @@ import SwiftUI
 struct CanvasArea: View {
     @Environment(EditorModel.self) private var model
     @State private var drag: DragState?
+    @State private var hoverPoint: CGPoint?
+    @State private var painting = false
     @FocusState private var focused: Bool
 
     struct DragState {
@@ -39,6 +41,20 @@ struct CanvasArea: View {
                     .offset(x: rect.minX, y: rect.minY)
                 Canvas { ctx, _ in drawOverlay(ctx, rect: rect) }
                     .allowsHitTesting(false)
+                if model.tool != .select, let p = hoverPoint {
+                    let d = CGFloat(model.brushSize) * rect.width
+                    Circle()
+                        .strokeBorder(model.tool == .erase ? Color.white : Theme.accent, lineWidth: 1.5)
+                        .background(Circle().fill((model.tool == .erase ? Color.black : Theme.accent).opacity(0.12)))
+                        .frame(width: d, height: d)
+                        .position(p)
+                        .allowsHitTesting(false)
+                }
+                if model.tool != .select {
+                    brushBanner
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 12)
+                }
                 if model.showThumbnailPreview, let p = model.preview {
                     thumbnailPreview(p)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -46,6 +62,12 @@ struct CanvasArea: View {
                 }
             }
             .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let p): hoverPoint = p
+                case .ended: hoverPoint = nil
+                }
+            }
             .gesture(dragGesture(rect: rect))
             .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in
                 if let id = hit(v.location, rect: rect), model.document.layer(id)?.textContent != nil {
@@ -55,6 +77,13 @@ struct CanvasArea: View {
                 }
             })
             .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                if model.tool != .select {
+                    if let id = brushTarget {
+                        let (x, y) = normalized(v.location, rect)
+                        model.beginStroke(layer: id, canvasX: x, canvasY: y)
+                    }
+                    return
+                }
                 model.selection = hit(v.location, rect: rect)
             })
             .onChange(of: rect.height, initial: true) { _, h in
@@ -84,6 +113,7 @@ struct CanvasArea: View {
             return .handled
         }
         .onKeyPress(.escape) {
+            if model.tool != .select { model.tool = .select; return .handled }
             model.selection = nil
             return .handled
         }
@@ -157,6 +187,18 @@ struct CanvasArea: View {
     private func dragGesture(rect: CGRect) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { v in
+                hoverPoint = v.location
+                if model.tool != .select {
+                    guard let id = brushTarget else { return }
+                    let (x, y) = normalized(v.location, rect)
+                    if !painting {
+                        painting = true
+                        let (sx, sy) = normalized(v.startLocation, rect)
+                        model.beginStroke(layer: id, canvasX: sx, canvasY: sy)
+                    }
+                    model.extendStroke(layer: id, canvasX: x, canvasY: y)
+                    return
+                }
                 if drag == nil {
                     if let h = handleHit(v.startLocation, rect: rect), let l = model.selectedLayer {
                         drag = DragState(layerID: l.id, handle: h, start: l.frame)
@@ -198,9 +240,33 @@ struct CanvasArea: View {
                 }
             }
             .onEnded { _ in
+                painting = false
                 drag = nil
                 model.activeSnapLines = ([], [])
             }
+    }
+
+    /// The image layer the brush paints on: the selection, else the main photo.
+    private var brushTarget: UUID? {
+        if let l = model.selectedLayer, l.imageContent != nil { return l.id }
+        return model.document.photoLayers.first?.id
+    }
+
+    private var brushBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: model.tool == .erase ? "eraser" : "paintbrush.pointed")
+            Text(model.tool == .erase ? "Erasing from \(model.document.layer(brushTarget)?.name ?? "photo")" : "Restoring \(model.document.layer(brushTarget)?.name ?? "photo")")
+                .font(.system(size: 12, weight: .medium))
+            Slider(value: Binding(get: { model.brushSize }, set: { model.brushSize = $0 }), in: 0.01...0.2)
+                .frame(width: 110)
+                .controlSize(.small)
+            Button("Done") { model.tool = .select }
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.hairline))
     }
 
     /// Snaps an edge or center of a span to the golden, thirds, center and margin lines.

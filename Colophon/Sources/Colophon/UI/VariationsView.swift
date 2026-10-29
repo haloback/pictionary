@@ -32,7 +32,7 @@ struct VariationsView: View {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 0) {
                     Text(model.document.book.title.isEmpty ? "Cover Ideas" : model.document.book.title).font(.headline)
-                    Text(model.isGenerating ? "Designing…" : "\(model.variations.count) ideas, \(model.document.book.genre.label)")
+                    Text(model.isGenerating ? "Designing…" : (model.isRemix ? "\(model.variations.count) takes on your cover" : "\(model.variations.count) ideas, \(model.document.book.genre.label)"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
@@ -94,6 +94,10 @@ private struct VariationCard: View {
                             .buttonStyle(.borderedProminent)
                         Menu {
                             Button("More with this layout") { model.generateVariations(only: Archetype.allCases.first { $0.label == variation.document.archetypeName }) }
+                            Button("More like this one") {
+                                model.adopt(variation)
+                                model.remixCurrent()
+                            }
                         } label: { Image(systemName: "ellipsis") }
                             .menuStyle(.borderlessButton)
                             .fixedSize()

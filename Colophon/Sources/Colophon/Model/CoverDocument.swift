@@ -164,6 +164,82 @@ struct ImageContent: Codable, Hashable {
     var focusX: Double = 0.5
     var focusY: Double = 0.5
     var flipped: Bool = false
+    /// Brush touch-ups to the cutout (or plain erasing when the whole image shows).
+    var maskEdits: [MaskStroke] = []
+
+    init(assetID: UUID) {
+        self.assetID = assetID
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        assetID = try c.decode(UUID.self, forKey: .assetID)
+        cutout = try c.decodeIfPresent(Cutout.self, forKey: .cutout) ?? .none
+        zoom = try c.decodeIfPresent(Double.self, forKey: .zoom) ?? 1
+        focusX = try c.decodeIfPresent(Double.self, forKey: .focusX) ?? 0.5
+        focusY = try c.decodeIfPresent(Double.self, forKey: .focusY) ?? 0.5
+        flipped = try c.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
+        maskEdits = try c.decodeIfPresent([MaskStroke].self, forKey: .maskEdits) ?? []
+    }
+}
+
+struct NPoint: Codable, Hashable {
+    var x: Double
+    var y: Double
+}
+
+/// One brush stroke in image space (0...1, top-left origin).
+struct MaskStroke: Codable, Hashable {
+    /// true restores pixels, false erases them.
+    var restore: Bool
+    /// Brush radius as a fraction of the image's shorter side.
+    var radius: Double
+    var points: [NPoint]
+}
+
+enum PaperType: String, Codable, CaseIterable, Identifiable {
+    case white, cream, color
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .white: return "White paper"
+        case .cream: return "Cream paper"
+        case .color: return "Premium color"
+        }
+    }
+    /// Inches of spine per page (KDP's published per-page thickness).
+    var inchesPerPage: Double {
+        switch self {
+        case .white: return 0.002252
+        case .cream: return 0.0025
+        case .color: return 0.002347
+        }
+    }
+}
+
+/// Settings for the printed paperback wraparound.
+struct PrintSettings: Codable, Hashable {
+    var trimWidth: Double = 6
+    var trimHeight: Double = 9
+    var pageCount: Int = 300
+    var paper: PaperType = .cream
+    var blurb: String = ""
+    var quote: String = ""
+    var keepBarcodeArea: Bool = true
+
+    static let bleed = 0.125
+    static let dpi = 300.0
+
+    var spineWidth: Double { Double(pageCount) * paper.inchesPerPage }
+    /// KDP allows spine text from 80 pages; thinner spines can't hold it reliably.
+    var spineHasText: Bool { pageCount >= 80 }
+    var fullWidth: Double { 2 * trimWidth + spineWidth + 2 * PrintSettings.bleed }
+    var fullHeight: Double { trimHeight + 2 * PrintSettings.bleed }
+
+    static let trims: [(String, Double, Double)] = [
+        ("5 x 8 in", 5, 8), ("5.25 x 8 in", 5.25, 8), ("5.5 x 8.5 in", 5.5, 8.5),
+        ("6 x 9 in", 6, 9), ("7 x 10 in", 7, 10), ("8.5 x 11 in", 8.5, 11)
+    ]
 }
 
 enum FillStyle: String, Codable, CaseIterable, Identifiable {
@@ -412,6 +488,7 @@ struct CoverDocument: Codable {
     var archetypeName: String = ""
     /// Font files the user imported, keyed by PostScript name, so the project opens anywhere.
     var fonts: [String: Data] = [:]
+    var paperback = PrintSettings()
 
     init() {}
 
@@ -427,6 +504,7 @@ struct CoverDocument: Codable {
         palette = try c.decodeIfPresent([RGBA].self, forKey: .palette) ?? []
         archetypeName = try c.decodeIfPresent(String.self, forKey: .archetypeName) ?? ""
         fonts = try c.decodeIfPresent([String: Data].self, forKey: .fonts) ?? [:]
+        paperback = try c.decodeIfPresent(PrintSettings.self, forKey: .paperback) ?? PrintSettings()
     }
 
     func assetData(_ id: UUID) -> Data? { assets[id.uuidString] }

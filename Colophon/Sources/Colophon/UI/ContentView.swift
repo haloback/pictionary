@@ -25,5 +25,6 @@ struct ContentView: View {
         .tint(Theme.accent)
         .sheet(isPresented: $model.showExport) { ExportSheet().environment(model) }
         .sheet(isPresented: $model.showSeries) { SeriesSheet().environment(model) }
+        .sheet(isPresented: $model.showPaperback) { PaperbackSheet().environment(model) }
     }
 }

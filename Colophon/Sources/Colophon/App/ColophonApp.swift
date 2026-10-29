@@ -71,6 +71,8 @@ struct AppCommands: Commands {
         }
         CommandMenu("Design") {
             Button("Generate Cover Ideas") { model.generateVariations() }.keyboardShortcut("g", modifiers: [.command, .shift])
+            Button("More Like This Cover") { model.remixCurrent() }.keyboardShortcut("m", modifiers: [.command, .shift])
+            Button("Paperback Wraparound…") { model.showPaperback = true }.keyboardShortcut("b", modifiers: [.command, .shift])
             Button("Auto-Polish Legibility") { model.autoPolish() }.keyboardShortcut("p", modifiers: [.command, .shift])
             Divider()
             Button("Add Text") { model.addText() }.keyboardShortcut("t", modifiers: [.command, .shift])

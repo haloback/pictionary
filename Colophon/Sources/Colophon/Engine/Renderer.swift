@@ -143,8 +143,15 @@ final class CoverRenderer {
 
     private func renderImage(_ ic: ImageContent, doc: CoverDocument, w: Int, h: Int, quality: Quality, cutout: Cutout) -> CGImage? {
         let data = doc.assetData(ic.assetID)
-        guard let src = AssetStore.shared.cutout(ic.assetID, data: data, mode: cutout, resolution: quality.assetResolution),
+        guard var src = AssetStore.shared.cutout(ic.assetID, data: data, mode: cutout, resolution: quality.assetResolution),
               let ctx = Gfx.context(w, h) else { return nil }
+        if !ic.maskEdits.isEmpty,
+           let full = AssetStore.shared.image(ic.assetID, data: data, resolution: quality.assetResolution),
+           let edited = MaskPainter.apply(ic.maskEdits, to: full,
+                                          base: cutout == .none ? nil : AssetStore.shared.mask(ic.assetID, data: data),
+                                          invertBase: cutout == .background) {
+            src = edited
+        }
         let iw = CGFloat(src.width), ih = CGFloat(src.height)
         let W = CGFloat(w), H = CGFloat(h)
         let s = max(W / iw, H / ih) * CGFloat(max(1, ic.zoom))
@@ -245,5 +252,53 @@ final class CoverRenderer {
         out.clip(to: rect, mask: m)
         out.draw(img, in: rect)
         return out.makeImage()
+    }
+}
+
+
+/// Applies brush strokes on top of the automatic subject mask.
+enum MaskPainter {
+    static func apply(_ strokes: [MaskStroke], to image: CGImage, base: CGImage?, invertBase: Bool) -> CGImage? {
+        let w = image.width, h = image.height
+        guard let ctx = Gfx.grayContext(w, h) else { return nil }
+        let rect = CGRect(x: 0, y: 0, width: w, height: h)
+        if let base {
+            ctx.draw(base, in: rect)
+            if invertBase {
+                ctx.setBlendMode(.difference)
+                ctx.setFillColor(gray: 1, alpha: 1)
+                ctx.fill(rect)
+                ctx.setBlendMode(.normal)
+            }
+        } else {
+            ctx.setFillColor(gray: 1, alpha: 1)
+            ctx.fill(rect)
+        }
+        let unit = CGFloat(min(w, h))
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        for s in strokes {
+            ctx.setStrokeColor(gray: s.restore ? 1 : 0, alpha: 1)
+            ctx.setFillColor(gray: s.restore ? 1 : 0, alpha: 1)
+            let r = CGFloat(s.radius) * unit
+            let pts = s.points.map { CGPoint(x: CGFloat($0.x) * CGFloat(w), y: CGFloat(1 - $0.y) * CGFloat(h)) }
+            guard let first = pts.first else { continue }
+            if pts.count == 1 {
+                ctx.fillEllipse(in: CGRect(x: first.x - r, y: first.y - r, width: 2 * r, height: 2 * r))
+                continue
+            }
+            ctx.setLineWidth(2 * r)
+            ctx.move(to: first)
+            for p in pts.dropFirst() { ctx.addLine(to: p) }
+            ctx.strokePath()
+        }
+        guard let mask = ctx.makeImage() else { return nil }
+        // Feather the brushed edge slightly so it blends like a real cutout.
+        let soft = FX.blur(CIImage(cgImage: mask), max(1, unit * 0.002))
+        let out = CIImage(cgImage: image).applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: CIImage.empty(),
+            kCIInputMaskImageKey: soft
+        ])
+        return Gfx.render(out, extent: CGRect(x: 0, y: 0, width: w, height: h))
     }
 }
