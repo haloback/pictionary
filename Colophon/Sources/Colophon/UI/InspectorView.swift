@@ -155,9 +155,15 @@ private struct TextSection: View {
             }
             ValueSlider(label: "Tracking", value: t.tracking, range: -0.05...0.6) { String(format: "%.2f", $0) }
             ValueSlider(label: "Leading", value: t.lineHeight, range: 0.75...1.6) { String(format: "%.2f", $0) }
+            ValueSlider(label: "Curve", value: t.arc, range: -1...1) { v in
+                abs(v) < 0.01 ? "Flat" : String(format: "%+.0f%%", v * 100)
+            }
         }
         PanelSection("Color & Finish") {
-            RGBAPicker(label: "Fill", color: t.color)
+            FieldRow("Finish") {
+                Picker("", selection: t.texture) { ForEach(TextTexture.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            RGBAPicker(label: t.wrappedValue.texture == .neon ? "Tube" : "Fill", color: t.color)
             colorSuggestions
             Toggle("Gradient", isOn: Binding(get: { t.wrappedValue.gradientTo != nil }, set: { on in
                 t.wrappedValue.gradientTo = on ? PaletteRoles(model.document.palette).accent.withLightness(0.7) : nil

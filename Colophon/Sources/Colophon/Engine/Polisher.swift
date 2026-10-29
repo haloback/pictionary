@@ -121,6 +121,19 @@ enum SuggestionEngine {
             }
         }
 
+        if let tl = titleLayer, tl.textContent?.texture == TextTexture.none {
+            let finish = TextTexture.suggested(for: doc.book.genre)
+            out.append(Suggestion(symbol: "textformat.alt", title: "Give the title a \(finish.label.lowercased()) finish",
+                                  detail: "A finish readers associate with \(doc.book.genre.label.lowercased()) covers.") { d in
+                if let i = d.index(of: tl.id) { d.layers[i].textContent?.texture = finish }
+            })
+        }
+        if let tl = titleLayer, tl.textContent?.arc == 0, (tl.textContent?.text.split(separator: "\n").count ?? 2) == 1 {
+            out.append(Suggestion(symbol: "arrow.up.and.down.text.horizontal", title: "Arch the title",
+                                  detail: "A gentle curve suits medallion, arch and badge-style covers.") { d in
+                if let i = d.index(of: tl.id) { d.layers[i].textContent?.arc = 0.35 }
+            })
+        }
         out.append(Suggestion(symbol: "scribble.variable", title: "Smear paint across the artwork",
                               detail: "Streaks of your palette, overlaid softly so the photo shows through.") { d in
             var l = Layer.fill(.paintSmear, colors: [p.dark, p.accent, p.dominant, p.light], seed: Int.random(in: 1...99999), intensity: 0.6)

@@ -346,6 +346,79 @@ struct TextContent: Codable, Hashable {
     var glowRadius: Double = 0.25
     /// Re-draws the photo's subject over the text so the type sits behind it.
     var behindSubject: Bool = false
+    /// A genre finish: metal foils, distressed print, neon...
+    var texture: TextTexture = .none
+    /// Bends each line along an arc. Positive arches up, negative sags down; 1 is a half circle.
+    var arc: Double = 0
+}
+
+extension TextContent {
+    // Declared in an extension so the memberwise initializer stays available.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(text: try c.decode(String.self, forKey: .text))
+        role = try c.decodeIfPresent(TextRole.self, forKey: .role) ?? .custom
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? "Didot"
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 0.05
+        autoFit = try c.decodeIfPresent(Bool.self, forKey: .autoFit) ?? true
+        tracking = try c.decodeIfPresent(Double.self, forKey: .tracking) ?? 0
+        lineHeight = try c.decodeIfPresent(Double.self, forKey: .lineHeight) ?? 1.04
+        alignment = try c.decodeIfPresent(TextAlign.self, forKey: .alignment) ?? .center
+        letterCase = try c.decodeIfPresent(LetterCase.self, forKey: .letterCase) ?? .asTyped
+        color = try c.decodeIfPresent(RGBA.self, forKey: .color) ?? .nearWhite
+        gradientTo = try c.decodeIfPresent(RGBA.self, forKey: .gradientTo)
+        strokeColor = try c.decodeIfPresent(RGBA.self, forKey: .strokeColor)
+        strokeWidth = try c.decodeIfPresent(Double.self, forKey: .strokeWidth) ?? 0.025
+        glowColor = try c.decodeIfPresent(RGBA.self, forKey: .glowColor)
+        glowRadius = try c.decodeIfPresent(Double.self, forKey: .glowRadius) ?? 0.25
+        behindSubject = try c.decodeIfPresent(Bool.self, forKey: .behindSubject) ?? false
+        texture = try c.decodeIfPresent(TextTexture.self, forKey: .texture) ?? .none
+        arc = try c.decodeIfPresent(Double.self, forKey: .arc) ?? 0
+    }
+}
+
+enum TextTexture: String, Codable, CaseIterable, Identifiable {
+    case none, gold, silver, roseGold, copper, neon, distressed, wornPrint, chalk
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: return "Flat Color"
+        case .gold: return "Gold Foil"
+        case .silver: return "Silver Foil"
+        case .roseGold: return "Rose Gold"
+        case .copper: return "Copper"
+        case .neon: return "Neon"
+        case .distressed: return "Distressed"
+        case .wornPrint: return "Worn Print"
+        case .chalk: return "Chalk"
+        }
+    }
+
+    /// The genres each finish is at home in, for suggestions.
+    static func suggested(for g: Genre) -> TextTexture {
+        switch g {
+        case .thriller, .horror, .mystery: return .distressed
+        case .fantasy, .historical: return .gold
+        case .scienceFiction: return .neon
+        case .romance, .cozy: return .roseGold
+        case .youngAdult: return .neon
+        case .literary, .memoir: return .wornPrint
+        case .nonfiction: return .silver
+        }
+    }
+
+    /// Metal ramps, top to bottom, with a bright band just above the middle.
+    var metalStops: [RGBA]? {
+        switch self {
+        case .gold: return ["7A5A16", "C99A3B", "FFF1C1", "B8862B", "E7C877", "6E4F12"].map { RGBA(hex: $0) }
+        case .silver: return ["5E6369", "B9BEC4", "FAFBFC", "8D9399", "D7DBDF", "4E5358"].map { RGBA(hex: $0) }
+        case .roseGold: return ["8A4B45", "D99A8F", "FFE3DC", "B8706A", "F0C0B5", "7A3F3A"].map { RGBA(hex: $0) }
+        case .copper: return ["5C2E14", "B8693A", "FFD2AE", "9A4F24", "D99060", "4A230E"].map { RGBA(hex: $0) }
+        default: return nil
+        }
+    }
 }
 
 enum LayerContent: Codable, Hashable {

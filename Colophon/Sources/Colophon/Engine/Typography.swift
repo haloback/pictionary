@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import CoreText
 
 /// Fonts that ship with macOS, grouped the way a cover designer thinks about them.
@@ -230,16 +231,28 @@ enum TextRenderer {
         return Metrics(lines: lines, bounds: bounds, advance: advance, width: width, height: max(1, height), top: top, fontSize: size)
     }
 
+    /// How far an arched line bends beyond its straight height, per unit of line width.
+    static func sagFactor(_ arc: Double) -> CGFloat {
+        let a = abs(arc)
+        guard a > 0.001 else { return 0 }
+        return CGFloat((1 - cos(a * .pi / 2)) / (a * .pi))
+    }
+
     /// Size that makes the text exactly fill the box (glyph bounds scale linearly with size).
     static func fittedSize(_ t: TextContent, box: CGSize) -> CGFloat {
         let ref: CGFloat = 100
         let m = measure(t, size: ref, wrapWidth: nil)
         guard m.width > 0, m.height > 0 else { return max(2, box.height * 0.5) }
-        return max(2, min(box.width / m.width, box.height / m.height) * ref * 0.995)
+        let sag = m.width * sagFactor(t.arc)
+        return max(2, min(box.width / m.width, box.height / (m.height + sag)) * ref * 0.995)
     }
 
     static func resolvedSize(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> CGFloat {
         t.autoFit ? fittedSize(t, box: box) : max(2, CGFloat(t.fontSize) * canvasHeight)
+    }
+
+    private static func seed(_ s: String) -> Int {
+        s.unicodeScalars.reduce(17) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
     }
 
     /// Returns the rendered text and the padding added around the box for strokes and glows.
@@ -247,14 +260,18 @@ enum TextRenderer {
         guard box.width >= 1, box.height >= 1 else { return nil }
         let size = resolvedSize(t, box: box, canvasHeight: canvasHeight)
         let m = measure(t, size: size, wrapWidth: t.autoFit ? nil : box.width)
+        let neon = t.texture == .neon
+        let glowColor: RGBA? = neon ? t.color : t.glowColor
+        let glowRadius = neon ? max(t.glowRadius, 0.35) : t.glowRadius
         var pad: CGFloat = 2
-        if t.glowColor != nil { pad += size * CGFloat(t.glowRadius) * 1.6 }
+        if glowColor != nil { pad += size * CGFloat(glowRadius) * 1.6 }
         if t.strokeColor != nil { pad += size * CGFloat(t.strokeWidth) * 2 }
         let W = Int(ceil(box.width + 2 * pad)), H = Int(ceil(box.height + 2 * pad))
         guard let maskCtx = Gfx.grayContext(W, H), let fillCtx = Gfx.context(W, H), let out = Gfx.context(W, H) else { return nil }
         let rect = CGRect(x: 0, y: 0, width: W, height: H)
 
-        let blockTop = pad + (box.height - m.height) / 2
+        let sag = m.width * sagFactor(t.arc)
+        let blockTop = pad + (box.height - (m.height + sag)) / 2 + (t.arc < 0 ? sag : 0)
         var positions: [CGPoint] = []
         for (i, b) in m.bounds.enumerated() {
             let baselineFromTop = blockTop + m.top + CGFloat(i) * m.advance
@@ -266,12 +283,49 @@ enum TextRenderer {
             }
             positions.append(CGPoint(x: x, y: CGFloat(H) - baselineFromTop))
         }
+
+        func drawLine(_ ctx: CGContext, _ i: Int) {
+            let line = m.lines[i], pos = positions[i], b = m.bounds[i]
+            guard abs(t.arc) > 0.001, b.width > 1 else {
+                ctx.textPosition = pos
+                CTLineDraw(line, ctx)
+                return
+            }
+            // Set each glyph on a circle so the line arches.
+            let R = b.width / (CGFloat(abs(t.arc)) * .pi)
+            let sgn: CGFloat = t.arc > 0 ? 1 : -1
+            let cx = pos.x + b.minX + b.width / 2
+            let center = CGPoint(x: cx, y: pos.y - sgn * R)
+            guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return }
+            for run in runs {
+                let count = CTRunGetGlyphCount(run)
+                guard count > 0 else { continue }
+                var glyphs = [CGGlyph](repeating: 0, count: count)
+                var points = [CGPoint](repeating: .zero, count: count)
+                var advances = [CGSize](repeating: .zero, count: count)
+                CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+                CTRunGetPositions(run, CFRange(location: 0, length: 0), &points)
+                CTRunGetAdvances(run, CFRange(location: 0, length: 0), &advances)
+                let attrs = CTRunGetAttributes(run) as NSDictionary
+                guard let fontValue = attrs[kCTFontAttributeName as String] else { continue }
+                let font = fontValue as! CTFont
+                for g in 0..<count {
+                    let gx = pos.x + points[g].x + advances[g].width / 2
+                    let phi = (gx - cx) / R
+                    let p = CGPoint(x: center.x + R * sin(phi), y: center.y + sgn * R * cos(phi))
+                    ctx.saveGState()
+                    ctx.translateBy(x: p.x, y: p.y)
+                    ctx.rotate(by: -sgn * phi)
+                    var glyph = glyphs[g]
+                    var origin = CGPoint(x: -advances[g].width / 2, y: points[g].y)
+                    CTFontDrawGlyphs(font, &glyph, &origin, 1, ctx)
+                    ctx.restoreGState()
+                }
+            }
+        }
         func drawLines(_ ctx: CGContext) {
             ctx.textMatrix = .identity
-            for (i, l) in m.lines.enumerated() {
-                ctx.textPosition = positions[i]
-                CTLineDraw(l, ctx)
-            }
+            for i in m.lines.indices { drawLine(ctx, i) }
         }
 
         maskCtx.setFillColor(gray: 0, alpha: 1)
@@ -280,21 +334,28 @@ enum TextRenderer {
         drawLines(maskCtx)
         guard let mask = maskCtx.makeImage() else { return nil }
 
+        // Fill: flat, gradient, metal ramp or a hot neon core.
+        let topY = CGFloat(H) - blockTop, bottomY = topY - m.height - sag
+        var stops: [RGBA]?
+        if let metal = t.texture.metalStops {
+            stops = metal
+        } else if neon {
+            stops = [t.color.mixed(with: .white, 0.75), t.color.mixed(with: .white, 0.55)]
+        } else if let g = t.gradientTo {
+            stops = [t.color, g]
+        }
         fillCtx.saveGState()
         fillCtx.clip(to: rect, mask: mask)
-        if let g = t.gradientTo {
-            // Top of the type to its bottom.
-            let topY = CGFloat(H) - blockTop, bottomY = topY - m.height
-            if let grad = CGGradient(colorsSpace: Gfx.sRGB, colors: [t.color.cgColor, g.cgColor] as CFArray, locations: nil) {
-                fillCtx.drawLinearGradient(grad, start: CGPoint(x: 0, y: topY), end: CGPoint(x: 0, y: bottomY),
-                                           options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-            }
+        if let stops, let grad = CGGradient(colorsSpace: Gfx.sRGB, colors: stops.map(\.cgColor) as CFArray, locations: nil) {
+            fillCtx.drawLinearGradient(grad, start: CGPoint(x: 0, y: topY), end: CGPoint(x: 0, y: bottomY),
+                                       options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         } else {
             fillCtx.setFillColor(t.color.cgColor)
             fillCtx.fill(rect)
         }
         fillCtx.restoreGState()
-        guard let fill = fillCtx.makeImage() else { return nil }
+        guard var fill = fillCtx.makeImage() else { return nil }
+        fill = texture(fill, t.texture, size: size, seed: seed(t.text)) ?? fill
 
         if let s = t.strokeColor {
             out.setTextDrawingMode(.stroke)
@@ -303,16 +364,56 @@ enum TextRenderer {
             out.setStrokeColor(s.cgColor)
             drawLines(out)
             out.setTextDrawingMode(.fill)
+        } else if t.texture.metalStops != nil {
+            // A hairline edge gives foil its pressed-in look.
+            out.setTextDrawingMode(.stroke)
+            out.setLineWidth(max(1, size * 0.012))
+            out.setStrokeColor(t.texture.metalStops!.last!.withAlpha(0.8).cgColor)
+            drawLines(out)
+            out.setTextDrawingMode(.fill)
         }
-        if let glow = t.glowColor {
+        if let glow = glowColor {
             out.saveGState()
-            out.setShadow(offset: .zero, blur: size * CGFloat(t.glowRadius), color: glow.cgColor)
+            out.setShadow(offset: .zero, blur: size * CGFloat(glowRadius), color: glow.cgColor)
             out.draw(fill, in: rect)
             out.draw(fill, in: rect)
+            if neon {
+                out.setShadow(offset: .zero, blur: size * CGFloat(glowRadius) * 0.35, color: glow.cgColor)
+                out.draw(fill, in: rect)
+            }
             out.restoreGState()
         }
         out.draw(fill, in: rect)
         guard let img = out.makeImage() else { return nil }
         return (img, pad)
+    }
+
+    /// Surface treatments applied to the filled type.
+    private static func texture(_ img: CGImage, _ tex: TextTexture, size: CGFloat, seed: Int) -> CGImage? {
+        let ci = CIImage(cgImage: img)
+        let e = ci.extent
+        switch tex {
+        case .none, .neon:
+            return nil
+        case .gold, .silver, .roseGold, .copper:
+            // Fine sparkle in the foil.
+            let sparkle = FX.noise(e, seed: seed, grainSize: max(1, size * 0.01), strength: 0.18)
+            let out = FX.blend(sparkle, over: ci, mode: "CIOverlayBlendMode")
+                .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: ci])
+            return Gfx.render(out, extent: e)
+        case .distressed, .wornPrint, .chalk:
+            let fine = FX.noise(e, seed: seed, grainSize: max(1, size * (tex == .chalk ? 0.008 : 0.025)), strength: 1)
+            let blotches = FX.smoothNoise(e, seed: seed &+ 7, cells: max(6, Int(e.width / max(1, size * 0.6))))
+            let speckCut: Double = tex == .wornPrint ? 0.25 : (tex == .chalk ? 0.45 : 0.4)
+            // Push noise to mostly white with dark holes, then multiply the two.
+            let specks = FX.controls(fine, brightness: speckCut, contrast: 6)
+            let wear = FX.controls(blotches, brightness: tex == .wornPrint ? 0.35 : 0.2, contrast: 4)
+            let mask = FX.blend(specks, over: wear, mode: "CIMultiplyBlendMode")
+            var out = ci.applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: mask
+            ])
+            if tex == .chalk { out = FX.blur(out, max(0.5, size * 0.004)) }
+            return Gfx.render(out.cropped(to: e), extent: e)
+        }
     }
 }
