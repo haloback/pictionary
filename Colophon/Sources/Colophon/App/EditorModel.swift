@@ -29,6 +29,24 @@ enum InspectorTab: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system = "System", light = "Light", dark = "Dark"
+    var id: String { rawValue }
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
+struct CompareRef: Identifiable {
+    let id = UUID()
+    var name: String
+    var image: CGImage
+}
+
 enum CanvasTool: String {
     case select, erase, restore
 }
@@ -83,6 +101,21 @@ final class EditorModel {
     /// Brush diameter as a fraction of the cover's width.
     var brushSize: Double = 0.05
     var isRemix = false
+
+    var showCompare = false
+    var showShortcuts = false
+    var compareRefs: [CompareRef] = []
+    var recentFiles: [URL] = (UserDefaults.standard.stringArray(forKey: "recentFiles") ?? []).compactMap { URL(string: $0) }
+    var appearance: AppAppearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system
+
+    func setAppearance(_ a: AppAppearance) {
+        appearance = a
+        UserDefaults.standard.set(a.rawValue, forKey: "appearance")
+        NSApp.appearance = a.nsAppearance
+    }
+    /// A recovered cover from a session that ended without saving.
+    var recoveryAvailable = FileManager.default.fileExists(atPath: EditorModel.recoveryURL.path)
+    @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     var showSeries = false
     var copiedTextStyle: TextContent?
 
@@ -667,9 +700,102 @@ final class EditorModel {
             let data = try JSONEncoder().encode(document)
             try data.write(to: url, options: .atomic)
             isDirty = false
+            noteRecent(url)
+            discardRecovery()
             toast = "Saved \(url.lastPathComponent)"
         } catch {
             toast = "Couldn't save: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: Recent files, autosave and recovery
+
+    static var recoveryURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Colophon", isDirectory: true)
+        return dir.appendingPathComponent("Recovered Cover.colophon")
+    }
+
+    func noteRecent(_ url: URL) {
+        recentFiles.removeAll { $0 == url }
+        recentFiles.insert(url, at: 0)
+        recentFiles = Array(recentFiles.prefix(10))
+        UserDefaults.standard.set(recentFiles.map(\.absoluteString), forKey: "recentFiles")
+    }
+
+    func clearRecent() {
+        recentFiles = []
+        UserDefaults.standard.removeObject(forKey: "recentFiles")
+    }
+
+    func openRecent(_ url: URL) {
+        guard confirmDiscard() else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            recentFiles.removeAll { $0 == url }
+            toast = "That file has moved or been deleted"
+            return
+        }
+        load(url)
+    }
+
+    /// Saves unsaved work every 45 seconds: in place when the project has a file,
+    /// otherwise to a recovery file offered on the next launch.
+    func startAutosave() {
+        autosaveTask?.cancel()
+        NSApp.appearance = appearance.nsAppearance
+        autosaveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                self?.autosaveNow()
+            }
+        }
+    }
+
+    func autosaveNow() {
+        guard isDirty, !document.layers.isEmpty else { return }
+        if let url = fileURL {
+            if let data = try? JSONEncoder().encode(document), (try? data.write(to: url, options: .atomic)) != nil {
+                isDirty = false
+            }
+        } else {
+            let url = EditorModel.recoveryURL
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if let data = try? JSONEncoder().encode(document) { try? data.write(to: url, options: .atomic) }
+        }
+    }
+
+    func restoreRecovery() {
+        let url = EditorModel.recoveryURL
+        guard let data = try? Data(contentsOf: url), let doc = try? JSONDecoder().decode(CoverDocument.self, from: data) else {
+            discardRecovery()
+            return
+        }
+        document = doc
+        fileURL = nil
+        for f in doc.fonts.values { FontCatalog.register(f) }
+        screen = doc.layers.isEmpty ? .start : .editor
+        isDirty = true
+        recoveryAvailable = false
+        documentChanged()
+        toast = "Recovered your unsaved cover. Save it to keep it."
+    }
+
+    func discardRecovery() {
+        try? FileManager.default.removeItem(at: EditorModel.recoveryURL)
+        recoveryAvailable = false
+    }
+
+    // MARK: Compare
+
+    func addCompareReferences() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose covers to compare against, such as bestsellers in your genre"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            guard let data = try? Data(contentsOf: url), let img = AssetStore.decode(data, maxPixel: 1200) else { continue }
+            compareRefs.append(CompareRef(name: url.deletingPathExtension().lastPathComponent, image: img))
         }
     }
 
@@ -686,6 +812,7 @@ final class EditorModel {
             let doc = try JSONDecoder().decode(CoverDocument.self, from: data)
             document = doc
             fileURL = url
+            noteRecent(url)
             undoStack = []
             redoStack = []
             selection = nil

@@ -26,5 +26,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.showExport) { ExportSheet().environment(model) }
         .sheet(isPresented: $model.showSeries) { SeriesSheet().environment(model) }
         .sheet(isPresented: $model.showPaperback) { PaperbackSheet().environment(model) }
+        .sheet(isPresented: $model.showCompare) { CompareSheet().environment(model) }
+        .sheet(isPresented: $model.showShortcuts) { ShortcutsSheet() }
     }
 }

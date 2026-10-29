@@ -301,3 +301,54 @@ final class PrintAndRemixTests: XCTestCase {
         XCTAssertGreaterThan(center.data[3], 240, "corner should remain")
     }
 }
+
+final class FinishAndPromoTests: XCTestCase {
+    private func sampleDoc() -> CoverDocument {
+        var base = CoverDocument()
+        base.book = BookInfo(title: "Cold Black River", author: "Dara Okonkwo", tagline: "Some debts run deep.", genre: .thriller)
+        return CoverComposer.variations(base: base, count: 1, seed: 11)[0]
+    }
+
+    func testEveryTextFinishRenders() {
+        for tex in TextTexture.allCases {
+            var t = TextContent(text: "Night Ferry", role: .title, fontName: "Futura-Bold", color: RGBA(hex: "F2A541"))
+            t.texture = tex
+            XCTAssertNotNil(TextRenderer.render(t, box: CGSize(width: 600, height: 160), canvasHeight: 2560), tex.rawValue)
+        }
+    }
+
+    func testArchedTextFitsItsBox() {
+        for arc in [-1.0, -0.4, 0.35, 1.0] {
+            var t = TextContent(text: "THE SALT ORCHARD", role: .title, fontName: "Didot")
+            t.arc = arc
+            let box = CGSize(width: 900, height: 300)
+            let size = TextRenderer.fittedSize(t, box: box)
+            let m = TextRenderer.measure(t, size: size, wrapWidth: nil)
+            XCTAssertLessThanOrEqual(m.height + m.width * TextRenderer.sagFactor(arc), box.height + 1, "arc \(arc)")
+            XCTAssertNotNil(TextRenderer.render(t, box: box, canvasHeight: 2560))
+        }
+    }
+
+    func testAdsRenderAtTheirSizes() {
+        let doc = sampleDoc()
+        for kind in AdKind.allCases {
+            let img = AdRenderer.render(kind, doc: doc, headline: AdRenderer.defaultHeadline(doc), cta: "Read now")
+            XCTAssertEqual(img?.width, Int(kind.pixelSize.width), kind.rawValue)
+            XCTAssertEqual(img?.height, Int(kind.pixelSize.height), kind.rawValue)
+        }
+        XCTAssertEqual(AdRenderer.defaultHeadline(doc), "Some debts run deep.")
+    }
+
+    func testSpineArtComesFromTheWrap() throws {
+        let spine = try XCTUnwrap(MockupRenderer.spineImage(sampleDoc(), coverHeight: 900))
+        XCTAssertGreaterThan(spine.height, spine.width * 5)
+    }
+
+    func testTextureSurvivesSaveAndOpen() throws {
+        var t = TextContent(text: "Gilded", role: .title)
+        t.texture = .gold
+        t.arc = 0.3
+        let back = try JSONDecoder().decode(TextContent.self, from: JSONEncoder().encode(t))
+        XCTAssertEqual(back, t)
+    }
+}

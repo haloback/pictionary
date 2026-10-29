@@ -20,6 +20,15 @@ struct StartView: View {
                 Text("New Cover").font(.headline)
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    ForEach(model.recentFiles, id: \.self) { url in
+                        Button(url.deletingPathExtension().lastPathComponent) { model.openRecent(url) }
+                    }
+                    if model.recentFiles.isEmpty { Text("No recent covers") }
+                } label: {
+                    Label("Recent", systemImage: "clock")
+                }
+                .help("Open a recent cover")
                 Button { model.open() } label: { Label("Open", systemImage: "folder") }
                     .help("Open a saved .colophon project")
             }
@@ -33,6 +42,20 @@ struct StartView: View {
         return VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    if model.recoveryAvailable {
+                        HStack(spacing: 10) {
+                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Unsaved cover found").font(.system(size: 12, weight: .semibold))
+                                Text("From your last session.").font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Discard") { model.discardRecovery() }.controlSize(.small)
+                            Button("Restore") { model.restoreRecovery() }.controlSize(.small).buttonStyle(.borderedProminent)
+                        }
+                        .padding(10)
+                        .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.radius))
+                    }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Tell Colophon about the book")
                             .font(.system(size: 22, weight: .semibold))

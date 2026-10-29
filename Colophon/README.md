@@ -28,6 +28,35 @@ It's built for people with ideas but no formal design training. The guardrails (
 
 **Export.** One sRGB JPEG, PNG or TIFF per store at its recommended size, rendered from the full-resolution sources. The layout is stored in normalized coordinates, so a design re-flows to each store's proportions.
 
+**Type finishes.** Gold, silver, rose gold and copper foils, neon, distressed, worn print and chalk. Any line of type can arch up or sag down. The Ideas panel suggests the finish that suits your genre.
+
+**Refine the cutout.** Erase and Restore brushes fix the automatic subject edge, or erase parts of any picture.
+
+**More Like This.** Gives 11 takes on the cover you're editing. Each keeps your layout and edits and explores a new type treatment, palette, opposite accent, photo look, crop or flipped layout.
+
+**Paperback wraparound.**
+- **Settings:** choose a trim size (5x8 to 8.5x11), page count and paper; the spine width follows from KDP's per-page thickness.
+- **Back cover:** your art continues around from the front, with a pull quote, a blurb (warns if it runs long) and a clear barcode area.
+- **Spine:** title and author, from 80 pages up.
+- **Output:** a print-ready PDF at 300 DPI with 0.125 in bleed.
+
+**Marketing and ads.**
+- **Mockups:** a 3D book (using your real printed spine), phone, tablet, a book-and-phone scene, a social post and a square cover.
+- **Ad sizes:** Facebook feed, Instagram/TikTok story, X/Bluesky, Pinterest, BookBub and an Amazon A+ banner. Each lays out the 3D book with your headline and a call-to-action button.
+
+**Series covers.** Type the titles and get matching covers for every book, plus a lineup image.
+
+**Compare.**
+- **Side by side:** see your cover next to hearted ideas and real bestsellers you import.
+- **Store sizes:** search-result, also-bought and product-page sizes.
+- **Checks:** grayscale (e-ink), squint (blur) and dark-page views.
+
+**Everyday polish.**
+- **Fonts:** import your own; they're embedded in the project.
+- **Editing:** eyedropper, copy/paste text style, align buttons, and photo adjustments (exposure, contrast, saturation, warmth, sharpness, blur).
+- **Files:** recent files, and autosave every 45 seconds with crash recovery.
+- **App:** light, dark or system appearance, and a keyboard shortcut sheet (Command-/).
+
 ## Requirements
 
 - macOS 14 Sonoma or later
@@ -43,6 +72,14 @@ open build/Colophon.app
 ```
 
 Or open `Colophon/Package.swift` in Xcode and press Run.
+
+To ship a signed and notarized build, add these repository secrets. The workflow then signs with your Developer ID and notarizes automatically:
+- `MACOS_CERT_P12`: a base64 Developer ID Application certificate
+- `MACOS_CERT_PASSWORD`
+- `MACOS_SIGN_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_PASSWORD`: an app-specific password
 
 Every push that touches `Colophon/` also runs the GitHub Actions workflow in `.github/workflows/colophon-macos.yml`. It builds and tests on macOS and uploads a zipped `Colophon.app` as an artifact. The app is ad-hoc signed, so on first launch you need to right-click it and choose Open.
 

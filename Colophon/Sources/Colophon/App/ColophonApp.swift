@@ -11,7 +11,10 @@ struct ColophonApp: App {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 1120, minHeight: 740)
-                .onAppear { appDelegate.model = model }
+                .onAppear {
+                    appDelegate.model = model
+                    model.startAutosave()
+                }
         }
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands { AppCommands(model: model) }
@@ -28,6 +31,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// Never lose work on quit: unsaved changes go to the project file or the recovery file.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { model?.autosaveNow() }
+        return .terminateNow
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else { return }
@@ -48,6 +57,15 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Cover") { model.newProject() }.keyboardShortcut("n")
             Button("Open…") { model.open() }.keyboardShortcut("o")
+            Menu("Open Recent") {
+                ForEach(model.recentFiles, id: \.self) { url in
+                    Button(url.deletingPathExtension().lastPathComponent) { model.openRecent(url) }
+                }
+                if !model.recentFiles.isEmpty {
+                    Divider()
+                    Button("Clear Menu") { model.clearRecent() }
+                }
+            }
         }
         CommandGroup(replacing: .saveItem) {
             Button("Save") { model.save() }.keyboardShortcut("s")
@@ -91,6 +109,13 @@ struct AppCommands: Commands {
                 ForEach(GuideStyle.allCases) { Text($0.rawValue).tag($0) }
             }
             Button(model.showThumbnailPreview ? "Hide Thumbnail Preview" : "Show Thumbnail Preview") { model.showThumbnailPreview.toggle() }
+            Button("Compare at Store Size…") { model.showCompare = true }.keyboardShortcut("y", modifiers: [.command, .shift])
+            Picker("Appearance", selection: Binding(get: { model.appearance }, set: { model.setAppearance($0) })) {
+                ForEach(AppAppearance.allCases) { Text($0.rawValue).tag($0) }
+            }
+        }
+        CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") { model.showShortcuts = true }.keyboardShortcut("/", modifiers: .command)
         }
     }
 }

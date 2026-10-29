@@ -352,7 +352,8 @@ struct CheckInspector: View {
                     Text(model.targetStore.note).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 if let p = model.preview {
-                    PanelSection("Thumbnail Test") {
+                    PanelSection("Thumbnail Test", trailing: AnyView(
+                        Button("Compare…") { model.showCompare = true }.buttonStyle(.link).font(.system(size: 11)))) {
                         HStack(alignment: .bottom, spacing: 14) {
                             ForEach([48.0, 80.0, 120.0], id: \.self) { w in
                                 VStack(spacing: 4) {
@@ -472,6 +473,9 @@ struct ExportSheet: View {
     @State private var running = false
     @State private var written: [URL] = []
     @State private var mockups: Set<MockupKind> = [.book3D, .social]
+    @State private var ads: Set<AdKind> = []
+    @State private var headline = ""
+    @State private var cta = "Available now"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -495,8 +499,26 @@ struct ExportSheet: View {
             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.radius))
             VStack(alignment: .leading, spacing: 6) {
                 Text("Marketing Images").font(.system(size: 12, weight: .semibold))
-                ForEach(MockupKind.allCases) { k in
-                    Toggle(k.label, isOn: Binding(get: { mockups.contains(k) }, set: { on in if on { mockups.insert(k) } else { mockups.remove(k) } }))
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 6) {
+                    ForEach(MockupKind.allCases) { k in
+                        Toggle(k.label, isOn: Binding(get: { mockups.contains(k) }, set: { on in if on { mockups.insert(k) } else { mockups.remove(k) } }))
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: Theme.radius))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ads & Promo").font(.system(size: 12, weight: .semibold))
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 6) {
+                    ForEach(AdKind.allCases) { k in
+                        Toggle(k.label, isOn: Binding(get: { ads.contains(k) }, set: { on in if on { ads.insert(k) } else { ads.remove(k) } }))
+                    }
+                }
+                if !ads.isEmpty {
+                    HStack {
+                        TextField("Headline", text: $headline).textFieldStyle(.roundedBorder)
+                        TextField("Button", text: $cta).textFieldStyle(.roundedBorder).frame(width: 140)
+                    }
                 }
             }
             .padding(12)
@@ -511,7 +533,7 @@ struct ExportSheet: View {
                 }
             }
             if running {
-                ProgressView(value: Double(progress), total: Double(max(1, selected.count + mockups.count)))
+                ProgressView(value: Double(progress), total: Double(max(1, selected.count + mockups.count + ads.count)))
             }
             if !written.isEmpty {
                 HStack {
@@ -527,11 +549,12 @@ struct ExportSheet: View {
                 Button("Export…") { export() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled((selected.isEmpty && mockups.isEmpty) || running)
+                    .disabled((selected.isEmpty && mockups.isEmpty && ads.isEmpty) || running)
             }
         }
         .padding(22)
-        .frame(width: 520)
+        .frame(width: 640)
+        .onAppear { if headline.isEmpty { headline = AdRenderer.defaultHeadline(model.document) } }
     }
 
     private func export() {
@@ -545,6 +568,9 @@ struct ExportSheet: View {
         let doc = model.document
         let fmt = format, q = quality
         let kinds = MockupKind.allCases.filter { mockups.contains($0) }
+        let adKinds = AdKind.allCases.filter { ads.contains($0) }
+        let head = headline.isEmpty ? AdRenderer.defaultHeadline(doc) : headline
+        let button = cta.isEmpty ? "Available now" : cta
         running = true
         progress = 0
         written = []
@@ -560,6 +586,13 @@ struct ExportSheet: View {
                 let url = folder.appendingPathComponent("\(base) - \(kind.fileSuffix).\(f.ext)")
                 if Exporter.write(img, to: url, format: f, quality: q) { urls.append(url) }
                 let done = specs.count + n + 1
+                Task { @MainActor in progress = done }
+            }
+            for (n, kind) in adKinds.enumerated() {
+                guard let img = AdRenderer.render(kind, doc: doc, headline: head, cta: button) else { continue }
+                let url = folder.appendingPathComponent("\(base) - \(kind.fileSuffix).\(fmt == .png ? "png" : "jpg")")
+                if Exporter.write(img, to: url, format: fmt == .png ? .png : .jpeg, quality: q) { urls.append(url) }
+                let done = specs.count + kinds.count + n + 1
                 Task { @MainActor in progress = done }
             }
             let finished = urls
@@ -675,6 +708,13 @@ struct SeriesSheet: View {
             if let lineup = SeriesKit.lineup(list) {
                 let url = folder.appendingPathComponent("Series Lineup.png")
                 if Exporter.write(lineup, to: url, format: .png, quality: 1) { urls.append(url) }
+            }
+            for (n, kind) in adKinds.enumerated() {
+                guard let img = AdRenderer.render(kind, doc: doc, headline: head, cta: button) else { continue }
+                let url = folder.appendingPathComponent("\(base) - \(kind.fileSuffix).\(fmt == .png ? "png" : "jpg")")
+                if Exporter.write(img, to: url, format: fmt == .png ? .png : .jpeg, quality: q) { urls.append(url) }
+                let done = specs.count + kinds.count + n + 1
+                Task { @MainActor in progress = done }
             }
             let finished = urls
             await MainActor.run {
