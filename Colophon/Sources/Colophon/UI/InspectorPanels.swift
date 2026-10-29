@@ -709,13 +709,6 @@ struct SeriesSheet: View {
                 let url = folder.appendingPathComponent("Series Lineup.png")
                 if Exporter.write(lineup, to: url, format: .png, quality: 1) { urls.append(url) }
             }
-            for (n, kind) in adKinds.enumerated() {
-                guard let img = AdRenderer.render(kind, doc: doc, headline: head, cta: button) else { continue }
-                let url = folder.appendingPathComponent("\(base) - \(kind.fileSuffix).\(fmt == .png ? "png" : "jpg")")
-                if Exporter.write(img, to: url, format: fmt == .png ? .png : .jpeg, quality: q) { urls.append(url) }
-                let done = specs.count + kinds.count + n + 1
-                Task { @MainActor in progress = done }
-            }
             let finished = urls
             await MainActor.run {
                 written = finished
