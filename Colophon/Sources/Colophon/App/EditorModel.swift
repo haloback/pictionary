@@ -273,7 +273,7 @@ final class EditorModel {
         base.layers = []
         let count = archetype == nil ? variationCount : 8
         let seed = Int.random(in: 1...999_999)
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self, base] in
             let docs = CoverComposer.variations(base: base, count: count, seed: seed, only: archetype)
             let items = docs.map { Variation(document: $0, thumbnail: nil) }
             await self?.setVariations(items)

@@ -17,7 +17,7 @@ struct ContentView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task(id: t) {
                         try? await Task.sleep(nanoseconds: 2_200_000_000)
-                        withAnimation { model.toast = nil }
+                        withAnimation { self.model.toast = nil }
                     }
             }
         }
