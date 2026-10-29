@@ -1,0 +1,28 @@
+name: Cadence (macOS app)
+
+on:
+  push:
+    paths: ["Cadence/**", ".github/workflows/cadence.yml"]
+  pull_request:
+    paths: ["Cadence/**", ".github/workflows/cadence.yml"]
+
+jobs:
+  build:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: Cadence
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || true
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Package app
+        run: sh scripts/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cadence.app
+          path: Cadence/build/Cadence.app
