@@ -352,3 +352,68 @@ final class FinishAndPromoTests: XCTestCase {
         XCTAssertEqual(back, t)
     }
 }
+
+final class StyleEngineTests: XCTestCase {
+    func testBundledFontsRegister() {
+        XCTAssertGreaterThanOrEqual(BundledFonts.entries.count, 60)
+        for name in ["Cinzel-Bold", "BebasNeue-Regular", "Creepster-Regular", "Orbitron-Black", "GreatVibes-Regular", "PlayfairDisplay-Black"] {
+            XCTAssertTrue(FontCatalog.isAvailable(name), name)
+        }
+        XCTAssertEqual(Set(BundledFonts.entries.map(\.id)).count, BundledFonts.entries.count)
+    }
+
+    func testPresetsAreUniqueAndGenreReferencesResolve() {
+        XCTAssertGreaterThanOrEqual(TextStylePreset.all.count, 40)
+        XCTAssertEqual(Set(TextStylePreset.all.map(\.id)).count, TextStylePreset.all.count)
+        for g in Genre.allCases {
+            for id in TextStylePreset.forGenre(g) { XCTAssertNotNil(TextStylePreset.preset(id), "\(g) \(id)") }
+        }
+        for p in TextStylePreset.all {
+            XCTAssertTrue(p.fonts.contains(where: FontCatalog.isAvailable), "\(p.name) has no available font")
+        }
+    }
+
+    func testEveryPresetRendersOverAPhoto() throws {
+        let palette = PaletteRoles([RGBA(hex: "13404A"), RGBA(hex: "F2A541"), RGBA(hex: "F2ECDF")])
+        let bgCtx = try XCTUnwrap(Gfx.context(300, 170))
+        Gfx.linearGradient(bgCtx, CGRect(x: 0, y: 0, width: 300, height: 170), [RGBA(hex: "0C2229"), RGBA(hex: "F1B15A")], angle: 90)
+        let bg = try XCTUnwrap(bgCtx.makeImage())
+        for p in TextStylePreset.all {
+            var t = TextContent(text: "Salt Orchard", role: .title, fontName: p.fonts.first(where: FontCatalog.isAvailable) ?? "Didot", color: palette.light)
+            p.apply(to: &t, palette: palette)
+            let (img, _) = try XCTUnwrap(TextRenderer.render(t, box: CGSize(width: 260, height: 90), canvasHeight: 1000), p.name)
+            if t.style.needsScene {
+                let patch = try XCTUnwrap(bg.cropping(to: CGRect(x: 0, y: 0, width: min(300, img.width), height: min(170, img.height))))
+                let sized = try XCTUnwrap(Gfx.context(img.width, img.height))
+                sized.draw(patch, in: CGRect(x: 0, y: 0, width: img.width, height: img.height))
+                XCTAssertNotNil(TextStyler.blendIntoScene(img, background: try XCTUnwrap(sized.makeImage()), style: t.style, fontSize: 70), p.name)
+            }
+        }
+    }
+
+    func testEverySurfaceAndWearRenders() {
+        let e = CGRect(x: 0, y: 0, width: 120, height: 60)
+        for s in SurfaceTexture.allCases {
+            XCTAssertNotNil(Gfx.render(SurfaceGen.make(s, extent: e, size: 40, seed: 3), extent: e), s.rawValue)
+        }
+        let mask = CIImage(color: .white).cropped(to: e)
+        for w in WearKind.allCases {
+            XCTAssertNotNil(Gfx.render(TextStyler.wear(mask, kind: w, amount: 0.5, size: 40, seed: 2, extent: e), extent: e), w.rawValue)
+        }
+    }
+
+    func testStyledTitleRendersOnFullCover() {
+        var base = CoverDocument()
+        base.book = BookInfo(title: "The Salt Orchard", author: "Ines Valcourt", genre: .fantasy)
+        let docs = CoverComposer.variations(base: base, count: 6, seed: 4)
+        XCTAssertTrue(docs.contains { $0.textLayer(role: .title)?.textContent?.style.isActive == true }, "genre styles should be applied")
+        for d in docs { XCTAssertNotNil(CoverRenderer.shared.render(d, size: CGSize(width: 200, height: 320))) }
+    }
+
+    func testStyleSurvivesSaveAndOpen() throws {
+        var t = TextContent(text: "Gilt", role: .title)
+        TextStylePreset.preset("epic")!.apply(to: &t, palette: PaletteRoles([]))
+        let back = try JSONDecoder().decode(TextContent.self, from: JSONEncoder().encode(t))
+        XCTAssertEqual(back.style, t.style)
+    }
+}

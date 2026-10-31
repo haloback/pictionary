@@ -5,6 +5,11 @@ import CoreText
 /// Fonts that ship with macOS, grouped the way a cover designer thinks about them.
 enum FontCatalog {
     enum Mood: String, CaseIterable, Identifiable {
+        case fantasy = "Fantasy & Medieval"
+        case horror = "Horror & Grunge"
+        case scifi = "Sci-Fi & Tech"
+        case deco = "Art Deco & Retro"
+        case brush = "Brush & Marker"
         case didone = "Didone & High Contrast"
         case oldstyle = "Classic Serif"
         case slab = "Slab & Wedge"
@@ -21,7 +26,9 @@ enum FontCatalog {
         let mood: Mood
     }
 
-    static let curated: [Entry] = [
+    static var curated: [Entry] { BundledFonts.entries + systemCurated }
+
+    static let systemCurated: [Entry] = [
         Entry(id: "Didot", label: "Didot", mood: .didone),
         Entry(id: "Didot-Bold", label: "Didot Bold", mood: .didone),
         Entry(id: "Didot-Italic", label: "Didot Italic", mood: .didone),
@@ -83,9 +90,13 @@ enum FontCatalog {
         Entry(id: "Skia-Regular", label: "Skia", mood: .display)
     ]
 
-    static func isAvailable(_ name: String) -> Bool { NSFont(name: name, size: 12) != nil }
+    static func isAvailable(_ name: String) -> Bool {
+        _ = BundledFonts.registered
+        return NSFont(name: name, size: 12) != nil
+    }
 
     static func ctFont(_ name: String, size: CGFloat) -> CTFont {
+        _ = BundledFonts.registered
         if let f = NSFont(name: name, size: size) { return f as CTFont }
         return NSFont.systemFont(ofSize: size, weight: .bold) as CTFont
     }
@@ -266,6 +277,7 @@ enum TextRenderer {
         var pad: CGFloat = 2
         if glowColor != nil { pad += size * CGFloat(glowRadius) * 1.6 }
         if t.strokeColor != nil { pad += size * CGFloat(t.strokeWidth) * 2 }
+        if t.style.isActive { pad += size * CGFloat(t.style.paddingFactor) }
         let W = Int(ceil(box.width + 2 * pad)), H = Int(ceil(box.height + 2 * pad))
         guard let maskCtx = Gfx.grayContext(W, H), let fillCtx = Gfx.context(W, H), let out = Gfx.context(W, H) else { return nil }
         let rect = CGRect(x: 0, y: 0, width: W, height: H)
@@ -356,6 +368,27 @@ enum TextRenderer {
         fillCtx.restoreGState()
         guard var fill = fillCtx.makeImage() else { return nil }
         fill = texture(fill, t.texture, size: size, seed: seed(t.text)) ?? fill
+
+        // The layered style engine takes over the face, outlines, depth and wear.
+        if t.style.isActive, let styled = TextStyler.compose(mask: mask, fill: fill, style: t.style, color: t.color, fontSize: size, seed: seed(t.text)) {
+            if let s = t.strokeColor {
+                out.setTextDrawingMode(.stroke)
+                out.setLineWidth(size * CGFloat(t.strokeWidth) * 2)
+                out.setLineJoin(.round)
+                out.setStrokeColor(s.cgColor)
+                drawLines(out)
+                out.setTextDrawingMode(.fill)
+            }
+            if let glow = glowColor {
+                out.saveGState()
+                out.setShadow(offset: .zero, blur: size * CGFloat(glowRadius), color: glow.cgColor)
+                out.draw(styled, in: rect)
+                out.restoreGState()
+            }
+            out.draw(styled, in: rect)
+            guard let img = out.makeImage() else { return nil }
+            return (img, pad)
+        }
 
         if let s = t.strokeColor {
             out.setTextDrawingMode(.stroke)

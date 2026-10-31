@@ -13,6 +13,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Colophon"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+mkdir -p "$APP/Contents/Resources/Fonts"
+cp Fonts/*.ttf "$APP/Contents/Resources/Fonts/"
+cp -R Fonts/licenses "$APP/Contents/Resources/Fonts/licenses"
 
 # App icon, drawn with Core Graphics at build time.
 if swift scripts/make-icon.swift build/AppIcon.iconset >/dev/null 2>&1; then

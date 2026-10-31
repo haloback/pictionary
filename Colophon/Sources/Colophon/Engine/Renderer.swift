@@ -48,7 +48,15 @@ final class CoverRenderer {
         ctx.scaleBy(x: 1, y: -1)
 
         for (i, layer) in doc.layers.enumerated() where layer.isVisible && !excluding.contains(layer.id) {
-            guard let r = rasterize(layer, doc: doc, canvas: canvas, quality: quality) else { continue }
+            guard var r = rasterize(layer, doc: doc, canvas: canvas, quality: quality) else { continue }
+            // Scene passes read what is already on the cover under the type.
+            if let t = layer.textContent, t.style.needsScene, let soFar = ctx.makeImage(),
+               let patch = backgroundPatch(soFar, rect: r.rect, width: r.image.width, height: r.image.height) {
+                let size = TextRenderer.resolvedSize(t, box: layer.frame.pixels(in: canvas).size, canvasHeight: canvas.height)
+                if let blended = TextStyler.blendIntoScene(r.image, background: patch, style: t.style, fontSize: size) {
+                    r.image = blended
+                }
+            }
             composite(r, layer: layer, in: ctx, canvas: canvas)
 
             // Type behind the subject: draw the nearest photo's lifted subject back over the text.
@@ -62,6 +70,18 @@ final class CoverRenderer {
                 }
             }
         }
+        return ctx.makeImage()
+    }
+
+    /// The part of the cover under a raster, padded with transparency where it runs off the edge.
+    private func backgroundPatch(_ full: CGImage, rect: CGRect, width: Int, height: Int) -> CGImage? {
+        let canvasRect = CGRect(x: 0, y: 0, width: full.width, height: full.height)
+        let inter = rect.integral.intersection(canvasRect)
+        guard !inter.isNull, inter.width >= 1, inter.height >= 1, let crop = full.cropping(to: inter),
+              let ctx = Gfx.context(width, height) else { return nil }
+        let x = inter.minX - rect.minX
+        let yTop = inter.minY - rect.minY
+        ctx.draw(crop, in: CGRect(x: x, y: CGFloat(height) - yTop - inter.height, width: inter.width, height: inter.height))
         return ctx.makeImage()
     }
 

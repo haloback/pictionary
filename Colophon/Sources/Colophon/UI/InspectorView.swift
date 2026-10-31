@@ -122,6 +122,7 @@ private struct TextSection: View {
                 Picker("", selection: t.role) { ForEach(TextRole.allCases) { Text($0.label).tag($0) } }.labelsHidden()
             }
         }
+        StyleGallery(layer: $layer)
         PanelSection("Typeface") {
             Button { showFonts = true } label: {
                 HStack {
@@ -186,6 +187,7 @@ private struct TextSection: View {
                 ValueSlider(label: "Radius", value: t.glowRadius, range: 0.05...0.8)
             }
         }
+        StyleControls(t: t)
         PanelSection("Depth") {
             Toggle(isOn: t.behindSubject) {
                 VStack(alignment: .leading, spacing: 2) {

@@ -1,0 +1,416 @@
+[
+ {
+  "ps": "Cinzel-Regular",
+  "label": "Cinzel Regular",
+  "mood": "fantasy",
+  "family": "Cinzel"
+ },
+ {
+  "ps": "Cinzel-Bold",
+  "label": "Cinzel Bold",
+  "mood": "fantasy",
+  "family": "Cinzel"
+ },
+ {
+  "ps": "CinzelDecorative-Bold",
+  "label": "Cinzel Decorative Bold",
+  "mood": "fantasy",
+  "family": "Cinzel Decorative"
+ },
+ {
+  "ps": "CinzelDecorative-Black",
+  "label": "Cinzel Decorative Black",
+  "mood": "fantasy",
+  "family": "Cinzel Decorative"
+ },
+ {
+  "ps": "UncialAntiqua-Regular",
+  "label": "Uncial Antiqua",
+  "mood": "fantasy",
+  "family": "Uncial Antiqua"
+ },
+ {
+  "ps": "MedievalSharp",
+  "label": "MedievalSharp",
+  "mood": "fantasy",
+  "family": "MedievalSharp"
+ },
+ {
+  "ps": "PirataOne-Regular",
+  "label": "Pirata One",
+  "mood": "fantasy",
+  "family": "Pirata One"
+ },
+ {
+  "ps": "UnifrakturMaguntia",
+  "label": "UnifrakturMaguntia",
+  "mood": "fantasy",
+  "family": "UnifrakturMaguntia"
+ },
+ {
+  "ps": "IM_FELL_English_SC",
+  "label": "IM FELL English SC",
+  "mood": "fantasy",
+  "family": "IM Fell English SC"
+ },
+ {
+  "ps": "MarcellusSC-Regular",
+  "label": "Marcellus SC",
+  "mood": "fantasy",
+  "family": "Marcellus SC"
+ },
+ {
+  "ps": "PlayfairDisplay-BoldItalic",
+  "label": "Playfair Display Bold Italic",
+  "mood": "didone",
+  "family": "Playfair Display"
+ },
+ {
+  "ps": "PlayfairDisplay-Bold",
+  "label": "Playfair Display Bold",
+  "mood": "didone",
+  "family": "Playfair Display"
+ },
+ {
+  "ps": "PlayfairDisplay-Black",
+  "label": "Playfair Display Black",
+  "mood": "didone",
+  "family": "Playfair Display"
+ },
+ {
+  "ps": "BodoniModa-Bold",
+  "label": "Bodoni Moda Bold",
+  "mood": "didone",
+  "family": "Bodoni Moda"
+ },
+ {
+  "ps": "BodoniModa-Black",
+  "label": "Bodoni Moda Black",
+  "mood": "didone",
+  "family": "Bodoni Moda"
+ },
+ {
+  "ps": "AbrilFatface-Regular",
+  "label": "Abril Fatface",
+  "mood": "didone",
+  "family": "Abril Fatface"
+ },
+ {
+  "ps": "DMSerifDisplay-Italic",
+  "label": "DM Serif Display Italic",
+  "mood": "didone",
+  "family": "DM Serif Display"
+ },
+ {
+  "ps": "DMSerifDisplay-Regular",
+  "label": "DM Serif Display Regular",
+  "mood": "didone",
+  "family": "DM Serif Display"
+ },
+ {
+  "ps": "YesevaOne-Regular",
+  "label": "Yeseva One Regular",
+  "mood": "didone",
+  "family": "Yeseva One"
+ },
+ {
+  "ps": "RozhaOne-Regular",
+  "label": "Rozha One Regular",
+  "mood": "didone",
+  "family": "Rozha One"
+ },
+ {
+  "ps": "Prata-Regular",
+  "label": "Prata Regular",
+  "mood": "didone",
+  "family": "Prata"
+ },
+ {
+  "ps": "LibreCaslonDisplay-Regular",
+  "label": "Libre Caslon Display Regular",
+  "mood": "didone",
+  "family": "Libre Caslon Display"
+ },
+ {
+  "ps": "CormorantGaramond-MediumItalic",
+  "label": "Cormorant Garamond Medium Italic",
+  "mood": "didone",
+  "family": "Cormorant Garamond"
+ },
+ {
+  "ps": "CormorantGaramond-SemiBold",
+  "label": "Cormorant Garamond SemiBold",
+  "mood": "didone",
+  "family": "Cormorant Garamond"
+ },
+ {
+  "ps": "CormorantGaramond-Bold",
+  "label": "Cormorant Garamond Bold",
+  "mood": "didone",
+  "family": "Cormorant Garamond"
+ },
+ {
+  "ps": "Fraunces-Black",
+  "label": "Fraunces Black",
+  "mood": "didone",
+  "family": "Fraunces"
+ },
+ {
+  "ps": "BebasNeue-Regular",
+  "label": "Bebas Neue Regular",
+  "mood": "condensed",
+  "family": "Bebas Neue"
+ },
+ {
+  "ps": "Anton-Regular",
+  "label": "Anton Regular",
+  "mood": "condensed",
+  "family": "Anton"
+ },
+ {
+  "ps": "LeagueGothic-Regular",
+  "label": "League Gothic Regular",
+  "mood": "condensed",
+  "family": "League Gothic"
+ },
+ {
+  "ps": "Oswald-Bold",
+  "label": "Oswald Bold",
+  "mood": "condensed",
+  "family": "Oswald"
+ },
+ {
+  "ps": "BigShouldersDisplay-Black",
+  "label": "Big Shoulders Display Black",
+  "mood": "condensed",
+  "family": "Big Shoulders Display"
+ },
+ {
+  "ps": "SixCaps",
+  "label": "Six Caps",
+  "mood": "condensed",
+  "family": "Six Caps"
+ },
+ {
+  "ps": "Antonio-Bold",
+  "label": "Antonio Bold",
+  "mood": "condensed",
+  "family": "Antonio"
+ },
+ {
+  "ps": "Teko-SemiBold",
+  "label": "Teko SemiBold",
+  "mood": "condensed",
+  "family": "Teko"
+ },
+ {
+  "ps": "ArchivoBlack-Regular",
+  "label": "Archivo Black Regular",
+  "mood": "condensed",
+  "family": "Archivo Black"
+ },
+ {
+  "ps": "Montserrat-Black",
+  "label": "Montserrat Black",
+  "mood": "sans",
+  "family": "Montserrat"
+ },
+ {
+  "ps": "JosefinSans-Light",
+  "label": "Josefin Sans Light",
+  "mood": "sans",
+  "family": "Josefin Sans"
+ },
+ {
+  "ps": "JosefinSans-Bold",
+  "label": "Josefin Sans Bold",
+  "mood": "sans",
+  "family": "Josefin Sans"
+ },
+ {
+  "ps": "Syne-ExtraBold",
+  "label": "Syne ExtraBold",
+  "mood": "sans",
+  "family": "Syne"
+ },
+ {
+  "ps": "Unbounded-ExtraBold",
+  "label": "Unbounded ExtraBold",
+  "mood": "sans",
+  "family": "Unbounded"
+ },
+ {
+  "ps": "PoiretOne-Regular",
+  "label": "Poiret One",
+  "mood": "deco",
+  "family": "Poiret One"
+ },
+ {
+  "ps": "Limelight-Regular",
+  "label": "Limelight Regular",
+  "mood": "deco",
+  "family": "Limelight"
+ },
+ {
+  "ps": "Monoton-Regular",
+  "label": "Monoton",
+  "mood": "deco",
+  "family": "Monoton"
+ },
+ {
+  "ps": "Bungee-Regular",
+  "label": "Bungee Regular",
+  "mood": "deco",
+  "family": "Bungee"
+ },
+ {
+  "ps": "BungeeShade-Regular",
+  "label": "Bungee Shade Regular",
+  "mood": "deco",
+  "family": "Bungee Shade"
+ },
+ {
+  "ps": "BungeeInline-Regular",
+  "label": "Bungee Inline Regular",
+  "mood": "deco",
+  "family": "Bungee Inline"
+ },
+ {
+  "ps": "Righteous-Regular",
+  "label": "Righteous",
+  "mood": "deco",
+  "family": "Righteous"
+ },
+ {
+  "ps": "Rye-Regular",
+  "label": "Rye Regular",
+  "mood": "deco",
+  "family": "Rye"
+ },
+ {
+  "ps": "Orbitron-Black",
+  "label": "Orbitron Black",
+  "mood": "scifi",
+  "family": "Orbitron"
+ },
+ {
+  "ps": "Audiowide-Regular",
+  "label": "Audiowide Regular",
+  "mood": "scifi",
+  "family": "Audiowide"
+ },
+ {
+  "ps": "Michroma-Regular",
+  "label": "Michroma Regular",
+  "mood": "scifi",
+  "family": "Michroma"
+ },
+ {
+  "ps": "Syncopate-Bold",
+  "label": "Syncopate Bold",
+  "mood": "scifi",
+  "family": "Syncopate"
+ },
+ {
+  "ps": "Exo2-ExtraBold",
+  "label": "Exo 2 ExtraBold",
+  "mood": "scifi",
+  "family": "Exo 2"
+ },
+ {
+  "ps": "Creepster-Regular",
+  "label": "Creepster",
+  "mood": "horror",
+  "family": "Creepster"
+ },
+ {
+  "ps": "Nosifer-Regular",
+  "label": "Nosifer",
+  "mood": "horror",
+  "family": "Nosifer"
+ },
+ {
+  "ps": "Butcherman-Regular",
+  "label": "Butcherman Regular",
+  "mood": "horror",
+  "family": "Butcherman"
+ },
+ {
+  "ps": "MetalMania-Regular",
+  "label": "Metal Mania",
+  "mood": "horror",
+  "family": "Metal Mania"
+ },
+ {
+  "ps": "SpecialElite-Regular",
+  "label": "Special Elite Regular",
+  "mood": "horror",
+  "family": "Special Elite"
+ },
+ {
+  "ps": "GreatVibes-Regular",
+  "label": "Great Vibes Regular",
+  "mood": "script",
+  "family": "Great Vibes"
+ },
+ {
+  "ps": "PinyonScript-Regular",
+  "label": "Pinyon Script Regular",
+  "mood": "script",
+  "family": "Pinyon Script"
+ },
+ {
+  "ps": "Parisienne-Regular",
+  "label": "Parisienne",
+  "mood": "script",
+  "family": "Parisienne"
+ },
+ {
+  "ps": "AlexBrush-Regular",
+  "label": "Alex Brush Regular",
+  "mood": "script",
+  "family": "Alex Brush"
+ },
+ {
+  "ps": "Sacramento-Regular",
+  "label": "Sacramento",
+  "mood": "script",
+  "family": "Sacramento"
+ },
+ {
+  "ps": "Allura-Regular",
+  "label": "Allura Regular",
+  "mood": "script",
+  "family": "Allura"
+ },
+ {
+  "ps": "MrsSaintDelafield-Regular",
+  "label": "Mrs Saint Delafield",
+  "mood": "script",
+  "family": "Mrs Saint Delafield"
+ },
+ {
+  "ps": "PermanentMarker-Regular",
+  "label": "Permanent Marker Regular",
+  "mood": "brush",
+  "family": "Permanent Marker"
+ },
+ {
+  "ps": "RockSalt-Regular",
+  "label": "Rock Salt Regular",
+  "mood": "brush",
+  "family": "Rock Salt"
+ },
+ {
+  "ps": "CaveatBrush-Regular",
+  "label": "Caveat Brush",
+  "mood": "brush",
+  "family": "Caveat Brush"
+ },
+ {
+  "ps": "KaushanScript-Regular",
+  "label": "Kaushan Script",
+  "mood": "brush",
+  "family": "Kaushan Script"
+ }
+]

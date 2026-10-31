@@ -350,6 +350,8 @@ struct TextContent: Codable, Hashable {
     var texture: TextTexture = .none
     /// Bends each line along an arc. Positive arches up, negative sags down; 1 is a half circle.
     var arc: Double = 0
+    /// The layered style: material, relief, outlines, depth, wear and blending into the photo.
+    var style = TextStyle()
 }
 
 extension TextContent {
@@ -374,6 +376,7 @@ extension TextContent {
         behindSubject = try c.decodeIfPresent(Bool.self, forKey: .behindSubject) ?? false
         texture = try c.decodeIfPresent(TextTexture.self, forKey: .texture) ?? .none
         arc = try c.decodeIfPresent(Double.self, forKey: .arc) ?? 0
+        style = try c.decodeIfPresent(TextStyle.self, forKey: .style) ?? TextStyle()
     }
 }
 

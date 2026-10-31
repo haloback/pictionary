@@ -102,6 +102,17 @@ enum CoverComposer {
             doc.palette = palette.colors
             doc.archetypeName = arch.label
             doc.background = palette.dark
+            // Two of every three ideas get a genre title style, so the set stays varied.
+            let styles = TextStylePreset.forGenre(base.book.genre)
+            if !styles.isEmpty, (i + seed) % 3 != 2,
+               let preset = TextStylePreset.preset(styles[(i + round) % styles.count]),
+               let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
+                // Keep the treatment's font and colors; the style adds material and depth.
+                let keepColor = t.color
+                preset.apply(to: &t, palette: palette)
+                if preset.category != "Light" && preset.category != "Genre" { t.color = keepColor }
+                doc.layers[ti].textContent = t
+            }
             Polisher.polish(&doc, palette: palette)
             docs.append(doc)
         }
