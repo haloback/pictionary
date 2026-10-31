@@ -592,14 +592,14 @@ enum SurfaceGen {
             FX.gradientMap(FX.controls(FX.smoothNoise(e, seed: seed, cells: cells), contrast: contrast), hex.map { RGBA(hex: $0) })
         }
         let cells = max(3, Int(e.width / max(8, size * 0.9)))
-        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.5).clampedToExtent()
+        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.12).clampedToExtent()
             .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.4, kCIInputAngleKey: 0.0]).cropped(to: e)
 
         switch kind {
         case .none:
             return FX.solid(.white, e)
         case .gold:
-            return FX.blend(brushed, over: ramp(["6E4F12", "C99A3B", "FFF1C1", "B8862B", "E7C877", "7A5A16"], period: size * 1.1), mode: "CISoftLightBlendMode")
+            return FX.blend(brushed, over: ramp(["5E4210", "B8862B", "F2D27A", "FFF1C1", "C99A3B", "8A6418", "D9B45A"], period: size * 1.05), mode: "CISoftLightBlendMode")
         case .goldLeaf:
             let base = ramp(["8A6418", "D9AE4E", "FFF0B8", "C9963A"], period: size * 0.9)
             let flakes = FX.noise(e, seed: seed, grainSize: 1, strength: 1)
@@ -608,12 +608,12 @@ enum SurfaceGen {
             let seams = FX.controls(FX.mono(flakes.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 4.0]).cropped(to: e)), contrast: 2).applyingFilter("CIColorInvert")
             return FX.blend(seams, over: leaf, mode: "CIMultiplyBlendMode")
         case .silver:
-            return FX.blend(brushed, over: ramp(["4E5358", "B9BEC4", "FAFBFC", "8D9399", "D7DBDF", "5E6369"], period: size * 1.1), mode: "CIOverlayBlendMode")
+            return FX.blend(brushed, over: ramp(["4E5358", "A9AEB4", "F2F4F6", "FAFBFC", "8D9399", "C7CBCF"], period: size * 1.05), mode: "CISoftLightBlendMode")
         case .chrome:
             // Sky above a hard horizon, earth below: the classic airbrushed chrome.
             return ramp(["1B2B4A", "6E9BD6", "DCEBFF", "FFFFFF", "2A1C12", "8A5A2E", "E6B070", "FFF4D8"], period: size * 1.2)
         case .copper:
-            return FX.blend(brushed, over: ramp(["4A230E", "B8693A", "FFD2AE", "9A4F24", "D99060", "5C2E14"], period: size * 1.1), mode: "CISoftLightBlendMode")
+            return FX.blend(brushed, over: ramp(["4A230E", "A8592A", "F2B488", "FFD2AE", "B8693A", "D99060"], period: size * 1.05), mode: "CISoftLightBlendMode")
         case .bronze:
             let metal = ramp(["4A3214", "9A7034", "D9B06A", "7A5A26"], period: size)
             let patina = FX.controls(FX.smoothNoise(e, seed: seed &+ 11, cells: cells), brightness: -0.1, contrast: 3)
@@ -641,8 +641,8 @@ enum SurfaceGen {
         case .ice:
             let base = ramp(["4A8DB8", "9CD3F0", "F2FAFF", "7FB9DD"], period: size * 1.3)
             let facets = FX.noise(e, seed: seed, grainSize: 1, strength: 1)
-                .applyingFilter("CICrystallize", parameters: [kCIInputRadiusKey: size * 0.18, kCIInputCenterKey: CIVector(x: e.midX, y: e.midY)]).cropped(to: e)
-            let edges = FX.mono(facets.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 5.0]).cropped(to: e))
+                .applyingFilter("CICrystallize", parameters: [kCIInputRadiusKey: size * 0.07, kCIInputCenterKey: CIVector(x: e.midX, y: e.midY)]).cropped(to: e)
+            let edges = FX.controls(FX.mono(facets.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 3.0]).cropped(to: e)), brightness: -0.1)
             return FX.blend(edges, over: FX.blend(FX.controls(FX.mono(facets), contrast: 0.5), over: base, mode: "CISoftLightBlendMode"), mode: "CIScreenBlendMode")
         case .fire:
             guard let ctx = Gfx.context(w, h) else { return FX.solid(RGBA(hex: "F28C28"), e) }
@@ -670,12 +670,12 @@ enum SurfaceGen {
         case .thread:
             let lines = (CIFilter(name: "CIStripesGenerator", parameters: [
                 "inputColor0": a.ciColor, "inputColor1": a.withLightness(max(0.1, a.hsl.l - 0.18)).ciColor,
-                kCIInputWidthKey: max(1, size * 0.018), kCIInputSharpnessKey: 0.4
+                kCIInputWidthKey: max(1, size * 0.006), kCIInputSharpnessKey: 0.3
             ])?.outputImage ?? FX.solid(a, e)).transformed(by: CGAffineTransform(rotationAngle: .pi / 4)).cropped(to: e)
             return FX.grain(lines, seed: seed, strength: 0.18, size: 1)
         case .charred:
             let base = noiseMap(["0E0806", "2A1810", "4A2C17", "1A0F0A"], cells: cells * 2, contrast: 1.8)
-            let embers = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.02), strength: 1), saturation: 0, brightness: -0.45, contrast: 10)
+            let embers = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.02), strength: 1), saturation: 0, brightness: -0.49, contrast: 14)
             let glow = FX.blend(FX.solid(RGBA(hex: "F2661C"), e), over: embers, mode: "CIMultiplyBlendMode")
             return FX.blend(glow, over: base, mode: "CIScreenBlendMode")
         case .chalk:

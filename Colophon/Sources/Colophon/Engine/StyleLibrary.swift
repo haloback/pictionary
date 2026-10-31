@@ -447,7 +447,7 @@ final class StyleLibrary {
             for (iName, k) in [("Light", 0.3), ("Medium", 0.5), ("Deep", 0.7), ("Scorched", 0.9)] {
                 for grain in [0.0, 0.4] {
                     add("burn-\(slug(iName))\(grain > 0 ? "-grain" : "")", "Wood Burn, \(iName)\(grain > 0 ? ", Photo Grain" : "")", ["Rye-Regular", "Cinzel-Bold", "IM_FELL_English_SC"], ["burnt", "wood"]) { _, _ in
-                        var s = TextStyle(); s.surface = .charred; s.innerShadow = 0.3 + 0.4 * k; s.wear = .eroded; s.wearAmount = k * 0.6
+                        var s = TextStyle(); s.surface = .charred; s.innerShadow = 0.3 + 0.4 * k; s.wear = .eroded; s.wearAmount = k * 0.3
                         s.outerGlow = 0.1 + 0.2 * k; s.outerGlowColor = RGBA(hex: "F2661C", alpha: 0.5); s.photoTexture = grain
                         return (s, nil)
                     }
