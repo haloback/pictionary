@@ -50,6 +50,14 @@ enum Masking {
             }
         }
 
+        if let tid = m.textureID, MaterialLibrary.shared.material(tid) != nil, m.textureAmount > 0 {
+            var tex = FX.mono(MaterialLibrary.shared.render(tid, extent: ext, palette: [.black, .white], seed: 3))
+            if m.textureInvert { tex = tex.applyingFilter("CIColorInvert") }
+            // Amount lifts the texture toward white: 0 leaves the layer whole, 1 applies it fully.
+            tex = FX.mix(FX.solid(.white, ext), tex, m.textureAmount.clamped01).cropped(to: ext)
+            mask = mask.map { tex.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: $0]) } ?? tex
+        }
+
         guard let mask else { return nil }
         let out = CIImage(cgImage: img).applyingFilter("CIBlendWithMask", parameters: [
             kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: mask.cropped(to: ext)

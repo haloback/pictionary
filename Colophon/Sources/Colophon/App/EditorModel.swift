@@ -117,6 +117,7 @@ final class EditorModel {
     var recoveryAvailable = FileManager.default.fileExists(atPath: EditorModel.recoveryURL.path)
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     var showSeries = false
+    var showMaterialBackground = false
     var copiedTextStyle: TextContent?
 
     @ObservationIgnored private var undoStack: [CoverDocument] = []
@@ -431,6 +432,16 @@ final class EditorModel {
                 d.layers.insert(l, at: 0)
             }
         }
+        selection = l.id
+    }
+
+    /// A full-cover ground printed from the material library.
+    func addMaterialFill(_ materialID: String) {
+        let p = PaletteRoles(document.palette)
+        var l = Layer.fill(.material, colors: [p.dark, p.accent, p.dominant, p.light], seed: Int.random(in: 1...99_999))
+        l.fillContent?.materialID = materialID
+        if let m = MaterialLibrary.shared.material(materialID) { l.name = m.name }
+        mutate { d in d.layers.insert(l, at: 0) }
         selection = l.id
     }
 

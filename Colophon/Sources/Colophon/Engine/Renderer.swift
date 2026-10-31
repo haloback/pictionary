@@ -161,7 +161,7 @@ final class CoverRenderer {
         if layer.fade != .none {
             img = fadeImage(img, edge: layer.fade, amount: layer.fadeAmount) ?? img
         }
-        if layer.mask.gradient != .none || layer.mask.keepDarks > 0 || layer.mask.keepLights > 0 {
+        if layer.mask.gradient != .none || layer.mask.keepDarks > 0 || layer.mask.keepLights > 0 || layer.mask.textureID != nil {
             img = Masking.applyLocal(layer.mask, to: img) ?? img
         }
 

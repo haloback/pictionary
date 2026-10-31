@@ -51,6 +51,13 @@ It's built for people with ideas but no formal design training. The guardrails (
 - **Store sizes:** search-result, also-bought and product-page sizes.
 - **Checks:** grayscale (e-ink), squint (blur) and dark-page views.
 
+**Material library.** 2,600+ procedural materials, all generated in-app with no stock files.
+- **Structures:** 48 families, including marble, granite, terrazzo, wood grain, planks, crumpled paper, linen, denim, leather, watercolor, ink wash, paint pour, grunge, scratches, rust, burned edges, clouds, nebula, aurora, frost, brushed metal, hammered metal, and geometric patterns.
+- **Colorways:** 26, among them gold, copper, slate, sage, ocean, midnight and ember. A Cover Palette colorway prints the material in your cover's own colors.
+- **Scales:** each material comes in fine and bold.
+- **Masks:** every structure is also available as a soft, hard or inverted gray mask.
+- **Where to use them:** Add → Material Background…, a Painted Ground's Material style, the title's Fine-Tune Style → Material → Library, and a layer's Mask → Texture, which wears the layer through grunge, paper or brush.
+
 **Everyday polish.**
 - **Fonts:** import your own; they're embedded in the project.
 - **Editing:** eyedropper, copy/paste text style, align buttons, and photo adjustments (exposure, contrast, saturation, warmth, sharpness, blur).

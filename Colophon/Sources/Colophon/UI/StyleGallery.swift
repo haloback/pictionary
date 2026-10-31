@@ -241,10 +241,11 @@ struct StyleControls: View {
             Button(open ? "Hide" : "Show") { withAnimation { open.toggle() } }.buttonStyle(.link).font(.system(size: 11)))) {
             if open {
                 group("Material") {
+                    MaterialRow(label: "Library", purpose: .titleFace, palette: [t.color], materialID: s.materialID)
                     FieldRow("Surface") {
                         Picker("", selection: s.surface) { ForEach(SurfaceTexture.allCases) { Text($0.label).tag($0) } }.labelsHidden()
                     }
-                    if s.wrappedValue.surface != .none {
+                    if s.wrappedValue.surface != .none || s.wrappedValue.materialID != nil {
                         ValueSlider(label: "Scale", value: s.surfaceScale, range: 0.4...3) { String(format: "%.1fx", $0) }
                         ValueSlider(label: "Tint", value: s.surfaceTint, range: 0...1)
                     }

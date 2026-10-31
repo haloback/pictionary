@@ -128,6 +128,8 @@ struct TextStyle: Codable, Hashable {
     /// Smoke rising off the letters.
     var smokeTrail = 0.0
     var smokeColor: RGBA?
+    /// A material from `MaterialLibrary` for the letter face; overrides `surface`.
+    var materialID: String?
 
     // Scene blending: these read the pixels under the type.
     var photoTexture = 0.0
@@ -203,6 +205,7 @@ extension TextStyle {
         echoColor2 = try c.decodeIfPresent(RGBA.self, forKey: .echoColor2)
         smokeTrail = try d(.smokeTrail, 0)
         smokeColor = try c.decodeIfPresent(RGBA.self, forKey: .smokeColor)
+        materialID = try c.decodeIfPresent(String.self, forKey: .materialID)
     }
 }
 
@@ -230,7 +233,14 @@ enum TextStyler {
 
         // 2. Face: a material or the flat fill.
         var face: CIImage
-        if s.surface != .none {
+        if let mid = s.materialID, MaterialLibrary.shared.material(mid) != nil {
+            let pal = [ColorAdvisor.opposite(color), color, s.patternColor ?? RGBA.nearWhite]
+            var tex = MaterialLibrary.shared.render(mid, extent: ext, palette: pal, seed: seed, scale: CGFloat(s.surfaceScale))
+            if s.surfaceTint > 0 {
+                tex = FX.mix(tex, FX.blend(FX.solid(color, ext), over: tex, mode: "CIColorBlendMode"), s.surfaceTint)
+            }
+            face = tex
+        } else if s.surface != .none {
             let pa = s.patternColor ?? color, pb = s.patternColor2 ?? ColorAdvisor.opposite(color)
             var tex = SurfaceGen.make(s.surface, extent: ext, size: size * CGFloat(s.surfaceScale), seed: seed, a: pa, b: pb)
             if s.surfaceTint > 0 {

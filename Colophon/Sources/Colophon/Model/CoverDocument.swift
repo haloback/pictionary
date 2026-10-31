@@ -244,7 +244,7 @@ struct PrintSettings: Codable, Hashable {
 
 enum FillStyle: String, Codable, CaseIterable, Identifiable {
     case solid, linear, radial, meshBlend, paintSmear, watercolor, smoke, marble, grain
-    case sunburst, stripes, bokeh, starfield, bauhaus, goldenBlocks, halftone, scrim
+    case sunburst, stripes, bokeh, starfield, bauhaus, goldenBlocks, halftone, scrim, material
 
     var id: String { rawValue }
 
@@ -267,6 +267,7 @@ enum FillStyle: String, Codable, CaseIterable, Identifiable {
         case .goldenBlocks: return "Golden Blocks"
         case .halftone: return "Halftone"
         case .scrim: return "Legibility Scrim"
+        case .material: return "Material"
         }
     }
 }
@@ -279,6 +280,8 @@ struct FillContent: Codable, Hashable {
     var seed: Int = 7
     /// Style-specific amount: smear length, stripe width, scrim strength...
     var intensity: Double = 0.5
+    /// For `.material`: an id from `MaterialLibrary`, printed in `colors` when its colorway is Cover Palette.
+    var materialID: String?
 }
 
 struct ShapeContent: Codable, Hashable {
@@ -458,6 +461,10 @@ struct LayerMask: Codable, Hashable {
     /// Blend If: hide this layer's light pixels (keep darks) or dark pixels (keep lights).
     var keepDarks: Double = 0
     var keepLights: Double = 0
+    /// A texture from `MaterialLibrary` multiplied into the mask (grunge edges, paper fibers, brush strokes...).
+    var textureID: String?
+    var textureAmount: Double = 1
+    var textureInvert = false
 
     var isEmpty: Bool { self == LayerMask() }
 }
@@ -475,6 +482,9 @@ extension LayerMask {
         invertSubject = try c.decodeIfPresent(Bool.self, forKey: .invertSubject) ?? false
         keepDarks = try c.decodeIfPresent(Double.self, forKey: .keepDarks) ?? 0
         keepLights = try c.decodeIfPresent(Double.self, forKey: .keepLights) ?? 0
+        textureID = try c.decodeIfPresent(String.self, forKey: .textureID)
+        textureAmount = try c.decodeIfPresent(Double.self, forKey: .textureAmount) ?? 1
+        textureInvert = try c.decodeIfPresent(Bool.self, forKey: .textureInvert) ?? false
     }
 }
 

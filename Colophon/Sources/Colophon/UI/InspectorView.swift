@@ -366,6 +366,7 @@ private struct ImageSection: View {
 }
 
 private struct FillSection: View {
+    @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
 
     private var f: Binding<FillContent> {
@@ -376,6 +377,13 @@ private struct FillSection: View {
         PanelSection("Painted Ground") {
             FieldRow("Style") {
                 Picker("", selection: f.style) { ForEach(FillStyle.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            if f.wrappedValue.style == .material {
+                MaterialRow(label: "Material", purpose: .background, palette: f.wrappedValue.colors.isEmpty ? model.document.palette : f.wrappedValue.colors,
+                            materialID: Binding(get: { f.wrappedValue.materialID ?? "mat.marble.palette.f" }, set: { f.wrappedValue.materialID = $0 }),
+                            allowsNone: false)
+                Text("Colors below print Cover Palette materials; fixed colorways keep their own.")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(f.wrappedValue.colors.enumerated()), id: \.offset) { i, _ in
@@ -476,6 +484,13 @@ private struct MaskSection: View {
             .controlSize(.small)
             ValueSlider(label: "Keep Darks", value: $layer.mask.keepDarks, range: 0...1)
             ValueSlider(label: "Keep Lights", value: $layer.mask.keepLights, range: 0...1)
+            MaterialRow(label: "Texture", purpose: .mask, palette: model.document.palette, materialID: $layer.mask.textureID)
+            if layer.mask.textureID != nil {
+                ValueSlider(label: "Texture Amount", value: $layer.mask.textureAmount, range: 0...1)
+                Toggle("Invert texture", isOn: $layer.mask.textureInvert).controlSize(.small)
+                Text("Wears the layer through grunge, paper, brush or any material's light and dark.")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

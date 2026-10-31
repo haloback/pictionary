@@ -558,8 +558,91 @@ final class SampleRenderTests: XCTestCase {
                 n += 1
             }
         }
+        // Material library contact sheets: every structure once (rotating colorways), then one structure in every colorway.
+        let lib = MaterialLibrary.shared
+        let cws = lib.colorways
+        func sheet(_ ids: [String], _ file: String, _ name: String) {
+            let cols = 4, tile = 300, rows = (ids.count + cols - 1) / cols
+            guard let ctx = Gfx.context(cols * tile, rows * tile) else { return }
+            ctx.setFillColor(RGBA.white.cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: cols * tile, height: rows * tile))
+            for (i, id) in ids.enumerated() {
+                guard let img = lib.renderImage(id, size: CGSize(width: tile - 6, height: tile - 6),
+                                                palette: [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]) else { continue }
+                let x = (i % cols) * tile + 3, y = (rows - 1 - i / cols) * tile + 3
+                ctx.draw(img, in: CGRect(x: x, y: y, width: tile - 6, height: tile - 6))
+            }
+            if let cg = ctx.makeImage() {
+                _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                manifest.append(["file": file, "name": name, "family": "Material library", "font": ""])
+            }
+        }
+        let structs = lib.structures
+        for chunk in stride(from: 0, to: structs.count, by: 12) {
+            let ids = structs[chunk..<min(structs.count, chunk + 12)].enumerated().map { j, st in
+                "mat.\(st.id).\(cws[(chunk + j * 5) % cws.count].id).\(j % 3 == 0 ? "b" : "f")"
+            }
+            sheet(ids, String(format: "%02d-materials-%02d.png", n, chunk / 12), "Materials: " + structs[chunk..<min(structs.count, chunk + 12)].map(\.name).joined(separator: ", "))
+            n += 1
+        }
+        sheet(cws.map { "mat.marble.\($0.id).f" }, String(format: "%02d-materials-colorways.png", n), "Marble in every colorway")
+        n += 1
+        sheet(["grunge", "distressed", "watercolor", "brush", "splatter", "crumpled", "burnedges", "halftone"].flatMap { ["mask.\($0).soft.f", "mask.\($0).hard.b"] },
+              String(format: "%02d-materials-masks.png", n), "Texture masks (soft and hard)")
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("manifest.json"))
+    }
+}
+
+final class MaterialLibraryTests: XCTestCase {
+    func testThousandsOfUniqueMaterials() {
+        let lib = MaterialLibrary.shared
+        XCTAssertGreaterThanOrEqual(lib.materials.count, 2000)
+        XCTAssertEqual(Set(lib.materials.map(\.id)).count, lib.materials.count)
+        XCTAssertGreaterThanOrEqual(lib.structures.count, 40)
+        XCTAssertGreaterThanOrEqual(lib.search("", category: nil, masksOnly: true).count, 100)
+        XCTAssertFalse(lib.search("marble gold", category: nil).isEmpty)
+        XCTAssertFalse(lib.search("rust", category: nil, masksOnly: true).isEmpty)
+    }
+
+    func testEveryStructureRendersWithVariation() throws {
+        let lib = MaterialLibrary.shared
+        for st in lib.structures {
+            let img = try XCTUnwrap(lib.renderImage("mat.\(st.id).palette.f", size: CGSize(width: 64, height: 64), palette: [.ink, RGBA(hex: "E4572E"), .paper]), st.id)
+            let p = PixelSampler.pixels(img, maxSide: 64)
+            var lo = 255, hi = 0
+            for i in stride(from: 0, to: p.w * p.h * 4, by: 4) {
+                let v = Int(p.data[i]) + Int(p.data[i + 1]) + Int(p.data[i + 2])
+                lo = min(lo, v / 3); hi = max(hi, v / 3)
+            }
+            XCTAssertGreaterThan(hi - lo, 12, "\(st.id) renders flat")
+        }
+    }
+
+    func testMaterialBackgroundAndTitleFace() throws {
+        var doc = CoverDocument()
+        var bg = Layer.fill(.material, colors: [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), .paper])
+        bg.fillContent?.materialID = "mat.linen.sage.f"
+        var title = Layer.text("Salt", role: .title, frame: NRect(0.1, 0.1, 0.8, 0.2), font: "Didot", color: .nearWhite)
+        title.textContent?.style.materialID = "mat.marble.gold.b"
+        doc.layers = [bg, title]
+        XCTAssertNotNil(CoverRenderer.shared.render(doc, size: CGSize(width: 320, height: 512), quality: .full))
+        let back = try JSONDecoder().decode(CoverDocument.self, from: JSONEncoder().encode(doc))
+        XCTAssertEqual(back.layers.first?.fillContent?.materialID, "mat.linen.sage.f")
+    }
+
+    func testTextureMaskWearsTheLayer() throws {
+        let ctx = try XCTUnwrap(Gfx.context(128, 128))
+        ctx.setFillColor(RGBA.white.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 128, height: 128))
+        var m = LayerMask()
+        m.textureID = "mask.grunge.hard.b"
+        let out = try XCTUnwrap(Masking.applyLocal(m, to: try XCTUnwrap(ctx.makeImage())))
+        let p = PixelSampler.pixels(out, maxSide: 128)
+        var hidden = 0, shown = 0
+        for i in stride(from: 3, to: p.w * p.h * 4, by: 4) { if p.data[i] < 60 { hidden += 1 } else if p.data[i] > 200 { shown += 1 } }
+        XCTAssertGreaterThan(hidden, 200)
+        XCTAssertGreaterThan(shown, 200)
     }
 }
 

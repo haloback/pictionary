@@ -89,6 +89,12 @@ enum Generators {
             ctx.setFillColor(c(0).cgColor)
             ctx.fill(rect)
 
+        case .material:
+            let id = f.materialID ?? "mat.marble.palette.f"
+            if let img = MaterialLibrary.shared.renderImage(id, size: CGSize(width: w, height: h), palette: cols, seed: f.seed) {
+                ctx.draw(img, in: rect)
+            }
+
         case .linear:
             Gfx.linearGradient(ctx, rect, cols, angle: f.angle)
 

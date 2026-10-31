@@ -28,5 +28,8 @@ struct ContentView: View {
         .sheet(isPresented: $model.showPaperback) { PaperbackSheet().environment(model) }
         .sheet(isPresented: $model.showCompare) { CompareSheet().environment(model) }
         .sheet(isPresented: $model.showShortcuts) { ShortcutsSheet() }
+        .sheet(isPresented: $model.showMaterialBackground) {
+            MaterialPickerSheet(purpose: .background, palette: model.document.palette) { model.addMaterialFill($0) }
+        }
     }
 }

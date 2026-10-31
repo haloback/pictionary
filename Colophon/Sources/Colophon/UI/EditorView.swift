@@ -50,10 +50,11 @@ struct EditorView: View {
                     }
                 }
                 Menu("Color & Texture") {
-                    ForEach(FillStyle.allCases) { s in
+                    ForEach(FillStyle.allCases.filter { $0 != .material }) { s in
                         Button(s.label) { model.addFill(s) }
                     }
                 }
+                Button { model.showMaterialBackground = true } label: { Label("Material Background…", systemImage: "square.grid.3x3.square") }
             } label: {
                 Label("Add", systemImage: "plus")
             }
