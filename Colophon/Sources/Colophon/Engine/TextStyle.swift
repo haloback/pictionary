@@ -278,16 +278,20 @@ enum TextStyler {
             face = FX.mix(face, FX.blend(glow, over: face, mode: "CIScreenBlendMode"), s.innerGlow)
         }
         if s.stitch > 0 {
-            let inset = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * 0.05]).cropped(to: ext)
-            let inner = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * CGFloat(0.062 + 0.01 * s.stitch)]).cropped(to: ext)
+            // A thin ring just inside each letter, cut into dashes by a small checkerboard so the stitches
+            // stay short whichever way the edge runs (diagonal stripes turned thin letters into candy canes).
+            let line = max(1, size * CGFloat(0.01 + 0.006 * s.stitch))
+            let inset = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * 0.035]).cropped(to: ext)
+            let inner = inset.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: line]).cropped(to: ext)
             let ring = inset.applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: inner])
-            let dashes = (CIFilter(name: "CIStripesGenerator", parameters: [
+            let dashes = (CIFilter(name: "CICheckerboardGenerator", parameters: [
+                kCIInputCenterKey: CIVector(x: ext.midX, y: ext.midY),
                 "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1), "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 0),
-                kCIInputWidthKey: max(1.5, size * 0.025), kCIInputSharpnessKey: 1
-            ])?.outputImage ?? CIImage.empty()).transformed(by: CGAffineTransform(rotationAngle: .pi / 4)).cropped(to: ext)
+                kCIInputWidthKey: max(2, size * 0.035), kCIInputSharpnessKey: 1
+            ])?.outputImage ?? CIImage.empty()).cropped(to: ext)
             let stitches = ring.applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: dashes])
             let thread = colored(s.stitchColor ?? color.withLightness(0.92), alpha: stitches, extent: ext)
-            let shadow = colored(RGBA(0, 0, 0, 0.45), alpha: stitches, extent: ext).transformed(by: CGAffineTransform(translationX: 0.8, y: -0.8))
+            let shadow = colored(RGBA(0, 0, 0, 0.45), alpha: stitches, extent: ext).transformed(by: CGAffineTransform(translationX: 1, y: -1)).cropped(to: ext)
             face = thread.composited(over: shadow.composited(over: face))
         }
         face = face.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha])
@@ -457,13 +461,20 @@ enum TextStyler {
         let sphere = CIImage(cgImage: lightSphere(angle: s.lightAngle, gloss: gloss, chisel: s.bevelStyle == .chisel))
         let shaded = height.applyingFilter("CIShadedMaterial", parameters: [
             kCIInputShadingImageKey: sphere, kCIInputScaleKey: 6 + 14 * s.bevel
+        ]).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
         ]).cropped(to: extent)
-        var lit = FX.blend(shaded, over: face, mode: gloss > 0.4 ? "CIHardLightBlendMode" : "CIOverlayBlendMode")
+        // Clamp: hard light on extended-range values pushed red negative at letter edges (cyan fringes).
+        var lit = FX.blend(shaded, over: face, mode: gloss > 0.4 ? "CIHardLightBlendMode" : "CIOverlayBlendMode").applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ]).cropped(to: extent)
         if gloss > 0 {
             let spec = FX.controls(FX.mono(shaded), brightness: -0.35, contrast: 3)
             lit = FX.mix(lit, FX.blend(spec, over: lit, mode: "CIScreenBlendMode"), gloss)
         }
-        return FX.mix(face, lit, min(1, 0.4 + s.bevel))
+        return FX.mix(face, lit, min(1, 0.4 + s.bevel)).applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+            ]).cropped(to: extent)
     }
 
     /// Grows drips from the bottom edge of each letter.
@@ -683,7 +694,7 @@ enum SurfaceGen {
             return noiseMap(["1A1A1E", "4A4A52", "9A9AA2", "E6E6EA"], cells: cells, contrast: 1.8)
         case .glitter:
             // A mid-tone base glinting with fine colored flecks and a few white sparkles.
-            let base = FX.grain(FX.solid(a.withLightness(min(0.6, max(0.3, a.hsl.l - 0.15))), e), seed: seed &+ 9, strength: 0.25, size: max(1, size * 0.02))
+            let base = FX.grain(FX.solid(a.withLightness(min(0.62, max(0.45, a.hsl.l - 0.1))), e), seed: seed &+ 9, strength: 0.25, size: max(1, size * 0.02))
             let flecks = threshold(FX.noise(e, seed: seed, grainSize: max(1, size * 0.012), strength: 1), 0.86, 12)
             let tinted = FX.blend(FX.solid(a.withLightness(0.82), e), over: flecks, mode: "CIMultiplyBlendMode")
             let big = threshold(FX.noise(e, seed: seed &+ 5, grainSize: max(1, size * 0.028), strength: 1), 0.965, 30)
@@ -693,7 +704,7 @@ enum SurfaceGen {
             let fibers = FX.noise(e, seed: seed, grainSize: 1, strength: 1).clampedToExtent()
                 .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: max(2, size * 0.06), kCIInputAngleKey: Double.pi / 4]).cropped(to: e)
             let l = a.hsl.l
-            return FX.gradientMap(lin(fibers, 4, 0.22), [a.withLightness(max(0.08, l - 0.2)), a, a.withLightness(min(0.95, l + 0.16))])
+            return FX.gradientMap(lin(fibers, 2.5, 0.22), [a.withLightness(max(0.08, l - 0.12)), a, a.withLightness(min(0.95, l + 0.1))])
         case .charred:
             let base = noiseMap(["0E0806", "2A1810", "4A2C17", "1A0F0A"], cells: cells * 2, contrast: 1.8)
             // Dark char split by thin glowing cracks, with a few loose embers.
