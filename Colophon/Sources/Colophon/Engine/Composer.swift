@@ -74,6 +74,10 @@ enum CoverComposer {
 
         var rng = SeededRNG(seed: seed)
         var docs: [CoverDocument] = []
+        // Generated styles that suit the genre, minus the loudest families for photo covers.
+        let genrePool = StyleLibrary.shared.search("", family: nil, genre: base.book.genre)
+            .filter { !["gen.pattern", "gen.sticker", "gen.balloon", "gen.glitch"].contains(where: $0.id.hasPrefix) || images.isEmpty }
+            .map(\.id)
         for i in 0..<count {
             let arch = order[i % order.count]
             let round = i / order.count
@@ -103,9 +107,12 @@ enum CoverComposer {
             doc.archetypeName = arch.label
             doc.background = palette.dark
             // Two of every three ideas get a genre title style, so the set stays varied.
-            let styles = TextStylePreset.forGenre(base.book.genre)
+            // Alternate hand-tuned genre styles with picks from the full library for the genre.
+            let curatedIDs = TextStylePreset.forGenre(base.book.genre)
+            let pool = genrePool
+            let styles = (i % 2 == 0 || pool.isEmpty) ? curatedIDs : pool
             if !styles.isEmpty, (i + seed) % 3 != 2,
-               let preset = TextStylePreset.preset(styles[(i + round) % styles.count]),
+               let preset = TextStylePreset.preset(styles[(i * 7 + round + seed) % styles.count]),
                let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
                 // Keep the treatment's font and colors; the style adds material and depth.
                 let keepColor = t.color

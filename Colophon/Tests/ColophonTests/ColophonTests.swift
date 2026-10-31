@@ -417,3 +417,61 @@ final class StyleEngineTests: XCTestCase {
         XCTAssertEqual(back.style, t.style)
     }
 }
+
+final class StyleLibraryTests: XCTestCase {
+    func testThousandsOfUniqueStyles() {
+        let lib = StyleLibrary.shared
+        XCTAssertGreaterThanOrEqual(lib.all.count, 2000)
+        XCTAssertEqual(Set(lib.all.map(\.id)).count, lib.all.count, "style ids must be unique")
+        for f in lib.families {
+            XCTAssertFalse(lib.search("", family: f.id, genre: nil).isEmpty, f.name)
+        }
+    }
+
+    func testSearchAndSimilar() {
+        let lib = StyleLibrary.shared
+        XCTAssertFalse(lib.search("gold", family: nil, genre: nil).isEmpty)
+        XCTAssertFalse(lib.search("neon pink", family: nil, genre: nil).isEmpty)
+        XCTAssertFalse(lib.search("drips", family: nil, genre: .horror).isEmpty)
+        let first = lib.search("", family: "metal", genre: nil)[0]
+        XCTAssertFalse(lib.similar(to: first.id).isEmpty)
+        for g in Genre.allCases { XCTAssertFalse(lib.search("", family: nil, genre: g).isEmpty, g.rawValue) }
+    }
+
+    func testGeneratedStylesRender() throws {
+        let palette = PaletteRoles([RGBA(hex: "1B2A4A"), RGBA(hex: "F2A541"), RGBA(hex: "F2ECDF")])
+        let lib = StyleLibrary.shared.all
+        for p in stride(from: 0, to: lib.count, by: 37).map({ lib[$0] }) {
+            var t = TextContent(text: "Salt", role: .title, fontName: p.fonts.first(where: FontCatalog.isAvailable) ?? "Didot", color: palette.light)
+            p.apply(to: &t, palette: palette)
+            XCTAssertNotNil(TextRenderer.render(t, box: CGSize(width: 160, height: 70), canvasHeight: 600), p.id)
+        }
+    }
+
+    func testDripsRunBelowTheLetters() throws {
+        var t = TextContent(text: "DRIP", role: .title, fontName: "Anton-Regular", color: RGBA(hex: "8E1020"))
+        let (plain, plainPad) = try XCTUnwrap(TextRenderer.render(t, box: CGSize(width: 300, height: 120), canvasHeight: 1000))
+        t.style.drips = 0.9
+        let (dripped, pad) = try XCTUnwrap(TextRenderer.render(t, box: CGSize(width: 300, height: 120), canvasHeight: 1000))
+        XCTAssertGreaterThan(pad, plainPad)
+        // Measure how far ink reaches toward the bottom of each raster.
+        func lowestInk(_ img: CGImage) -> Double {
+            let p = PixelSampler.pixels(img, maxSide: 400)
+            for row in stride(from: p.h - 1, through: 0, by: -1) {
+                for x in 0..<p.w where p.data[(row * p.w + x) * 4 + 3] > 40 { return Double(row) / Double(p.h) }
+            }
+            return 0
+        }
+        XCTAssertGreaterThan(lowestInk(dripped), lowestInk(plain))
+        _ = plain
+    }
+
+    func testNewSurfacesUsePatternColors() throws {
+        let e = CGRect(x: 0, y: 0, width: 80, height: 80)
+        for s in [SurfaceTexture.stripes, .checker, .polkaDots, .gradient] {
+            let img = try XCTUnwrap(Gfx.render(SurfaceGen.make(s, extent: e, size: 40, seed: 1, a: RGBA(hex: "E4572E"), b: RGBA(hex: "1B2A4A")), extent: e))
+            let pal = PaletteExtractor.extract(img)
+            XCTAssertTrue(pal.contains { $0.distance(to: RGBA(hex: "E4572E")) < 20 }, s.rawValue)
+        }
+    }
+}

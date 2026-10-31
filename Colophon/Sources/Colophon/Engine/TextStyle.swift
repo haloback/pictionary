@@ -6,6 +6,7 @@ import Foundation
 
 enum SurfaceTexture: String, Codable, CaseIterable, Identifiable {
     case none, gold, goldLeaf, silver, chrome, copper, bronze, rust, stone, marble, wood, leather, ice, fire, concrete, paper, galaxy, smoke
+    case glitter, thread, charred, chalk, stripes, polkaDots, checker, plaid, gradient
 
     var id: String { rawValue }
 
@@ -29,18 +30,27 @@ enum SurfaceTexture: String, Codable, CaseIterable, Identifiable {
         case .paper: return "Paper"
         case .galaxy: return "Galaxy"
         case .smoke: return "Smoke"
+        case .glitter: return "Glitter"
+        case .thread: return "Embroidery Thread"
+        case .charred: return "Burnt Wood"
+        case .chalk: return "Chalk"
+        case .stripes: return "Stripes"
+        case .polkaDots: return "Polka Dots"
+        case .checker: return "Checkerboard"
+        case .plaid: return "Plaid"
+        case .gradient: return "Two-Tone Gradient"
         }
     }
 }
 
 enum BevelStyle: String, Codable, CaseIterable, Identifiable {
-    case chisel, smooth, pillow
+    case chisel, smooth, pillow, inflated
     var id: String { rawValue }
     var label: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
 }
 
 enum WearKind: String, Codable, CaseIterable, Identifiable {
-    case none, distressed, cracked, scratched, grunge, eroded, inkBleed
+    case none, distressed, cracked, scratched, grunge, eroded, inkBleed, shattered
 
     var id: String { rawValue }
 
@@ -53,6 +63,7 @@ enum WearKind: String, Codable, CaseIterable, Identifiable {
         case .grunge: return "Grunge"
         case .eroded: return "Eroded Edges"
         case .inkBleed: return "Ink Bleed"
+        case .shattered: return "Shattered Glass"
         }
     }
 }
@@ -98,6 +109,26 @@ struct TextStyle: Codable, Hashable {
     var halftone = 0.0
     var glitch = 0.0
 
+    /// Pattern and thread colors for pattern surfaces, glitter and embroidery.
+    var patternColor: RGBA?
+    var patternColor2: RGBA?
+    /// Rounds every corner of the letters (balloon and sticker type).
+    var roundness = 0.0
+    /// Paint or liquid running off the bottom of the letters.
+    var drips = 0.0
+    /// A dashed stitch line just inside each letter.
+    var stitch = 0.0
+    var stitchColor: RGBA?
+    /// A soft offset shadow cast away from the light.
+    var dropShadow = 0.0
+    /// Stacked offset copies behind the type, in alternating colors.
+    var echo = 0.0
+    var echoColor: RGBA?
+    var echoColor2: RGBA?
+    /// Smoke rising off the letters.
+    var smokeTrail = 0.0
+    var smokeColor: RGBA?
+
     // Scene blending: these read the pixels under the type.
     var photoTexture = 0.0
     var photoDisplace = 0.0
@@ -119,6 +150,7 @@ struct TextStyle: Codable, Hashable {
     /// Extra room the effects need around the type, in multiples of the font size.
     var paddingFactor: Double {
         outline + outline2 + outerGlow * 0.7 + extrude * 1.1 + longShadow * 2.6 + (wear == .inkBleed ? 0.04 : 0) + glitch * 0.05
+            + drips * 0.9 + dropShadow * 0.12 + echo * 0.36 + smokeTrail * 1.2
     }
 }
 
@@ -159,6 +191,18 @@ extension TextStyle {
         colorMatch = try d(.colorMatch, 0)
         photoErode = try d(.photoErode, 0)
         photoFill = try d(.photoFill, 0)
+        patternColor = try c.decodeIfPresent(RGBA.self, forKey: .patternColor)
+        patternColor2 = try c.decodeIfPresent(RGBA.self, forKey: .patternColor2)
+        roundness = try d(.roundness, 0)
+        drips = try d(.drips, 0)
+        stitch = try d(.stitch, 0)
+        stitchColor = try c.decodeIfPresent(RGBA.self, forKey: .stitchColor)
+        dropShadow = try d(.dropShadow, 0)
+        echo = try d(.echo, 0)
+        echoColor = try c.decodeIfPresent(RGBA.self, forKey: .echoColor)
+        echoColor2 = try c.decodeIfPresent(RGBA.self, forKey: .echoColor2)
+        smokeTrail = try d(.smokeTrail, 0)
+        smokeColor = try c.decodeIfPresent(RGBA.self, forKey: .smokeColor)
     }
 }
 
@@ -176,12 +220,19 @@ enum TextStyler {
         if s.wear != .none {
             grayMask = wear(grayMask, kind: s.wear, amount: s.wearAmount, size: size, seed: seed, extent: ext)
         }
+        if s.roundness > 0 {
+            grayMask = FX.controls(FX.blur(grayMask, size * CGFloat(0.015 + 0.06 * s.roundness)), contrast: 7).cropped(to: ext)
+        }
+        if s.drips > 0, let dripped = addDrips(grayMask, extent: ext, size: size, amount: s.drips, seed: seed) {
+            grayMask = dripped
+        }
         let alpha = grayMask.applyingFilter("CIMaskToAlpha").cropped(to: ext)
 
         // 2. Face: a material or the flat fill.
         var face: CIImage
         if s.surface != .none {
-            var tex = SurfaceGen.make(s.surface, extent: ext, size: size * CGFloat(s.surfaceScale), seed: seed)
+            let pa = s.patternColor ?? color, pb = s.patternColor2 ?? ColorAdvisor.opposite(color)
+            var tex = SurfaceGen.make(s.surface, extent: ext, size: size * CGFloat(s.surfaceScale), seed: seed, a: pa, b: pb)
             if s.surfaceTint > 0 {
                 tex = FX.mix(tex, FX.blend(FX.solid(color, ext), over: tex, mode: "CIColorBlendMode"), s.surfaceTint)
             }
@@ -214,12 +265,54 @@ enum TextStyler {
             let glow = FX.blur(colored(s.innerGlowColor ?? RGBA(1, 1, 1, 0.9), alpha: inverse, extent: ext), size * 0.06)
             face = FX.mix(face, FX.blend(glow, over: face, mode: "CIScreenBlendMode"), s.innerGlow)
         }
+        if s.stitch > 0 {
+            let inset = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * 0.05]).cropped(to: ext)
+            let inner = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * CGFloat(0.062 + 0.01 * s.stitch)]).cropped(to: ext)
+            let ring = inset.applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: inner])
+            let dashes = (CIFilter(name: "CIStripesGenerator", parameters: [
+                "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1), "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 0),
+                kCIInputWidthKey: max(1.5, size * 0.025), kCIInputSharpnessKey: 1
+            ])?.outputImage ?? CIImage.empty()).transformed(by: CGAffineTransform(rotationAngle: .pi / 4)).cropped(to: ext)
+            let stitches = ring.applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: dashes])
+            let thread = colored(s.stitchColor ?? color.withLightness(0.92), alpha: stitches, extent: ext)
+            let shadow = colored(RGBA(0, 0, 0, 0.45), alpha: stitches, extent: ext).transformed(by: CGAffineTransform(translationX: 0.8, y: -0.8))
+            face = thread.composited(over: shadow.composited(over: face))
+        }
         face = face.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha])
 
         // 5. Behind the face, back to front: long shadow, extrusion, glow, outlines.
         var behind = CIImage.empty().cropped(to: ext)
         var shape = alpha
         let o1 = CGFloat(s.outline) * size, o2 = CGFloat(s.outline2) * size
+        let outer = o1 + o2 > 0 ? dilate(alpha, o1 + o2) : alpha
+        let lightRad = s.lightAngle * .pi / 180
+        if s.smokeTrail > 0 {
+            let smoke = colored(s.smokeColor ?? color.withLightness(0.85).withAlpha(0.7), alpha: alpha, extent: ext)
+                .clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * CGFloat(0.3 + 0.6 * s.smokeTrail), kCIInputAngleKey: Double.pi / 2])
+                .cropped(to: ext)
+            let rising = FX.displace(smoke.transformed(by: CGAffineTransform(translationX: 0, y: size * CGFloat(0.25 * s.smokeTrail))),
+                                     by: FX.smoothNoise(ext, seed: seed &+ 21, cells: max(4, Int(ext.width / max(1, size * 0.4)))),
+                                     scale: size * 0.35)
+            behind = FX.blur(rising, size * 0.03).composited(over: behind)
+        }
+        if s.dropShadow > 0 {
+            let d = size * CGFloat(0.03 + 0.06 * s.dropShadow)
+            let cast = colored(RGBA(0, 0, 0, 0.35 + 0.3 * s.dropShadow), alpha: outer, extent: ext)
+                .transformed(by: CGAffineTransform(translationX: -cos(lightRad) * d, y: -sin(lightRad) * d))
+            behind = FX.blur(cast, size * CGFloat(0.015 + 0.04 * s.dropShadow)).composited(over: behind)
+        }
+        if s.echo > 0 {
+            let copies = max(1, min(4, Int((s.echo * 4).rounded())))
+            let step = size * 0.08
+            let rad = s.extrudeAngle * .pi / 180
+            let c1 = s.echoColor ?? ColorAdvisor.opposite(color), c2 = s.echoColor2 ?? color.withLightness(0.25)
+            for k in stride(from: copies, through: 1, by: -1) {
+                let copy = colored(k % 2 == 1 ? c1 : c2, alpha: outer, extent: ext)
+                    .transformed(by: CGAffineTransform(translationX: cos(rad) * step * CGFloat(k), y: sin(rad) * step * CGFloat(k)))
+                behind = copy.composited(over: behind)
+            }
+        }
         if s.longShadow > 0 {
             let base = o1 + o2 > 0 ? dilate(alpha, o1 + o2) : alpha
             behind = trail(base, color: s.longShadowColor ?? RGBA(0, 0, 0, 0.45), length: CGFloat(s.longShadow) * size * 2.5,
@@ -344,19 +437,62 @@ enum TextStyler {
         case .chisel: radius = size * CGFloat(0.02 + 0.05 * s.bevel)
         case .smooth: radius = size * CGFloat(0.04 + 0.1 * s.bevel)
         case .pillow: radius = size * CGFloat(0.08 + 0.12 * s.bevel)
+        case .inflated: radius = size * CGFloat(0.16 + 0.14 * s.bevel)
         }
         let ground = grayMask.composited(over: FX.solid(.black, extent)).cropped(to: extent)
         let height = ground.applyingFilter("CIHeightFieldFromMask", parameters: [kCIInputRadiusKey: radius]).cropped(to: extent)
-        let sphere = CIImage(cgImage: lightSphere(angle: s.lightAngle, gloss: s.gloss, chisel: s.bevelStyle == .chisel))
+        let gloss = s.bevelStyle == .inflated ? max(s.gloss, 0.7) : s.gloss
+        let sphere = CIImage(cgImage: lightSphere(angle: s.lightAngle, gloss: gloss, chisel: s.bevelStyle == .chisel))
         let shaded = height.applyingFilter("CIShadedMaterial", parameters: [
             kCIInputShadingImageKey: sphere, kCIInputScaleKey: 6 + 14 * s.bevel
         ]).cropped(to: extent)
-        var lit = FX.blend(shaded, over: face, mode: s.gloss > 0.4 ? "CIHardLightBlendMode" : "CIOverlayBlendMode")
-        if s.gloss > 0 {
+        var lit = FX.blend(shaded, over: face, mode: gloss > 0.4 ? "CIHardLightBlendMode" : "CIOverlayBlendMode")
+        if gloss > 0 {
             let spec = FX.controls(FX.mono(shaded), brightness: -0.35, contrast: 3)
-            lit = FX.mix(lit, FX.blend(spec, over: lit, mode: "CIScreenBlendMode"), s.gloss)
+            lit = FX.mix(lit, FX.blend(spec, over: lit, mode: "CIScreenBlendMode"), gloss)
         }
         return FX.mix(face, lit, min(1, 0.4 + s.bevel))
+    }
+
+    /// Grows drips from the bottom edge of each letter.
+    static func addDrips(_ m: CIImage, extent e: CGRect, size: CGFloat, amount: Double, seed: Int) -> CIImage? {
+        let w = Int(e.width), h = Int(e.height)
+        guard w > 2, h > 2, let rendered = Gfx.render(m, extent: e) else { return nil }
+        var buf = [UInt8](repeating: 0, count: w * h)
+        let ok = buf.withUnsafeMutableBytes { ptr -> Bool in
+            guard let g = CGContext(data: ptr.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                                    space: Gfx.gray, bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            g.draw(rendered, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        guard ok, let ctx = Gfx.grayContext(w, h) else { return nil }
+        ctx.draw(rendered, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var rng = SeededRNG(seed: seed &+ 99)
+        ctx.setFillColor(gray: 1, alpha: 1)
+        ctx.setStrokeColor(gray: 1, alpha: 1)
+        ctx.setLineCap(.round)
+        let step = max(2, Int(size * 0.055))
+        var x = step / 2
+        while x < w {
+            // Lowest inked pixel in this column (row 0 is the top of the buffer).
+            var bottom = -1
+            for row in stride(from: h - 1, through: 0, by: -1) where buf[row * w + x] > 140 { bottom = row; break }
+            if bottom > 0 && rng.unit() < 0.25 + 0.45 * amount {
+                let width = size * CGFloat(rng.range(0.035, 0.085))
+                let length = size * CGFloat(rng.range(0.15, 0.25 + 0.75 * amount))
+                let startY = CGFloat(h - bottom) + width * 0.4
+                let endY = max(width, startY - length)
+                ctx.setLineWidth(width)
+                ctx.move(to: CGPoint(x: CGFloat(x), y: startY))
+                ctx.addLine(to: CGPoint(x: CGFloat(x), y: endY))
+                ctx.strokePath()
+                let r = width * CGFloat(rng.range(0.6, 0.85))
+                ctx.fillEllipse(in: CGRect(x: CGFloat(x) - r, y: endY - r * 1.2, width: 2 * r, height: 2.4 * r))
+                ctx.fillEllipse(in: CGRect(x: CGFloat(x) - width, y: startY - width * 0.9, width: width * 2, height: width * 1.2))
+            }
+            x += step + rng.int(step)
+        }
+        return ctx.makeImage().map { CIImage(cgImage: $0) }
     }
 
     private static var sphereCache: [String: CGImage] = [:]
@@ -415,6 +551,14 @@ enum TextStyler {
                 .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.6, kCIInputAngleKey: 0.35]).cropped(to: e)
             let cuts = FX.controls(FX.mono(streaks), brightness: 0.55 - 0.25 * a, contrast: 12)
             return FX.blend(cuts, over: m, mode: "CIMultiplyBlendMode")
+        case .shattered:
+            let shards = FX.noise(e, seed: seed, grainSize: 1, strength: 1)
+                .applyingFilter("CICrystallize", parameters: [kCIInputRadiusKey: size * CGFloat(0.4 - 0.2 * a), kCIInputCenterKey: CIVector(x: e.midX, y: e.midY)])
+                .cropped(to: e)
+            let shifted = FX.displace(m, by: shards, scale: size * CGFloat(0.04 + 0.06 * a))
+            let seams = FX.controls(FX.mono(shards.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 12.0]).cropped(to: e)), contrast: 5)
+                .applyingFilter("CIColorInvert")
+            return FX.blend(FX.controls(seams, brightness: 0.2, contrast: 8), over: shifted, mode: "CIMultiplyBlendMode")
         case .eroded, .inkBleed:
             let blurred = FX.blur(m, size * (kind == .inkBleed ? 0.045 : 0.03))
             let rough = FX.blend(FX.noise(e, seed: seed, grainSize: max(1, size * 0.015), strength: 0.6 * a), over: blurred, mode: "CIOverlayBlendMode")
@@ -428,7 +572,7 @@ enum TextStyler {
 // MARK: - Materials
 
 enum SurfaceGen {
-    static func make(_ kind: SurfaceTexture, extent e: CGRect, size: CGFloat, seed: Int) -> CIImage {
+    static func make(_ kind: SurfaceTexture, extent e: CGRect, size: CGFloat, seed: Int, a: RGBA = .nearWhite, b: RGBA = .ink) -> CIImage {
         let w = max(1, Int(e.width)), h = max(1, Int(e.height))
         func ramp(_ hex: [String], period: CGFloat) -> CIImage {
             guard let ctx = Gfx.context(w, h),
@@ -515,6 +659,70 @@ enum SurfaceGen {
             return FX.blend(nebula, over: s, mode: "CIScreenBlendMode")
         case .smoke:
             return noiseMap(["1A1A1E", "4A4A52", "9A9AA2", "E6E6EA"], cells: cells, contrast: 1.8)
+        case .glitter:
+            let base = FX.solid(a.withLightness(max(0.25, a.hsl.l - 0.15)), e)
+            let flecks = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.012), strength: 1), saturation: 0, brightness: -0.42, contrast: 10)
+            let tinted = FX.blend(FX.solid(a.withLightness(0.85), e), over: flecks, mode: "CIMultiplyBlendMode")
+            let big = FX.controls(FX.noise(e, seed: seed &+ 5, grainSize: max(1, size * 0.03), strength: 1), saturation: 0, brightness: -0.46, contrast: 14)
+            return FX.blend(big, over: FX.blend(tinted, over: base, mode: "CIScreenBlendMode"), mode: "CIScreenBlendMode")
+        case .thread:
+            let lines = (CIFilter(name: "CIStripesGenerator", parameters: [
+                "inputColor0": a.ciColor, "inputColor1": a.withLightness(max(0.1, a.hsl.l - 0.18)).ciColor,
+                kCIInputWidthKey: max(1, size * 0.018), kCIInputSharpnessKey: 0.4
+            ])?.outputImage ?? FX.solid(a, e)).transformed(by: CGAffineTransform(rotationAngle: .pi / 4)).cropped(to: e)
+            return FX.grain(lines, seed: seed, strength: 0.18, size: 1)
+        case .charred:
+            let base = noiseMap(["0E0806", "2A1810", "4A2C17", "1A0F0A"], cells: cells * 2, contrast: 1.8)
+            let embers = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.02), strength: 1), saturation: 0, brightness: -0.45, contrast: 10)
+            let glow = FX.blend(FX.solid(RGBA(hex: "F2661C"), e), over: embers, mode: "CIMultiplyBlendMode")
+            return FX.blend(glow, over: base, mode: "CIScreenBlendMode")
+        case .chalk:
+            let streaks = FX.noise(e, seed: seed, grainSize: 1, strength: 1).clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.12, kCIInputAngleKey: 0.25]).cropped(to: e)
+            return FX.blend(FX.controls(FX.mono(streaks), brightness: 0.25, contrast: 2.5), over: FX.solid(RGBA(hex: "F4F4F0"), e), mode: "CIMultiplyBlendMode")
+        case .stripes:
+            return (CIFilter(name: "CIStripesGenerator", parameters: [
+                "inputColor0": a.ciColor, "inputColor1": b.ciColor, kCIInputWidthKey: max(2, size * 0.09), kCIInputSharpnessKey: 1
+            ])?.outputImage ?? FX.solid(a, e)).transformed(by: CGAffineTransform(rotationAngle: -.pi / 4)).cropped(to: e)
+        case .checker:
+            return (CIFilter(name: "CICheckerboardGenerator", parameters: [
+                kCIInputCenterKey: CIVector(x: e.midX, y: e.midY), "inputColor0": a.ciColor, "inputColor1": b.ciColor,
+                kCIInputWidthKey: max(3, size * 0.16), kCIInputSharpnessKey: 1
+            ])?.outputImage ?? FX.solid(a, e)).cropped(to: e)
+        case .plaid:
+            func band(_ angle: CGFloat, _ c: RGBA, _ width: CGFloat) -> CIImage {
+                (CIFilter(name: "CIStripesGenerator", parameters: [
+                    "inputColor0": c.withAlpha(0.55).ciColor, "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 0),
+                    kCIInputWidthKey: width, kCIInputSharpnessKey: 1
+                ])?.outputImage ?? CIImage.empty()).transformed(by: CGAffineTransform(rotationAngle: angle)).cropped(to: e)
+            }
+            let base = FX.solid(a, e)
+            let w1 = max(2, size * 0.12), w2 = max(1, size * 0.03)
+            let wide = band(0, b, w1).composited(over: band(.pi / 2, b, w1))
+            let fine = band(0, b.withLightness(0.9), w2).composited(over: band(.pi / 2, b.withLightness(0.9), w2))
+            return wide.composited(over: fine.composited(over: base))
+        case .gradient:
+            guard let ctx = Gfx.context(w, h) else { return FX.solid(a, e) }
+            Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: w, height: h), [a, a.mixed(with: b, 0.5), b], angle: 90)
+            return ctx.makeImage().map { CIImage(cgImage: $0) } ?? FX.solid(a, e)
+        case .polkaDots:
+            guard let ctx = Gfx.context(w, h) else { return FX.solid(a, e) }
+            ctx.setFillColor(a.cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            ctx.setFillColor(b.cgColor)
+            let gap = max(4, size * 0.16), r = gap * 0.28
+            var row = 0
+            var y: CGFloat = 0
+            while y < CGFloat(h) + gap {
+                var x: CGFloat = row % 2 == 0 ? 0 : gap / 2
+                while x < CGFloat(w) + gap {
+                    ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+                    x += gap
+                }
+                y += gap * 0.866
+                row += 1
+            }
+            return ctx.makeImage().map { CIImage(cgImage: $0) } ?? FX.solid(a, e)
         }
     }
 }
@@ -528,6 +736,8 @@ struct TextStylePreset: Identifiable {
     let category: String
     /// Fonts that suit the style, tried in order when the user asks for "font too".
     let fonts: [String]
+    /// Search words: materials, moods, colors and the genres the style suits.
+    var tags: [String] = []
     let make: (PaletteRoles, RGBA) -> (TextStyle, RGBA?)
 
     func apply(to t: inout TextContent, palette: PaletteRoles) {
@@ -741,7 +951,7 @@ struct TextStylePreset: Identifiable {
         }
     ]
 
-    static func preset(_ id: String) -> TextStylePreset? { all.first { $0.id == id } }
+    static func preset(_ id: String) -> TextStylePreset? { StyleLibrary.shared.preset(id) }
 
     /// Styles that suit each genre's titles, used by the cover generator.
     static func forGenre(_ g: Genre) -> [String] {

@@ -60,36 +60,104 @@ enum StyleTiles {
 struct StyleGallery: View {
     @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
-    @State private var category = "All"
+    @State private var query = ""
+    @State private var family: String?
+    @State private var genre: Genre?
+    @State private var similarTo: String?
+    @State private var shown = 40
     @State private var useFont = true
 
-    private var presets: [TextStylePreset] {
-        category == "All" ? TextStylePreset.all : TextStylePreset.all.filter { $0.category == category }
+    private var library: StyleLibrary { StyleLibrary.shared }
+
+    private var results: [TextStylePreset] {
+        if let id = similarTo { return library.similar(to: id) }
+        return library.search(query, family: family, genre: genre)
     }
 
     var body: some View {
+        let found = results
         PanelSection("Style", trailing: AnyView(
             Toggle("Use style's font", isOn: $useFont).toggleStyle(.checkbox).controlSize(.small)
                 .help("Also switch to a typeface designed for the style"))) {
+            HStack(spacing: 6) {
+                TextField("Search \(library.all.count.formatted()) styles: gold, drips, neon pink…", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: query) { _, _ in similarTo = nil; shown = 40 }
+                Menu {
+                    Button("Any genre") { genre = nil; shown = 40 }
+                    Divider()
+                    ForEach(Genre.allCases) { g in Button(g.label) { genre = g; similarTo = nil; shown = 40 } }
+                } label: {
+                    Image(systemName: genre == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help(genre.map { "Showing styles for \($0.label)" } ?? "Filter by genre")
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 5) {
-                    ForEach(["All"] + TextStylePreset.categories, id: \.self) { c in
-                        Button { category = c } label: {
-                            Text(c).font(.system(size: 10.5, weight: category == c ? .semibold : .regular))
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(category == c ? Theme.accent.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
+                    chip("All", selected: family == nil && similarTo == nil) { family = nil; similarTo = nil; shown = 40 }
+                    ForEach(library.families, id: \.id) { f in
+                        chip(f.name, selected: family == f.id && similarTo == nil) { family = f.id; similarTo = nil; shown = 40 }
                     }
                 }
             }
+            HStack(spacing: 8) {
+                Button { surprise(from: found) } label: { Label("Surprise Me", systemImage: "dice") }
+                    .help("Apply a random style from the current results")
+                Button {
+                    similarTo = layer.textContent?.style.presetName.isEmpty == false ? currentPresetID : nil
+                    shown = 40
+                } label: { Label("More Like This", systemImage: "square.stack.3d.down.right") }
+                    .disabled(currentPresetID == nil)
+                    .help("Styles close to the one on this layer")
+                Spacer()
+                Text(similarTo != nil ? "Similar styles" : "\(found.count.formatted()) styles")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+            }
+            .controlSize(.small)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                StyleTile(preset: nil, layer: layer, useFont: false)
-                ForEach(presets) { p in
+                if similarTo == nil && query.isEmpty && family == nil && genre == nil {
+                    StyleTile(preset: nil, layer: layer, useFont: false)
+                }
+                ForEach(found.prefix(shown)) { p in
                     StyleTile(preset: p, layer: layer, useFont: useFont)
                 }
             }
+            if found.count > shown {
+                Button("Show \(min(40, found.count - shown)) more") { shown += 40 }
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity)
+            }
         }
+    }
+
+    private var currentPresetID: String? {
+        guard let name = layer.textContent?.style.presetName, !name.isEmpty else { return nil }
+        return library.all.first { $0.name == name }?.id
+    }
+
+    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 10.5, weight: selected ? .semibold : .regular))
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(selected ? Theme.accent.opacity(0.18) : Color.primary.opacity(0.05), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func surprise(from list: [TextStylePreset]) {
+        guard let p = list.randomElement() else { return }
+        let id = layer.id
+        let palette = PaletteRoles(model.document.palette)
+        let f = useFont
+        model.mutate { d in
+            guard let i = d.index(of: id), var t = d.layers[i].textContent else { return }
+            p.apply(to: &t, palette: palette)
+            if f, let font = p.fonts.first(where: FontCatalog.isAvailable) { t.fontName = font }
+            d.layers[i].textContent = t
+        }
+        model.toast = "Applied \(p.name)"
     }
 }
 
@@ -208,6 +276,28 @@ struct StyleControls: View {
                         if s.wrappedValue.extrude > 0 { optionalColor("Depth Color", s.extrudeColor, fallback: t.color.withLightness(0.2)) }
                         if s.wrappedValue.longShadow > 0 { optionalColor("Shadow Color", s.longShadowColor, fallback: RGBA(0, 0, 0, 0.45)) }
                     }
+                }
+                if [.stripes, .polkaDots, .checker, .plaid, .thread, .glitter, .gradient].contains(s.wrappedValue.surface) {
+                    group("Pattern Colors") {
+                        optionalColor("Color 1", s.patternColor, fallback: t.color)
+                        optionalColor("Color 2", s.patternColor2, fallback: ColorAdvisor.opposite(t.color))
+                    }
+                }
+                group("Shape") {
+                    ValueSlider(label: "Roundness", value: s.roundness, range: 0...1)
+                    ValueSlider(label: "Drips", value: s.drips, range: 0...1)
+                    ValueSlider(label: "Stitching", value: s.stitch, range: 0...1)
+                    if s.wrappedValue.stitch > 0 { optionalColor("Thread", s.stitchColor, fallback: t.color.withLightness(0.92)) }
+                }
+                group("Shadows & Stacks") {
+                    ValueSlider(label: "Drop Shadow", value: s.dropShadow, range: 0...1)
+                    ValueSlider(label: "Stacked", value: s.echo, range: 0...1)
+                    if s.wrappedValue.echo > 0 {
+                        optionalColor("Stack 1", s.echoColor, fallback: ColorAdvisor.opposite(t.color))
+                        optionalColor("Stack 2", s.echoColor2, fallback: t.color.withLightness(0.25))
+                    }
+                    ValueSlider(label: "Smoke", value: s.smokeTrail, range: 0...1)
+                    if s.wrappedValue.smokeTrail > 0 { optionalColor("Smoke Color", s.smokeColor, fallback: t.color.withLightness(0.85)) }
                 }
                 group("Age & Print") {
                     FieldRow("Wear") {
