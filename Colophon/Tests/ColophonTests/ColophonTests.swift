@@ -474,3 +474,58 @@ final class StyleLibraryTests: XCTestCase {
         }
     }
 }
+
+/// Renders a gallery of real style samples when COLOPHON_SAMPLES names an output folder (used by CI).
+final class SampleRenderTests: XCTestCase {
+    func testRenderStyleSamples() throws {
+        guard let dir = ProcessInfo.processInfo.environment["COLOPHON_SAMPLES"] else { throw XCTSkip("COLOPHON_SAMPLES not set") }
+        let out = URL(fileURLWithPath: dir)
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        let lib = StyleLibrary.shared
+        let curated = ["gilded", "epic", "chrome", "carved", "rusted", "frozen", "molten", "neon", "letterpress", "window",
+                       "fog", "bloodrust", "haunted", "romance", "scifiplate", "yapop", "block3d", "deco", "goldleaf", "galaxy"]
+        let searches = ["blood drips long", "molten gold drips", "embroidery puffy", "balloon glossy", "sticker glitter", "triple stack",
+                        "exploded glass", "smoke column", "polka dots sticker", "plaid outlined", "broken glitch halftone", "wood burn scorched",
+                        "chalk smudged", "to glow", "outline neon wide", "backlit eclipse", "marble carved", "towering 3d chrome",
+                        "gold leaf inflated", "rust eroded", "ice blazing", "copper chiseled raised", "letterpress heavy", "painted on full"]
+        var picks: [TextStylePreset] = curated.compactMap { lib.preset($0) }
+        for q in searches { if let p = lib.search(q, family: nil, genre: nil).first, !picks.contains(where: { $0.id == p.id }) { picks.append(p) } }
+
+        let grounds: [(FillStyle, [RGBA])] = [
+            (.smoke, [RGBA(hex: "0B1D3A"), RGBA(hex: "23308C"), RGBA(hex: "7B83EB")]),
+            (.meshBlend, [RGBA(hex: "1E3D2F"), RGBA(hex: "0B4A33"), RGBA(hex: "D4A017")]),
+            (.starfield, [RGBA(hex: "0B0C10"), RGBA(hex: "3A1F6B")]),
+            (.watercolor, [RGBA(hex: "F2ECDF"), RGBA(hex: "C8553D"), RGBA(hex: "1B2A4A")]),
+            (.radial, [RGBA(hex: "F2A541"), RGBA(hex: "7A2E12"), RGBA(hex: "1A0C05")]),
+            (.bokeh, [RGBA(hex: "121417"), RGBA(hex: "D81E5B"), RGBA(hex: "48CAE4")])
+        ]
+        var manifest: [[String: String]] = []
+        for (i, p) in picks.enumerated() {
+            let g = grounds[i % grounds.count]
+            var doc = CoverDocument()
+            doc.canvas = CanvasSpec(width: 1200, height: 675)
+            doc.palette = g.1 + [RGBA(hex: "F2ECDF"), RGBA(hex: "E4572E")]
+            let palette = PaletteRoles(doc.palette)
+            var bg = Layer.fill(g.0, colors: g.1, seed: 40 + i, intensity: 0.5)
+            bg.name = "Ground"
+            var title = Layer.text("The Salt\nOrchard", role: .title, frame: NRect(0.08, 0.14, 0.84, 0.66),
+                                   font: p.fonts.first(where: FontCatalog.isAvailable) ?? "Didot", color: palette.light)
+            if var t = title.textContent {
+                p.apply(to: &t, palette: palette)
+                if t.fontName.lowercased().contains("script") || t.fontName.contains("Vibes") || t.fontName.contains("Allura") {
+                    t.letterCase = .asTyped
+                } else {
+                    t.letterCase = .upper
+                }
+                title.textContent = t
+            }
+            doc.layers = [bg, title]
+            let img = try XCTUnwrap(CoverRenderer.shared.render(doc, size: CGSize(width: 1200, height: 675), quality: .full), p.id)
+            let file = String(format: "%02d-%@.png", i, p.id.replacingOccurrences(of: ".", with: "-"))
+            XCTAssertTrue(Exporter.write(img, to: out.appendingPathComponent(file), format: .png, quality: 1))
+            manifest.append(["file": file, "name": p.name, "family": p.category, "font": FontCatalog.displayName(title.textContent?.fontName ?? "")])
+        }
+        let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
+        try data.write(to: out.appendingPathComponent("manifest.json"))
+    }
+}
