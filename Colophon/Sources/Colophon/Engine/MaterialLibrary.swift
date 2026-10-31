@@ -318,14 +318,23 @@ final class MaterialLibrary {
                 FX.blend(FX.controls(noise(e, s, u * 0.04), brightness: 0.4, contrast: 5), over: FX.controls(smooth(e, s &+ 1, cells(e, u, 1)), contrast: 2.5), mode: "CIMultiplyBlendMode")
             },
             Structure(id: "scratches", name: "Scratches", category: "Grunge & Wear", tags: ["scratches", "worn", "metal", "distressed"]) { e, u, s in
-                // Motion-blurred noise has a spread of about 0.29 / sqrt(radius): keep only its brightest
-                // ~4% as thin scratches, whatever the scale.
-                { () -> CIImage in
-                    let r = u * 2.5
-                    let sigma = 0.29 / Double(max(1, r)).squareRoot()
-                    let lines = remap(streaks(e, s, r, 0.25 + Double(s % 3) * 0.6), 2 / sigma, -3.6)
-                    return lines.applyingFilter("CIColorInvert").cropped(to: e)
-                }()
+                // Hairline scratches drawn directly: clusters running roughly one way, a few strays.
+                drawn(e) { ctx, w, h in
+                    ctx.setFillColor(CGColor(gray: 1, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+                    var rng = SeededRNG(seed: s)
+                    let main = rng.range(0, Double.pi)
+                    ctx.setLineCap(.round)
+                    for i in 0..<Int(20 + 2.5 * (w * h) / (u * u * 6)) {
+                        let ang = i % 7 == 0 ? rng.range(0, Double.pi) : main + rng.range(-0.25, 0.25)
+                        let len = u * CGFloat(rng.range(1.5, 9))
+                        let p = CGPoint(x: w * CGFloat(rng.unit()), y: h * CGFloat(rng.unit()))
+                        ctx.setStrokeColor(CGColor(gray: CGFloat(rng.range(0, 0.55)), alpha: 1))
+                        ctx.setLineWidth(max(0.6, u * CGFloat(rng.range(0.015, 0.06))))
+                        ctx.move(to: p)
+                        ctx.addLine(to: CGPoint(x: p.x + CGFloat(cos(ang)) * len, y: p.y + CGFloat(sin(ang)) * len))
+                        ctx.strokePath()
+                    }
+                }
             },
             Structure(id: "dust", name: "Dust & Specks", category: "Grunge & Wear", tags: ["dust", "film", "specks", "vintage"]) { e, u, s in
                 FX.controls(noise(e, s, u * 0.03), brightness: 0.47, contrast: 16)
