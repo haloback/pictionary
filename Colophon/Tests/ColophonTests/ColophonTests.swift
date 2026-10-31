@@ -595,6 +595,32 @@ final class SampleRenderTests: XCTestCase {
 }
 
 final class MaterialLibraryTests: XCTestCase {
+    /// Prints how Core Image's noise and blend building blocks actually come out (sRGB 0-255), for tuning.
+    func testPrintNoiseStatistics() throws {
+        let e = CGRect(x: 0, y: 0, width: 256, height: 256)
+        func stats(_ name: String, _ i: CIImage) {
+            guard let cg = Gfx.render(i.cropped(to: e), extent: e) else { return print("STAT \(name): render failed") }
+            let p = PixelSampler.pixels(cg, maxSide: 256)
+            var sum = 0.0, lo = 255, hi = 0, above = 0, n = 0
+            for k in stride(from: 0, to: p.w * p.h * 4, by: 4) {
+                let v = Int(p.data[k]); sum += Double(v); lo = min(lo, v); hi = max(hi, v); n += 1
+                if v > 220 { above += 1 }
+            }
+            print(String(format: "STAT %@: mean %.1f min %d max %d >220: %.1f%%", name, sum / Double(n), lo, hi, 100 * Double(above) / Double(n)))
+        }
+        let noise = FX.noise(e, seed: 3, grainSize: 1, strength: 1)
+        stats("noise", noise)
+        stats("noise grain3", FX.noise(e, seed: 3, grainSize: 3, strength: 1))
+        stats("smoothNoise", FX.smoothNoise(e, seed: 3, cells: 6))
+        stats("solid0.5", FX.solid(RGBA(0.5, 0.5, 0.5), e))
+        stats("matrix v>0.86", FX.matrix(noise, r: (12, 0, 0), g: (12, 0, 0), b: (12, 0, 0), bias: (-10.32, -10.32, -10.32)))
+        stats("controls c3 noise", FX.controls(noise, contrast: 3))
+        stats("controls c3 smooth", FX.controls(FX.smoothNoise(e, seed: 3, cells: 6), contrast: 3))
+        stats("softlight noise.05 over gray", FX.blend(FX.noise(e, seed: 3, grainSize: 1, strength: 0.05), over: FX.solid(RGBA(0.5, 0.5, 0.5), e), mode: "CISoftLightBlendMode"))
+        stats("overlay noise.25 over gray", FX.blend(FX.noise(e, seed: 3, grainSize: 1, strength: 0.25), over: FX.solid(RGBA(0.5, 0.5, 0.5), e), mode: "CIOverlayBlendMode"))
+        stats("motionblur noise r20", noise.clampedToExtent().applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: 20, kCIInputAngleKey: 0]).cropped(to: e))
+    }
+
     func testThousandsOfUniqueMaterials() {
         let lib = MaterialLibrary.shared
         XCTAssertGreaterThanOrEqual(lib.materials.count, 2000)

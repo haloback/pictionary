@@ -71,7 +71,13 @@ final class MaterialLibrary {
         if let mode = m.mask {
             switch mode {
             case .soft: return gray
-            case .hard: return FX.controls(gray, contrast: 6).cropped(to: e)
+            case .hard:
+                // Lift to perceptual space first so the threshold sits at the visual mid-gray.
+                let lifted = gray.applyingFilter("CIGammaAdjust", parameters: ["inputPower": 0.4545])
+                return FX.matrix(lifted, r: (6, 0, 0), g: (6, 0, 0), b: (6, 0, 0), bias: (-2.5, -2.5, -2.5))
+                    .applyingFilter("CIColorClamp", parameters: [
+                        "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                    ]).cropped(to: e)
             case .inverted: return gray.applyingFilter("CIColorInvert").cropped(to: e)
             }
         }
@@ -201,6 +207,20 @@ final class MaterialLibrary {
         func smoothMid(_ e: CGRect, _ seed: Int, _ n: Int) -> CIImage {
             smooth(e, seed, n).applyingFilter("CIGammaAdjust", parameters: ["inputPower": 0.4545]).cropped(to: e)
         }
+        /// Uniform noise stretched along x (or rotated): full-contrast grain for brushed and fibrous looks.
+        func stretched(_ e: CGRect, _ seed: Int, _ length: CGFloat, _ angle: CGFloat = 0) -> CIImage {
+            guard let base = CIFilter(name: "CIRandomGenerator")?.outputImage else { return FX.solid(RGBA(0.5, 0.5, 0.5), e) }
+            let off = CGFloat((seed &* 7919) % 4000)
+            let t = CGAffineTransform(translationX: off, y: off).concatenating(CGAffineTransform(scaleX: max(1, length), y: 1))
+                .concatenating(CGAffineTransform(rotationAngle: angle))
+            return FX.mono(base.transformed(by: t)).cropped(to: e)
+        }
+        /// Thin lines where `i` changes quickly: the difference with a slightly shifted copy, inverted.
+        func contours(_ i: CIImage, _ shift: CGFloat, _ k: Double) -> CIImage {
+            let e = i.extent
+            let moved = i.clampedToExtent().transformed(by: CGAffineTransform(translationX: shift, y: shift)).cropped(to: e)
+            return remap(FX.mono(FX.blend(moved, over: i, mode: "CIDifferenceBlendMode")), -k, 1 - 0.5 * k)
+        }
         func streaks(_ e: CGRect, _ seed: Int, _ radius: CGFloat, _ angle: Double) -> CIImage {
             noise(e, seed, 1).clampedToExtent().applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: radius, kCIInputAngleKey: angle]).cropped(to: e)
         }
@@ -208,7 +228,15 @@ final class MaterialLibrary {
         return [
             // Stone & Mineral
             Structure(id: "marble", name: "Marble Veins", category: "Stone & Mineral", tags: ["marble", "veins", "luxury", "stone"]) { e, u, s in
-                FX.controls(FX.displace(stripes(e, u * 0.7, 0.6), by: smooth(e, s, cells(e, u, 3)), scale: u * 4), contrast: 1.3)
+                // Veins run where turbulent noise crosses its middle; a soft cloudy body sits behind them.
+                { () -> CIImage in
+                    let turb = FX.blend(smoothMid(e, s &+ 2, cells(e, u, 1.5)), over: smoothMid(e, s, cells(e, u, 6)), mode: "CISoftLightBlendMode")
+                    let dist = FX.mono(FX.blend(FX.solid(RGBA(0.5, 0.5, 0.5), e).applyingFilter("CIGammaAdjust", parameters: ["inputPower": 0.4545]),
+                                                over: turb, mode: "CIDifferenceBlendMode"))
+                    let veins = FX.blur(remap(dist, -14, -6), max(0.6, u * 0.01))
+                    let body = remap(smoothMid(e, s &+ 5, cells(e, u, 2)), 0.5, 0.82)
+                    return FX.blend(veins, over: body, mode: "CIMultiplyBlendMode")
+                }()
             },
             Structure(id: "granite", name: "Granite", category: "Stone & Mineral", tags: ["granite", "speckle", "stone"]) { e, u, s in
                 FX.controls(FX.blend(noise(e, s, u * 0.06), over: smooth(e, s &+ 1, cells(e, u, 1)), mode: "CIOverlayBlendMode"), contrast: 1.4)
@@ -259,7 +287,22 @@ final class MaterialLibrary {
                 return FX.blend(creases, over: remap(n, 1.2, 0.55), mode: "CIMultiplyBlendMode")
             },
             Structure(id: "fibers", name: "Paper Fibers", category: "Wood & Paper", tags: ["paper", "fibers", "handmade"]) { e, u, s in
-                FX.blend(FX.controls(streaks(e, s &+ 3, u * 0.4, 0.8), contrast: 2), over: FX.controls(noise(e, s, 1), brightness: 0.3, contrast: 0.4), mode: "CIMultiplyBlendMode")
+                drawn(e) { ctx, w, h in
+                    ctx.setFillColor(CGColor(gray: 0.86, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+                    var rng = SeededRNG(seed: s)
+                    ctx.setLineCap(.round)
+                    for _ in 0..<Int(60 + 4 * (w * h) / (u * u * 4)) {
+                        let p = CGPoint(x: w * CGFloat(rng.unit()), y: h * CGFloat(rng.unit()))
+                        let a = rng.range(0, 2 * Double.pi), len = u * CGFloat(rng.range(0.4, 2.2))
+                        let bend = CGFloat(rng.range(-0.6, 0.6)) * len
+                        ctx.setStrokeColor(CGColor(gray: CGFloat(rng.unit() < 0.5 ? rng.range(0.55, 0.78) : rng.range(0.93, 1)), alpha: 0.8))
+                        ctx.setLineWidth(max(0.5, u * CGFloat(rng.range(0.01, 0.035))))
+                        ctx.move(to: p)
+                        ctx.addQuadCurve(to: CGPoint(x: p.x + CGFloat(cos(a)) * len, y: p.y + CGFloat(sin(a)) * len),
+                                         control: CGPoint(x: p.x + CGFloat(cos(a)) * len / 2 - CGFloat(sin(a)) * bend, y: p.y + CGFloat(sin(a)) * len / 2 + CGFloat(cos(a)) * bend))
+                        ctx.strokePath()
+                    }
+                }
             },
             Structure(id: "linen", name: "Linen Weave", category: "Fabric & Leather", tags: ["linen", "fabric", "weave", "cloth"]) { e, u, s in
                 FX.blend(noise(e, s, 1), over: FX.blend(stripes(e, u * 0.07, 0), over: stripes(e, u * 0.07, .pi / 2), mode: "CIMultiplyBlendMode"), mode: "CISoftLightBlendMode")
@@ -275,7 +318,12 @@ final class MaterialLibrary {
                 FX.blend(FX.controls(streaks(e, s, u * 0.3, .pi / 2), contrast: 2), over: stripes(e, u * 0.05, .pi / 4), mode: "CISoftLightBlendMode")
             },
             Structure(id: "leather", name: "Leather Grain", category: "Fabric & Leather", tags: ["leather", "grain", "luxury"]) { e, u, s in
-                FX.blur(edges(crystal(e, s, u * 0.12), 4).applyingFilter("CIColorInvert"), 0.8)
+                // Pebbled cells of slightly different tone, separated by soft creases.
+                { () -> CIImage in
+                    let cellsImg = crystal(e, s, u * 0.12)
+                    let creases = FX.blur(contours(cellsImg, max(1, u * 0.02), 5), max(0.6, u * 0.012))
+                    return FX.blend(creases, over: remap(FX.blur(cellsImg, max(0.5, u * 0.02)), 0.35, 0.7), mode: "CIMultiplyBlendMode")
+                }()
             },
             Structure(id: "felt", name: "Felt", category: "Fabric & Leather", tags: ["felt", "soft", "fabric"]) { e, u, s in
                 FX.controls(FX.blur(noise(e, s, 1), u * 0.02), contrast: 2.2)
@@ -284,7 +332,26 @@ final class MaterialLibrary {
             Structure(id: "watercolor", name: "Watercolor Wash", category: "Paint & Ink", tags: ["watercolor", "wash", "soft", "paint"]) { e, _, s in gen(.watercolor, e, s) },
             Structure(id: "smear", name: "Paint Smear", category: "Paint & Ink", tags: ["paint", "smear", "streaks", "bold"]) { e, _, s in gen(.paintSmear, e, s) },
             Structure(id: "brush", name: "Brush Strokes", category: "Paint & Ink", tags: ["brush", "strokes", "paint", "expressive"]) { e, u, s in
-                FX.controls(streaks(e, s, u * 1.2, Double(s % 7) * 0.45), contrast: 2.4)
+                // Layered translucent strokes in one general direction, with bristle streaks inside.
+                { () -> CIImage in
+                    let strokes = drawn(e) { ctx, w, h in
+                        ctx.setFillColor(CGColor(gray: 0.5, alpha: 1)); ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+                        var rng = SeededRNG(seed: s)
+                        let main = rng.range(0, Double.pi)
+                        ctx.setLineCap(.round)
+                        for _ in 0..<Int(14 + 1.2 * (w * h) / (u * u * 10)) {
+                            let a = main + rng.range(-0.2, 0.2), len = u * CGFloat(rng.range(3, 10))
+                            let p = CGPoint(x: w * CGFloat(rng.range(-0.1, 1.05)), y: h * CGFloat(rng.range(-0.1, 1.05)))
+                            ctx.setStrokeColor(CGColor(gray: CGFloat(rng.range(0.1, 0.95)), alpha: 0.55))
+                            ctx.setLineWidth(u * CGFloat(rng.range(0.5, 1.6)))
+                            ctx.move(to: p)
+                            ctx.addLine(to: CGPoint(x: p.x + CGFloat(cos(a)) * len, y: p.y + CGFloat(sin(a)) * len))
+                            ctx.strokePath()
+                        }
+                    }
+                    let bristles = remap(FX.blur(stretched(e, s, u * 1.5, 0), 0.6), 0.45, 0.8)
+                    return FX.blend(bristles, over: strokes, mode: "CIMultiplyBlendMode")
+                }()
             },
             Structure(id: "splatter", name: "Ink Splatter", category: "Paint & Ink", tags: ["splatter", "ink", "drops", "grunge"]) { e, u, s in
                 drawn(e) { ctx, w, h in
@@ -355,17 +422,29 @@ final class MaterialLibrary {
                 FX.controls(FX.displace(smooth(e, s, cells(e, u, 3)), by: smooth(e, s &+ 5, cells(e, u, 2)), scale: u * 2), contrast: 1.8)
             },
             Structure(id: "nebula", name: "Nebula", category: "Sky & Elements", tags: ["nebula", "space", "cosmic", "sci-fi"]) { e, u, s in
-                let gas = FX.controls(FX.blend(smooth(e, s, cells(e, u, 2)), over: smooth(e, s &+ 7, cells(e, u, 5)), mode: "CIScreenBlendMode"), brightness: -0.2, contrast: 2.2)
-                return FX.blend(FX.controls(noise(e, s, 1), brightness: -0.48, contrast: 20), over: gas, mode: "CIScreenBlendMode")
+                let gas = remap(FX.blend(smoothMid(e, s, cells(e, u, 2)), over: smoothMid(e, s &+ 7, cells(e, u, 5)), mode: "CISoftLightBlendMode"), 2.4, 0.3)
+                let stars = remap(noise(e, s, 1), 60, (0.5 - 0.988) * 60)
+                return FX.blend(stars, over: gas, mode: "CIScreenBlendMode")
             },
             Structure(id: "stars", name: "Starfield", category: "Sky & Elements", tags: ["stars", "night", "space"]) { e, _, s in gen(.starfield, e, s) },
             Structure(id: "bokeh", name: "Bokeh Lights", category: "Sky & Elements", tags: ["bokeh", "lights", "festive", "romantic"]) { e, _, s in gen(.bokeh, e, s) },
             Structure(id: "aurora", name: "Aurora", category: "Sky & Elements", tags: ["aurora", "northern lights", "glow"]) { e, u, s in
-                let curtains = FX.displace(FX.controls(streaks(e, s, u * 3, .pi / 2), contrast: 3), by: smooth(e, s, cells(e, u, 4)), scale: u * 3)
-                return FX.blend(FX.linear(CGPoint(x: 0, y: e.maxY), CGPoint(x: 0, y: e.minY), .white, .black, extent: e), over: curtains, mode: "CIMultiplyBlendMode")
+                // Tall folds: smooth noise squashed sideways, swayed by a second noise, fading toward the ground.
+                let folds = smoothMid(CGRect(x: 0, y: 0, width: e.width, height: e.height / 6), s, max(3, cells(e, u, 1.2)))
+                    .transformed(by: CGAffineTransform(scaleX: 1, y: 6)).cropped(to: e)
+                let swayed = FX.displace(remap(folds, 2.6, 0.45), by: smoothMid(e, s &+ 4, cells(e, u, 6)), scale: u * 6)
+                let fade = FX.linear(CGPoint(x: 0, y: e.maxY), CGPoint(x: 0, y: e.minY), RGBA(0.9, 0.9, 0.9), .black, extent: e)
+                return FX.blend(fade, over: swayed, mode: "CIMultiplyBlendMode")
             },
             Structure(id: "fire", name: "Flames", category: "Sky & Elements", tags: ["fire", "flames", "heat"]) { e, u, s in
-                FX.displace(FX.linear(CGPoint(x: 0, y: e.minY), CGPoint(x: 0, y: e.maxY), .white, .black, extent: e), by: smooth(e, s, cells(e, u, 1.5)), scale: u * 3)
+                // Bright at the base, tongues licking upward, broken up by turbulence.
+                { () -> CIImage in
+                    let heat = FX.linear(CGPoint(x: 0, y: e.minY), CGPoint(x: 0, y: e.maxY), .white, .black, extent: e)
+                    let tongues = smoothMid(CGRect(x: 0, y: 0, width: e.width, height: e.height / 4), s, max(3, cells(e, u, 0.9)))
+                        .transformed(by: CGAffineTransform(scaleX: 1, y: 4)).cropped(to: e)
+                    let flame = FX.blend(remap(tongues, 2.2, 0.6), over: heat, mode: "CIMultiplyBlendMode")
+                    return remap(FX.displace(flame, by: smoothMid(e, s &+ 9, cells(e, u, 3)), scale: u * 5), 1.6, 0.45)
+                }()
             },
             Structure(id: "ripples", name: "Water Ripples", category: "Sky & Elements", tags: ["water", "ripples", "calm", "sea"]) { e, u, s in
                 let rings = FX.solid(RGBA(0.5, 0.5, 0.5), e).applyingFilter("CICircularScreen", parameters: [
@@ -392,7 +471,8 @@ final class MaterialLibrary {
             },
             // Metal
             Structure(id: "brushedmetal", name: "Brushed Metal", category: "Metal", tags: ["metal", "brushed", "steel"]) { e, u, s in
-                FX.blend(streaks(e, s, u * 2, 0), over: FX.linear(CGPoint(x: 0, y: e.maxY), CGPoint(x: 0, y: e.minY), RGBA(0.75, 0.75, 0.75), RGBA(0.35, 0.35, 0.35), extent: e), mode: "CIOverlayBlendMode")
+                FX.blend(remap(FX.blur(stretched(e, s, max(8, u * 3)), 0.5), 0.5, 0.5),
+                         over: FX.linear(CGPoint(x: 0, y: e.maxY), CGPoint(x: 0, y: e.minY), RGBA(0.78, 0.78, 0.78), RGBA(0.4, 0.4, 0.4), extent: e), mode: "CIOverlayBlendMode")
             },
             Structure(id: "hammered", name: "Hammered Metal", category: "Metal", tags: ["metal", "hammered", "craft"]) { e, u, s in
                 FX.blur(FX.controls(crystal(e, s, u * 0.25), contrast: 0.8), u * 0.04)
@@ -526,8 +606,8 @@ final class MaterialLibrary {
                 }
             },
             Structure(id: "topo", name: "Topographic Lines", category: "Pattern & Geometry", tags: ["topographic", "map", "contour", "adventure"]) { e, u, s in
-                let levels = smooth(e, s, cells(e, u, 4)).applyingFilter("CIColorPosterize", parameters: ["inputLevels": 9])
-                return edges(levels, 6).applyingFilter("CIColorInvert")
+                let levels = remap(smoothMid(e, s, cells(e, u, 4)), 1.6, 0.5).applyingFilter("CIColorPosterize", parameters: ["inputLevels": 10]).cropped(to: e)
+                return contours(levels, max(1.2, u * 0.03), 12)
             },
             Structure(id: "halftone", name: "Halftone Fade", category: "Pattern & Geometry", tags: ["halftone", "dots", "print", "comic"]) { e, _, s in gen(.halftone, e, s) },
             Structure(id: "sunburst", name: "Sunburst", category: "Pattern & Geometry", tags: ["sunburst", "rays", "retro", "vintage"]) { e, _, s in gen(.sunburst, e, s) },
