@@ -74,6 +74,7 @@ struct LayerInspector: View {
                     if b.wrappedValue.textContent == nil {
                         AdjustSection(layer: b)
                     }
+                    MaskSection(layer: b)
                     AppearanceSection(layer: b)
                     GeometrySection(layer: b)
                 }
@@ -426,6 +427,55 @@ private struct ShapeSection: View {
             if s.wrappedValue.kind == .roundedRect {
                 ValueSlider(label: "Corners", value: s.cornerRadius, range: 0...0.5)
             }
+        }
+    }
+}
+
+private struct MaskSection: View {
+    @Environment(EditorModel.self) private var model
+    @Binding var layer: Layer
+
+    private var sources: [Layer] {
+        model.document.layers.filter { $0.id != layer.id && $0.imageContent != nil }
+    }
+
+    var body: some View {
+        PanelSection("Mask", trailing: layer.mask.isEmpty && !layer.clipToBelow ? nil : AnyView(
+            Button("Clear") { layer.mask = LayerMask(); layer.clipToBelow = false }.buttonStyle(.link).font(.system(size: 11)))) {
+            FieldRow("Fade") {
+                Picker("", selection: $layer.mask.gradient) { ForEach(MaskGradientKind.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            if layer.mask.gradient != .none {
+                if layer.mask.gradient == .linear {
+                    ValueSlider(label: "Toward", value: $layer.mask.angle, range: 0...360) { String(format: "%.0f°", $0) }
+                }
+                ValueSlider(label: "Starts", value: $layer.mask.start, range: 0...1)
+                ValueSlider(label: "Gone By", value: $layer.mask.end, range: 0...1)
+                Toggle("Invert fade", isOn: $layer.mask.invert).controlSize(.small)
+            }
+            FieldRow("Subject") {
+                Picker("", selection: $layer.mask.subjectOf) {
+                    Text("Not masked").tag(UUID?.none)
+                    ForEach(sources) { s in Text("Inside \(s.name)").tag(UUID?.some(s.id)) }
+                }
+                .labelsHidden()
+                .disabled(sources.isEmpty)
+            }
+            if layer.mask.subjectOf != nil {
+                Toggle("Outside the subject instead", isOn: $layer.mask.invertSubject).controlSize(.small)
+                Text("Double exposure: this layer only shows within the other photo's subject.")
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Toggle(isOn: $layer.clipToBelow) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Clip to layer below")
+                    Text("Shows only where the layer underneath is, e.g. a photo inside the title.")
+                        .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                }
+            }
+            .controlSize(.small)
+            ValueSlider(label: "Keep Darks", value: $layer.mask.keepDarks, range: 0...1)
+            ValueSlider(label: "Keep Lights", value: $layer.mask.keepLights, range: 0...1)
         }
     }
 }

@@ -6,6 +6,8 @@ struct EffectContext {
     /// Pixels per 1000 canvas pixels.
     var scale: CGFloat
     var seed: Int
+    /// The cover's palette, for effects that print in its inks.
+    var palette: [RGBA] = []
 }
 
 /// Core Image building blocks used by the effect library and generators.
@@ -140,6 +142,15 @@ enum FX {
     static func splitTone(_ i: CIImage, shadows: RGBA, highlights: RGBA) -> CIImage {
         let map = gradientMap(i, [shadows.withLightness(min(shadows.hsl.l, 0.18)), RGBA(0.5, 0.5, 0.5), highlights.withLightness(max(highlights.hsl.l, 0.78))])
         return blend(map, over: i, mode: "CISoftLightBlendMode")
+    }
+
+    /// Repaints every pixel in one color, keeping its transparency (for colored line work).
+    static func recolor(_ i: CIImage, _ c: RGBA) -> CIImage {
+        matrix(i, r: (0, 0, 0), g: (0, 0, 0), b: (0, 0, 0), bias: (c.r, c.g, c.b))
+    }
+
+    static func blendWithMask(_ top: CIImage, over base: CIImage, mask: CIImage) -> CIImage {
+        top.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: base, kCIInputMaskImageKey: mask]).cropped(to: base.extent)
     }
 
     static func bloom(_ i: CIImage, radius: CGFloat, intensity: Double) -> CIImage {

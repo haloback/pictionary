@@ -156,6 +156,52 @@ enum SuggestionEngine {
             d.layers.insert(l, at: min(topTextIndex, d.layers.count))
         })
 
+        let photoAssets = doc.assetOrder.filter { doc.assets[$0.uuidString] != nil }
+        let placed = Set(doc.layers.compactMap { $0.imageContent?.assetID })
+        if let ph = photo, let second = photoAssets.first(where: { !placed.contains($0) }) {
+            out.append(Suggestion(symbol: "square.2.layers.3d.bottom.filled", title: "Blend in your second photo",
+                                  detail: "Fades the other photo up from the bottom so the two scenes melt into each other.") { d in
+                guard let i = d.index(of: ph.id) else { return }
+                var l = Layer.image(second, frame: .full, name: "Second Photo")
+                l.mask.gradient = .linear
+                l.mask.angle = 270
+                l.mask.start = 0.4
+                l.mask.end = 0.95
+                d.layers.insert(l, at: i + 1)
+            })
+            out.append(Suggestion(symbol: "person.crop.square.filled.and.at.rectangle", title: "Double exposure",
+                                  detail: "Shows the second photo inside the first photo's subject.") { d in
+                guard let i = d.index(of: ph.id) else { return }
+                var subject = ph
+                subject.id = UUID()
+                subject.name = "Subject"
+                subject.imageContent?.cutout = .subject
+                var scene = Layer.image(second, frame: ph.frame, name: "Exposed Scene")
+                scene.mask.subjectOf = subject.id
+                var detail = subject
+                detail.id = UUID()
+                detail.name = "Subject Detail"
+                detail.blend = .multiply
+                detail.opacity = 0.45
+                d.layers.insert(contentsOf: [subject, scene, detail], at: i + 1)
+            })
+        }
+        if let ph = photo {
+            out.append(Suggestion(symbol: "pencil.and.scribble", title: "Ink over the color",
+                                  detail: "Adds an ink drawing of the photo on top, multiplied, like an inked and colored illustration.") { d in
+                guard let i = d.index(of: ph.id) else { return }
+                var ink = ph
+                ink.id = UUID()
+                ink.name = "Ink Lines"
+                ink.effects = [EffectInstance(presetID: "ink.clean-line-art.black.1", amount: 1)]
+                ink.blend = .multiply
+                d.layers.insert(ink, at: i + 1)
+            })
+            out.append(Suggestion(symbol: "scribble", title: "Turn the photo into a drawing",
+                                  detail: "Engraving in your palette's ink. Try others under Effects, Ink & Line Art.") { d in
+                if let i = d.index(of: ph.id) { d.layers[i].effects.append(EffectInstance(presetID: "ink.engraving.palette.1", amount: 1)) }
+            })
+        }
         if let ph = photo {
             let hasGrain = ph.effects.contains { $0.presetID.contains("grain") }
             if !hasGrain {

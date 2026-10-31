@@ -13,6 +13,7 @@ enum EffectFamily: String, CaseIterable, Identifiable {
     case atmosphere = "Atmosphere"
     case print = "Print & Halftone"
     case paint = "Paint & Art"
+    case ink = "Ink & Line Art"
 
     var id: String { rawValue }
 
@@ -29,6 +30,7 @@ enum EffectFamily: String, CaseIterable, Identifiable {
         case .atmosphere: return "cloud.fog"
         case .print: return "circle.grid.3x3"
         case .paint: return "paintbrush"
+        case .ink: return "pencil.and.scribble"
         }
     }
 }
@@ -108,6 +110,7 @@ final class EffectLibrary {
         EffectLibrary.buildPaint(&list)
         EffectLibrary.buildWashes(&list)
         EffectLibrary.buildLooks(&list)
+        EffectLibrary.buildInk(&list)
         presets = list
         var idx: [String: EffectPreset] = [:]
         for p in list { idx[p.id] = p }
@@ -400,6 +403,140 @@ final class EffectLibrary {
                         default: return FX.mix(i, FX.blend(FX.solid(col, i.extent), over: i, mode: "CIMultiplyBlendMode"), 0.75)
                         }
                     }))
+            }
+        }
+    }
+
+    // MARK: Ink & line art
+
+    /// Black lines on transparency from the photo's edges.
+    static func lines(_ i: CIImage, weight: Double, detail: Double) -> CIImage {
+        i.applyingFilter("CILineOverlay", parameters: [
+            "inputNRNoiseLevel": 0.07 - 0.05 * detail, "inputNRSharpness": 0.71,
+            "inputEdgeIntensity": 0.6 + 1.6 * weight, "inputThreshold": 0.18 - 0.1 * detail, "inputContrast": 50.0
+        ]).cropped(to: i.extent)
+    }
+
+    /// Black where `tone` (gray) is darker than a pattern, white elsewhere: the basis of hatching and stipple.
+    static func toneScreen(_ tone: CIImage, _ pattern: CIImage, gain: Double) -> CIImage {
+        let sum = tone.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: pattern])
+        let halved = FX.matrix(sum, r: (0.5, 0, 0), g: (0, 0.5, 0), b: (0, 0, 0.5))
+        return FX.controls(halved, contrast: gain).cropped(to: tone.extent)
+    }
+
+    static func stripes(_ extent: CGRect, width: CGFloat, angle: CGFloat) -> CIImage {
+        (CIFilter(name: "CIStripesGenerator", parameters: [
+            "inputColor0": CIColor(red: 1, green: 1, blue: 1), "inputColor1": CIColor(red: 0, green: 0, blue: 0),
+            kCIInputWidthKey: max(1, width), kCIInputSharpnessKey: 0.0
+        ])?.outputImage ?? CIImage.empty()).transformed(by: CGAffineTransform(rotationAngle: angle)).cropped(to: extent)
+    }
+
+    /// Prints a black-and-white drawing in an ink on a paper color.
+    static func inkOn(_ drawing: CIImage, ink: RGBA, paper: RGBA) -> CIImage {
+        FX.gradientMap(drawing, [ink, paper])
+    }
+
+    private typealias InkRecipe = (name: String, run: (CIImage, EffectContext, Double, RGBA, RGBA) -> CIImage)
+
+    private static let inkRecipes: [InkRecipe] = [
+        ("Ink Drawing", { i, c, k, ink, paper in
+            let l = lines(i, weight: 0.4 + 0.5 * k, detail: 0.5)
+            let shadows = FX.controls(FX.mono(i), brightness: 0.25 - 0.2 * k, contrast: 6)
+            let drawing = l.composited(over: FX.blend(shadows, over: FX.solid(.white, i.extent), mode: "CIMultiplyBlendMode"))
+            return FX.grain(inkOn(drawing, ink: ink, paper: paper), seed: c.seed, strength: 0.08, size: 1)
+        }),
+        ("Clean Line Art", { i, _, k, ink, paper in
+            inkOn(lines(FX.blur(i, 1.5), weight: 0.3 + 0.5 * k, detail: 0.3).composited(over: FX.solid(.white, i.extent)), ink: ink, paper: paper)
+        }),
+        ("Technical Pen", { i, _, k, ink, paper in
+            inkOn(lines(i, weight: 0.2 + 0.3 * k, detail: 0.9).composited(over: FX.solid(.white, i.extent)), ink: ink, paper: paper)
+        }),
+        ("Pencil Sketch", { i, c, k, ink, paper in
+            let m = FX.mono(i)
+            let dodge = FX.blur(m.applyingFilter("CIColorInvert"), (4 + 10 * k) * c.scale)
+            let sketch = FX.controls(dodge.applyingFilter("CIColorDodgeBlendMode", parameters: [kCIInputBackgroundImageKey: m]).cropped(to: i.extent), contrast: 1.2 + 0.6 * k)
+            return FX.grain(inkOn(sketch, ink: ink, paper: paper), seed: c.seed, strength: 0.12, size: max(1, 1.2 * c.scale))
+        }),
+        ("Engraving", { i, c, k, ink, paper in
+            let tone = FX.controls(FX.mono(i), contrast: 1.1)
+            let hatch = toneScreen(tone, stripes(i.extent, width: (3 + 3 * k) * c.scale, angle: .pi / 6), gain: 9)
+            return inkOn(hatch, ink: ink, paper: paper)
+        }),
+        ("Crosshatch", { i, c, k, ink, paper in
+            let tone = FX.mono(i)
+            let a = toneScreen(tone, stripes(i.extent, width: (3 + 2 * k) * c.scale, angle: .pi / 4), gain: 8)
+            let darker = FX.controls(tone, brightness: 0.18)
+            let b = toneScreen(darker, stripes(i.extent, width: (3 + 2 * k) * c.scale, angle: -.pi / 4), gain: 8)
+            return inkOn(FX.blend(a, over: b, mode: "CIMultiplyBlendMode"), ink: ink, paper: paper)
+        }),
+        ("Stipple", { i, c, k, ink, paper in
+            let tone = FX.controls(FX.mono(i), contrast: 1.15)
+            let dots = FX.noise(i.extent, seed: c.seed, grainSize: max(1, (1 + 1.5 * k) * c.scale), strength: 1)
+            return inkOn(toneScreen(tone, FX.mono(dots), gain: 14), ink: ink, paper: paper)
+        }),
+        ("Linocut", { i, c, k, ink, paper in
+            let carved = FX.controls(FX.blur(FX.mono(i), (1 + 2 * k) * c.scale), brightness: 0.05, contrast: 9)
+            let gouges = FX.controls(FX.mono(FX.noise(i.extent, seed: c.seed, grainSize: 1, strength: 1).clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: 18 * c.scale, kCIInputAngleKey: 0.3]).cropped(to: i.extent)), brightness: 0.4, contrast: 6)
+            return inkOn(FX.blend(gouges, over: carved, mode: "CIMultiplyBlendMode"), ink: ink, paper: paper)
+        }),
+        ("Ink Wash", { i, c, k, ink, paper in
+            var soft = FX.mono(i)
+            for _ in 0..<2 { soft = soft.applyingFilter("CIMedianFilter") }
+            let washed = FX.gradientMap(FX.controls(soft, contrast: 1 + 0.5 * k), [ink, ink.mixed(with: paper, 0.55), paper])
+            let bled = FX.displace(washed, by: FX.smoothNoise(i.extent, seed: c.seed, cells: 9), scale: 10 * c.scale)
+            return FX.grain(bled, seed: c.seed, strength: 0.1, size: max(1, 1.5 * c.scale))
+        }),
+        ("Graphic Novel", { i, c, k, ink, _ in
+            let flat = FX.controls(i.applyingFilter("CIColorPosterize", parameters: ["inputLevels": 6 - 2 * k]), saturation: 1.15)
+            let shade = FX.controls(FX.mono(i), brightness: -0.1, contrast: 5)
+            let dots = flat.applyingFilter("CIDotScreen", parameters: [kCIInputCenterKey: FX.center(i), kCIInputAngleKey: 0.6, kCIInputWidthKey: 6 * c.scale, kCIInputSharpnessKey: 0.7]).cropped(to: i.extent)
+            let shadowed = FX.blendWithMask(dots, over: flat, mask: shade.applyingFilter("CIColorInvert"))
+            let l = lines(i, weight: 0.8 + 0.2 * k, detail: 0.5)
+            return FX.recolor(l, ink).composited(over: shadowed)
+        }),
+        ("Screen Print", { i, c, k, ink, paper in
+            let p = PaletteRoles(c.palette)
+            let tones = FX.mono(i).applyingFilter("CIColorPosterize", parameters: ["inputLevels": 3 + k])
+            let printed = FX.gradientMap(tones, [ink, p.accent, paper])
+            let offset = printed.transformed(by: CGAffineTransform(translationX: 2 * c.scale, y: -1.5 * c.scale))
+            return FX.grain(FX.blend(offset, over: printed, mode: "CIMultiplyBlendMode").cropped(to: i.extent), seed: c.seed, strength: 0.15, size: max(1, 1.4 * c.scale))
+        }),
+        ("Vector Poster", { i, _, k, ink, _ in
+            var flat = i
+            for _ in 0..<3 { flat = flat.applyingFilter("CIMedianFilter") }
+            let poster = FX.controls(flat.applyingFilter("CIColorPosterize", parameters: ["inputLevels": 6 - 2 * k]), saturation: 1.25, contrast: 1.1)
+            return FX.recolor(lines(flat, weight: 0.6, detail: 0.2), ink).composited(over: poster)
+        }),
+        ("Blueprint", { i, c, k, _, _ in
+            let l = lines(i, weight: 0.4 + 0.4 * k, detail: 0.6).composited(over: FX.solid(.white, i.extent))
+            let blue = inkOn(l, ink: RGBA(hex: "F2F6FF"), paper: RGBA(hex: "1B4F9C"))
+            let grid = stripes(i.extent, width: 22 * c.scale, angle: 0)
+            let gridLines = FX.controls(FX.blend(grid, over: stripes(i.extent, width: 22 * c.scale, angle: .pi / 2), mode: "CIMultiplyBlendMode"), brightness: -0.45, contrast: 20)
+            return FX.blend(FX.mix(FX.solid(.black, i.extent), gridLines, 0.25), over: blue, mode: "CIScreenBlendMode")
+        }),
+        ("Cyanotype", { i, c, k, _, _ in
+            FX.vignette(FX.grain(FX.gradientMap(FX.controls(FX.mono(i), contrast: 1 + 0.4 * k), [RGBA(hex: "0B2A5C"), RGBA(hex: "2D6CB5"), RGBA(hex: "E9F1F7")]),
+                                 seed: c.seed, strength: 0.14, size: max(1, 1.3 * c.scale)), intensity: 0.6)
+        })
+    ]
+
+    private static func buildInk(_ list: inout [EffectPreset]) {
+        let inks: [(String, RGBA?, RGBA)] = [("Black", RGBA(hex: "121417"), RGBA(hex: "F4F1E8")), ("Sepia", RGBA(hex: "4A2C17"), RGBA(hex: "F3E9D2")),
+                                             ("Navy", RGBA(hex: "1B2A4A"), RGBA(hex: "EEF1F4")), ("Palette", nil, RGBA(hex: "F4F1E8"))]
+        let levels: [(String, Double)] = [("Light", 0.2), ("Medium", 0.55), ("Bold", 0.9)]
+        for r in inkRecipes {
+            for (inkName, ink, paper) in inks {
+                for (li, l) in levels.enumerated() {
+                    let run = r.run, k = l.1
+                    list.append(EffectPreset(
+                        id: "ink.\(slug(r.name)).\(slug(inkName)).\(li)", name: "\(r.name), \(inkName) Ink, \(l.0)",
+                        family: .ink, swatch: ink.map { [$0, paper] } ?? [],
+                        apply: { i, c in
+                            let p = PaletteRoles(c.palette)
+                            return run(i, c, k, ink ?? p.dark, ink == nil ? p.light : paper)
+                        }))
+                }
             }
         }
     }

@@ -431,6 +431,53 @@ enum LayerContent: Codable, Hashable {
     case text(TextContent)
 }
 
+enum MaskGradientKind: String, Codable, CaseIterable, Identifiable {
+    case none, linear, radial
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .none: return "None"
+        case .linear: return "Linear Fade"
+        case .radial: return "Radial Fade"
+        }
+    }
+}
+
+/// What part of a layer shows: a gradient fade, another photo's subject, and tonal "blend if".
+struct LayerMask: Codable, Hashable {
+    var gradient: MaskGradientKind = .none
+    /// Direction the layer fades toward, in degrees (90 fades out toward the bottom).
+    var angle: Double = 90
+    /// Where the fade begins and where the layer is fully hidden, along the fade (0...1).
+    var start: Double = 0.35
+    var end: Double = 0.8
+    var invert = false
+    /// Show this layer only inside (or outside) another image layer's subject.
+    var subjectOf: UUID?
+    var invertSubject = false
+    /// Blend If: hide this layer's light pixels (keep darks) or dark pixels (keep lights).
+    var keepDarks: Double = 0
+    var keepLights: Double = 0
+
+    var isEmpty: Bool { self == LayerMask() }
+}
+
+extension LayerMask {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        gradient = try c.decodeIfPresent(MaskGradientKind.self, forKey: .gradient) ?? .none
+        angle = try c.decodeIfPresent(Double.self, forKey: .angle) ?? 90
+        start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0.35
+        end = try c.decodeIfPresent(Double.self, forKey: .end) ?? 0.8
+        invert = try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false
+        subjectOf = try c.decodeIfPresent(UUID.self, forKey: .subjectOf)
+        invertSubject = try c.decodeIfPresent(Bool.self, forKey: .invertSubject) ?? false
+        keepDarks = try c.decodeIfPresent(Double.self, forKey: .keepDarks) ?? 0
+        keepLights = try c.decodeIfPresent(Double.self, forKey: .keepLights) ?? 0
+    }
+}
+
 struct EffectInstance: Codable, Hashable, Identifiable {
     var id = UUID()
     var presetID: String
@@ -466,6 +513,9 @@ struct Layer: Codable, Hashable, Identifiable {
     var shadow: ShadowStyle?
     var effects: [EffectInstance] = []
     var adjust = Adjustments()
+    var mask = LayerMask()
+    /// Clip to the layer directly below, like a clipping mask: a photo inside the title.
+    var clipToBelow = false
 
     init(id: UUID = UUID(), name: String, content: LayerContent, frame: NRect = .full) {
         self.id = id
@@ -491,6 +541,8 @@ struct Layer: Codable, Hashable, Identifiable {
         shadow = try c.decodeIfPresent(ShadowStyle.self, forKey: .shadow)
         effects = try c.decodeIfPresent([EffectInstance].self, forKey: .effects) ?? []
         adjust = try c.decodeIfPresent(Adjustments.self, forKey: .adjust) ?? Adjustments()
+        mask = try c.decodeIfPresent(LayerMask.self, forKey: .mask) ?? LayerMask()
+        clipToBelow = try c.decodeIfPresent(Bool.self, forKey: .clipToBelow) ?? false
     }
 
     var textContent: TextContent? {

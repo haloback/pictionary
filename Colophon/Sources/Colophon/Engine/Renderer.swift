@@ -26,6 +26,7 @@ final class CoverRenderer {
         var canvasH: Int
         var effects: [EffectInstance]
         var adjust: Adjustments
+        var mask: LayerMask
         var clip: ShapeKind?
         var fade: FadeEdge
         var fadeAmount: Double
@@ -47,8 +48,19 @@ final class CoverRenderer {
         ctx.translateBy(x: 0, y: CGFloat(H))
         ctx.scaleBy(x: 1, y: -1)
 
+        var below: LayerRaster?
         for (i, layer) in doc.layers.enumerated() where layer.isVisible && !excluding.contains(layer.id) {
             guard var r = rasterize(layer, doc: doc, canvas: canvas, quality: quality) else { continue }
+            // Masks that depend on other layers: another photo's subject, or the layer below.
+            if let sid = layer.mask.subjectOf, sid != layer.id, let source = doc.layer(sid), source.imageContent != nil,
+               let sr = rasterize(source, doc: doc, canvas: canvas, quality: quality, cutoutOverride: .subject),
+               let masked = Masking.mask(r, by: sr, invert: layer.mask.invertSubject) {
+                r.image = masked
+            }
+            if layer.clipToBelow, let b = below, let clipped = Masking.mask(r, by: b, invert: false) {
+                r.image = clipped
+            }
+            let ownRaster = r
             // Scene passes read what is already on the cover under the type.
             if let t = layer.textContent, t.style.needsScene, let soFar = ctx.makeImage(),
                let patch = backgroundPatch(soFar, rect: r.rect, width: r.image.width, height: r.image.height) {
@@ -58,6 +70,8 @@ final class CoverRenderer {
                 }
             }
             composite(r, layer: layer, in: ctx, canvas: canvas)
+            // A clipped layer clips to the same base as the layer it sits on.
+            if !layer.clipToBelow { below = ownRaster }
 
             // Type behind the subject: draw the nearest photo's lifted subject back over the text.
             if let t = layer.textContent, t.behindSubject,
@@ -107,7 +121,7 @@ final class CoverRenderer {
         let frame = layer.frame.pixels(in: canvas)
         let w = max(1, Int(frame.width.rounded())), h = max(1, Int(frame.height.rounded()))
         let key = RasterKey(content: layer.content, w: w, h: h, canvasW: Int(canvas.width), canvasH: Int(canvas.height),
-                            effects: layer.effects, adjust: layer.adjust, clip: layer.clipShape, fade: layer.fade, fadeAmount: layer.fadeAmount,
+                            effects: layer.effects, adjust: layer.adjust, mask: layer.mask, clip: layer.clipShape, fade: layer.fade, fadeAmount: layer.fadeAmount,
                             quality: quality.rawValue, cutout: cutoutOverride)
         lock.lock()
         if let hit = cache[key] {
@@ -139,13 +153,16 @@ final class CoverRenderer {
             img = applyAdjustments(layer.adjust, to: img, canvas: canvas) ?? img
         }
         if !layer.effects.isEmpty {
-            img = applyEffects(layer.effects, to: img, canvas: canvas, seed: Int(layer.id.uuid.0) << 8 | Int(layer.id.uuid.1)) ?? img
+            img = applyEffects(layer.effects, to: img, canvas: canvas, seed: Int(layer.id.uuid.0) << 8 | Int(layer.id.uuid.1), palette: doc.palette) ?? img
         }
         if let clip = layer.clipShape {
             img = clipImage(img, to: clip, pad: pad) ?? img
         }
         if layer.fade != .none {
             img = fadeImage(img, edge: layer.fade, amount: layer.fadeAmount) ?? img
+        }
+        if layer.mask.gradient != .none || layer.mask.keepDarks > 0 || layer.mask.keepLights > 0 {
+            img = Masking.applyLocal(layer.mask, to: img) ?? img
         }
 
         let raster = LayerRaster(image: img, rect: CGRect(x: frame.minX - pad, y: frame.minY - pad,
@@ -187,10 +204,10 @@ final class CoverRenderer {
         return ctx.makeImage()
     }
 
-    private func applyEffects(_ effects: [EffectInstance], to img: CGImage, canvas: CGSize, seed: Int) -> CGImage? {
+    private func applyEffects(_ effects: [EffectInstance], to img: CGImage, canvas: CGSize, seed: Int, palette: [RGBA]) -> CGImage? {
         let original = CIImage(cgImage: img)
         var ci = original
-        let ec = EffectContext(scale: canvas.height / 1000, seed: seed)
+        let ec = EffectContext(scale: canvas.height / 1000, seed: seed, palette: palette)
         for e in effects {
             guard let p = EffectLibrary.shared.preset(e.presetID) else { continue }
             let processed = p.apply(ci, ec).cropped(to: original.extent)

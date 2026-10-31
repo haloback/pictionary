@@ -5,6 +5,7 @@ import Foundation
 enum Archetype: String, CaseIterable, Codable, Identifiable {
     case fullBleedTop, fullBleedBottom, behindSubject, framedWindow, arch, medallion, splitBand
     case diagonal, typographic, minimal, duotonePoster, cinematic, collage, ghostSubject, goldenGrid
+    case doubleExposure, blendedPair
 
     var id: String { rawValue }
 
@@ -25,6 +26,8 @@ enum Archetype: String, CaseIterable, Codable, Identifiable {
         case .collage: return "Two-Piece Collage"
         case .ghostSubject: return "Depth Cutout"
         case .goldenGrid: return "Golden Grid"
+        case .doubleExposure: return "Double Exposure"
+        case .blendedPair: return "Blended Pair"
         }
     }
 
@@ -424,6 +427,56 @@ enum CoverComposer {
             add(scrim(c, NRect(0, 0.8, 1, 0.2), darkAt: 90, strength: 0.8))
             add(supporting(c, NRect(m, Golden.minor - 0.01, wide, 0.03), role: .subtitle, align: .center))
             add(author(c, NRect(m, 0.885, wide, 0.05), align: .center))
+
+        case .doubleExposure:
+            // A second scene inside the first photo's subject, on a pale ground.
+            c.darkGround = false
+            var ground = Layer.fill(.linear, colors: [c.palette.light, c.palette.light.withLightness(0.86)], angle: 90)
+            ground.name = "Ground"
+            add(ground)
+            if let first = c.images.first {
+                var subject = Layer.image(first, frame: .full, name: "Subject")
+                subject.imageContent?.cutout = .subject
+                subject.effects = [EffectInstance(presetID: "tone.desaturate.4", amount: 1)]
+                var scene = Layer.image(c.images.count > 1 ? c.images[1] : first, frame: .full, name: "Exposed Scene")
+                if c.images.count < 2 {
+                    scene.imageContent?.zoom = 1.8
+                    scene.imageContent?.flipped = true
+                }
+                scene.mask.subjectOf = subject.id
+                if let e = c.effect { scene.effects = [EffectInstance(presetID: e, amount: 0.7)] }
+                var detail = subject
+                detail.id = UUID()
+                detail.name = "Subject Detail"
+                detail.blend = .multiply
+                detail.opacity = 0.45
+                add(subject)
+                add(scene)
+                add(detail)
+            }
+            add(title(c, NRect(m, 0.06, wide, Golden.minor - 0.1), align: .center))
+            add(supporting(c, NRect(m, Golden.minor - 0.03, wide, 0.03), role: .subtitle, align: .center))
+            add(author(c, NRect(m, 0.89, wide, 0.045), align: .center))
+
+        case .blendedPair:
+            c.darkGround = true
+            let top = photo(c, NRect(0, 0, 1, 0.64), index: 0)
+            var bottom = photo(c, NRect(0, 0.36, 1, 0.64), index: 1)
+            if c.images.count < 2 {
+                bottom.imageContent?.zoom = 1.7
+                bottom.imageContent?.focusX = c.focus.midX
+                bottom.imageContent?.focusY = c.focus.midY
+            }
+            bottom.mask.gradient = .linear
+            bottom.mask.angle = 270
+            bottom.mask.start = 0.45
+            bottom.mask.end = 1
+            add(top)
+            add(bottom)
+            add(scrim(c, NRect(0, 0.42, 1, 0.3), darkAt: 90, strength: 0.5))
+            add(title(c, NRect(m, 0.47, wide, 0.2), align: .center))
+            add(scrim(c, NRect(0, 0.82, 1, 0.18), darkAt: 90, strength: 0.8))
+            add(author(c, NRect(m, 0.89, wide, 0.045), align: .center))
 
         case .goldenGrid:
             c.darkGround = true

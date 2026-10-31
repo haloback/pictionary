@@ -484,7 +484,7 @@ final class SampleRenderTests: XCTestCase {
         let lib = StyleLibrary.shared
         let curated = ["gilded", "epic", "chrome", "carved", "rusted", "frozen", "molten", "neon", "letterpress", "window",
                        "fog", "bloodrust", "haunted", "romance", "scifiplate", "yapop", "block3d", "deco", "goldleaf", "galaxy"]
-        let searches = ["blood drips long", "molten gold drips", "embroidery puffy", "balloon glossy", "sticker glitter", "triple stack",
+        let searches = ["ink drawing black bold", "engraving sepia medium", "pencil sketch", "blood drips long", "molten gold drips", "embroidery puffy", "balloon glossy", "sticker glitter", "triple stack",
                         "exploded glass", "smoke column", "polka dots sticker", "plaid outlined", "broken glitch halftone", "wood burn scorched",
                         "chalk smudged", "to glow", "outline neon wide", "backlit eclipse", "marble carved", "towering 3d chrome",
                         "gold leaf inflated", "rust eroded", "ice blazing", "copper chiseled raised", "letterpress heavy", "painted on full"]
@@ -527,5 +527,102 @@ final class SampleRenderTests: XCTestCase {
         }
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("manifest.json"))
+    }
+}
+
+final class MaskingTests: XCTestCase {
+    private func photoData() throws -> Data {
+        let ctx = try XCTUnwrap(Gfx.context(300, 450))
+        Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: 300, height: 450), [RGBA(hex: "13404A"), RGBA(hex: "F2A541")], angle: 90)
+        ctx.setFillColor(RGBA(hex: "121417").cgColor)
+        ctx.fillEllipse(in: CGRect(x: 90, y: 90, width: 120, height: 240))
+        return try XCTUnwrap(AssetStore.encode(try XCTUnwrap(ctx.makeImage())))
+    }
+
+    private func alphaAt(_ img: CGImage, _ x: Double, _ y: Double) -> UInt8 {
+        let p = PixelSampler.pixels(img, maxSide: 4000)
+        let px = min(p.w - 1, Int(x * Double(p.w))), py = min(p.h - 1, Int(y * Double(p.h)))
+        return p.data[(py * p.w + px) * 4 + 3]
+    }
+
+    func testGradientMaskFadesTheLayer() throws {
+        let ctx = try XCTUnwrap(Gfx.context(100, 200))
+        ctx.setFillColor(RGBA.white.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 100, height: 200))
+        var m = LayerMask()
+        m.gradient = .linear
+        m.angle = 90
+        m.start = 0.3
+        m.end = 0.7
+        let out = try XCTUnwrap(Masking.applyLocal(m, to: try XCTUnwrap(ctx.makeImage())))
+        XCTAssertGreaterThan(alphaAt(out, 0.5, 0.1), 240)
+        XCTAssertLessThan(alphaAt(out, 0.5, 0.95), 15)
+    }
+
+    func testBlendIfKeepsDarks() throws {
+        let ctx = try XCTUnwrap(Gfx.context(100, 100))
+        ctx.setFillColor(RGBA.black.cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: 50, height: 100))
+        ctx.setFillColor(RGBA.white.cgColor)
+        ctx.fill(CGRect(x: 50, y: 0, width: 50, height: 100))
+        var m = LayerMask()
+        m.keepDarks = 0.5
+        let out = try XCTUnwrap(Masking.applyLocal(m, to: try XCTUnwrap(ctx.makeImage())))
+        XCTAssertGreaterThan(alphaAt(out, 0.25, 0.5), 240)
+        XCTAssertLessThan(alphaAt(out, 0.75, 0.5), 15)
+    }
+
+    func testClipToBelowPutsAPhotoInsideTheTitle() throws {
+        var doc = CoverDocument()
+        doc.canvas = CanvasSpec(width: 400, height: 640)
+        doc.background = .white
+        let id = doc.addAsset(try photoData())
+        var title = Layer.text("SALT", role: .title, frame: NRect(0.1, 0.1, 0.8, 0.3), font: "Anton-Regular", color: .nearBlack)
+        title.name = "Title"
+        var photo = Layer.image(id, frame: .full)
+        photo.clipToBelow = true
+        doc.layers = [title, photo]
+        let img = try XCTUnwrap(CoverRenderer.shared.render(doc, size: CGSize(width: 400, height: 640)))
+        // Far below the title the photo is clipped away, so the white backdrop shows.
+        let p = PixelSampler.pixels(img, maxSide: 4000)
+        let i = (Int(0.85 * Double(p.h)) * p.w + p.w / 2) * 4
+        XCTAssertGreaterThan(p.data[i], 240)
+    }
+
+    func testDoubleExposureAndBlendedPairCovers() throws {
+        var base = CoverDocument()
+        base.book = BookInfo(title: "The Salt Orchard", author: "Ines Valcourt", genre: .literary)
+        _ = base.addAsset(try photoData())
+        _ = base.addAsset(try photoData())
+        for a in [Archetype.doubleExposure, .blendedPair] {
+            let docs = CoverComposer.variations(base: base, count: 2, seed: 3, only: a)
+            for d in docs {
+                XCTAssertNotNil(CoverRenderer.shared.render(d, size: CGSize(width: 200, height: 320)), a.rawValue)
+                if a == .doubleExposure { XCTAssertTrue(d.layers.contains { $0.mask.subjectOf != nil }) }
+            }
+        }
+    }
+
+    func testInkEffectsRender() throws {
+        let ctx = try XCTUnwrap(Gfx.context(96, 128))
+        Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: 96, height: 128), [RGBA(hex: "1B2A4A"), RGBA(hex: "F2A541")], angle: 45)
+        ctx.setFillColor(RGBA.black.cgColor)
+        ctx.fillEllipse(in: CGRect(x: 30, y: 30, width: 36, height: 60))
+        let base = CIImage(cgImage: try XCTUnwrap(ctx.makeImage()))
+        let inks = EffectLibrary.shared.search("", family: .ink)
+        XCTAssertGreaterThanOrEqual(inks.count, 150)
+        for p in inks where p.id.hasSuffix(".1") {
+            let out = p.apply(base, EffectContext(scale: 0.12, seed: 2, palette: [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]))
+            XCTAssertNotNil(Gfx.render(out.cropped(to: base.extent), extent: base.extent), p.id)
+        }
+    }
+
+    func testMaskSurvivesSaveAndOpen() throws {
+        var l = Layer.image(UUID())
+        l.mask.gradient = .radial
+        l.mask.subjectOf = UUID()
+        l.clipToBelow = true
+        let back = try JSONDecoder().decode(Layer.self, from: JSONEncoder().encode(l))
+        XCTAssertEqual(back, l)
     }
 }
