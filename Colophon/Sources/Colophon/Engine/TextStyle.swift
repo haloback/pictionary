@@ -229,6 +229,11 @@ enum TextStyler {
         if s.drips > 0, let dripped = addDrips(grayMask, extent: ext, size: size, amount: s.drips, seed: seed) {
             grayMask = dripped
         }
+        // Contrast-sharpened masks overshoot below 0 and above 1; unclamped, alpha went negative at the edges
+        // (cyan fringes on red type) and above 1 inside (face-over-outline turned black).
+        grayMask = grayMask.applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ]).cropped(to: ext)
         let alpha = grayMask.applyingFilter("CIMaskToAlpha").cropped(to: ext)
 
         // 2. Face: a material or the flat fill.
@@ -280,14 +285,14 @@ enum TextStyler {
         if s.stitch > 0 {
             // A thin ring just inside each letter, cut into dashes by a small checkerboard so the stitches
             // stay short whichever way the edge runs (diagonal stripes turned thin letters into candy canes).
-            let line = max(1, size * CGFloat(0.01 + 0.006 * s.stitch))
-            let inset = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * 0.035]).cropped(to: ext)
+            let line = max(1, size * CGFloat(0.006 + 0.004 * s.stitch))
+            let inset = alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: size * 0.022]).cropped(to: ext)
             let inner = inset.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: line]).cropped(to: ext)
             let ring = inset.applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: inner])
             let dashes = (CIFilter(name: "CICheckerboardGenerator", parameters: [
                 kCIInputCenterKey: CIVector(x: ext.midX, y: ext.midY),
                 "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1), "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 0),
-                kCIInputWidthKey: max(2, size * 0.035), kCIInputSharpnessKey: 1
+                kCIInputWidthKey: max(2, size * 0.028), kCIInputSharpnessKey: 1
             ])?.outputImage ?? CIImage.empty()).cropped(to: ext)
             let stitches = ring.applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: dashes])
             let thread = colored(s.stitchColor ?? color.withLightness(0.92), alpha: stitches, extent: ext)
