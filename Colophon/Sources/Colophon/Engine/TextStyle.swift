@@ -238,7 +238,9 @@ enum TextStyler {
             }
             face = tex
         } else {
-            face = CIImage(cgImage: fill)
+            // Shape passes (drips, rounding, ink bleed) grow the letters past the original fill,
+            // so back it with the text color.
+            face = CIImage(cgImage: fill).composited(over: FX.solid(color, ext))
         }
         if s.halftone > 0 {
             let dots = face.applyingFilter("CIDotScreen", parameters: [
