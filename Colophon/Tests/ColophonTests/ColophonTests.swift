@@ -559,15 +559,15 @@ final class SampleRenderTests: XCTestCase {
             }
         }
         // Material library contact sheets: every structure once (rotating colorways), then one structure in every colorway.
-        let lib = MaterialLibrary.shared
-        let cws = lib.colorways
+        let mats = MaterialLibrary.shared
+        let cws = mats.colorways
         func sheet(_ ids: [String], _ file: String, _ name: String) {
             let cols = 4, tile = 300, rows = (ids.count + cols - 1) / cols
             guard let ctx = Gfx.context(cols * tile, rows * tile) else { return }
             ctx.setFillColor(RGBA.white.cgColor)
             ctx.fill(CGRect(x: 0, y: 0, width: cols * tile, height: rows * tile))
             for (i, id) in ids.enumerated() {
-                guard let img = lib.renderImage(id, size: CGSize(width: tile - 6, height: tile - 6),
+                guard let img = mats.renderImage(id, size: CGSize(width: tile - 6, height: tile - 6),
                                                 palette: [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]) else { continue }
                 let x = (i % cols) * tile + 3, y = (rows - 1 - i / cols) * tile + 3
                 ctx.draw(img, in: CGRect(x: x, y: y, width: tile - 6, height: tile - 6))
@@ -577,7 +577,7 @@ final class SampleRenderTests: XCTestCase {
                 manifest.append(["file": file, "name": name, "family": "Material library", "font": ""])
             }
         }
-        let structs = lib.structures
+        let structs = mats.structures
         for chunk in stride(from: 0, to: structs.count, by: 12) {
             let ids = structs[chunk..<min(structs.count, chunk + 12)].enumerated().map { j, st in
                 "mat.\(st.id).\(cws[(chunk + j * 5) % cws.count].id).\(j % 3 == 0 ? "b" : "f")"
