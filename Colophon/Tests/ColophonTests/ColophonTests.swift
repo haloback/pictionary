@@ -525,6 +525,39 @@ final class SampleRenderTests: XCTestCase {
             XCTAssertTrue(Exporter.write(img, to: out.appendingPathComponent(file), format: .png, quality: 1))
             manifest.append(["file": file, "name": p.name, "family": p.category, "font": FontCatalog.displayName(title.textContent?.fontName ?? "")])
         }
+        // Diagnostics: each raw material on its own, so texture problems can be told apart from relief and finish.
+        var n = picks.count
+        for surf in SurfaceTexture.allCases where surf != .none {
+            let e = CGRect(x: 0, y: 0, width: 600, height: 338)
+            let img = SurfaceGen.make(surf, extent: e, size: 160, seed: 7, a: RGBA(hex: "E4572E"), b: RGBA(hex: "1B998B"))
+            if let cg = Gfx.render(img, extent: e) {
+                let file = String(format: "%02d-material-%@.png", n, surf.rawValue)
+                _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                manifest.append(["file": file, "name": "Raw material: " + surf.label, "family": "Diagnostic", "font": ""])
+                n += 1
+            }
+        }
+        // Ink & line art effects applied to a photo-like scene.
+        let scene = try XCTUnwrap(Gfx.context(1200, 675))
+        Gfx.linearGradient(scene, CGRect(x: 0, y: 0, width: 1200, height: 675), [RGBA(hex: "13404A"), RGBA(hex: "C9884A"), RGBA(hex: "F1B15A")], angle: 90)
+        scene.setFillColor(RGBA(hex: "1E2E22").cgColor)
+        for k in 0..<7 { scene.fillEllipse(in: CGRect(x: CGFloat(k) * 190 - 40, y: 120, width: 200, height: 170)) }
+        scene.setFillColor(RGBA(hex: "121417").cgColor)
+        scene.fillEllipse(in: CGRect(x: 540, y: 330, width: 120, height: 150))
+        scene.fill(CGRect(x: 500, y: 0, width: 200, height: 340))
+        let base = CIImage(cgImage: try XCTUnwrap(scene.makeImage()))
+        for id in ["ink.ink-drawing.black.1", "ink.engraving.sepia.1", "ink.pencil-sketch.black.1", "ink.crosshatch.navy.1",
+                   "ink.linocut.black.2", "ink.ink-wash.black.1", "ink.graphic-novel.black.1", "ink.screen-print.palette.1",
+                   "ink.stipple.black.1", "ink.blueprint.black.1", "ink.cyanotype.black.1", "ink.vector-poster.black.1"] {
+            guard let p = EffectLibrary.shared.preset(id) else { continue }
+            let ctx = EffectContext(scale: 0.675, seed: 5, palette: [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")])
+            if let cg = Gfx.render(p.apply(base, ctx).cropped(to: base.extent), extent: base.extent) {
+                let file = String(format: "%02d-%@.png", n, id.replacingOccurrences(of: ".", with: "-"))
+                _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                manifest.append(["file": file, "name": p.name, "family": "Ink & Line Art (photo effect)", "font": ""])
+                n += 1
+            }
+        }
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("manifest.json"))
     }
