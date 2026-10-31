@@ -953,7 +953,7 @@ struct TextStylePreset: Identifiable {
         },
         // Genre
         TextStylePreset(id: "bloodrust", name: "Blood Rust", category: "Genre", fonts: ["Creepster-Regular", "Nosifer-Regular", "MetalMania-Regular"]) { _, _ in
-            var s = TextStyle(); s.surface = .rust; s.surfaceTint = 0.6; s.wear = .eroded; s.wearAmount = 0.65; s.innerShadow = 0.4; s.outerGlow = 0.25; s.outerGlowColor = RGBA(hex: "3A0000", alpha: 0.8)
+            var s = TextStyle(); s.surface = .rust; s.surfaceTint = 0.6; s.wear = .eroded; s.wearAmount = 0.5; s.innerShadow = 0.3; s.bevel = 0.2; s.dropShadow = 0.4
             return (s, RGBA(hex: "8E1020"))
         },
         TextStylePreset(id: "bone", name: "Cracked Bone", category: "Genre", fonts: ["Butcherman-Regular", "Cinzel-Bold", "Creepster-Regular"]) { _, _ in
