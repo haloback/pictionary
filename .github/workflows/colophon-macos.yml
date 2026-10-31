@@ -13,6 +13,8 @@ on:
 jobs:
   build:
     runs-on: macos-15
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: Colophon
@@ -38,6 +40,17 @@ jobs:
         with:
           name: Colophon-Style-Samples
           path: Colophon/build/samples
+      - name: Publish samples to the colophon-style-samples branch
+        if: github.event_name == 'push'
+        working-directory: Colophon/build/samples
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q
+          git checkout -q -b colophon-style-samples
+          git add .
+          git -c user.name="colophon-ci" -c user.email="colophon-ci@users.noreply.github.com" commit -qm "Style samples for ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" colophon-style-samples
       - name: Package Colophon.app
         run: |
           chmod +x scripts/make-app.sh
