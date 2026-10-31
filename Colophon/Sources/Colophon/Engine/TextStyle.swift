@@ -374,10 +374,12 @@ enum TextStyler {
         let size = max(4, fontSize)
         var r = CIImage(cgImage: raster)
         let bg = CIImage(cgImage: background).cropped(to: ext)
-        let lum = FX.controls(FX.mono(bg), contrast: 1.3)
+        // Read the photo's tones gamma-encoded: in linear light a typical photo's mid-gray sits near 0.21,
+        // so "erode into the darks" removed most of the letter.
+        let lum = FX.controls(FX.toPerceptual(FX.mono(bg)), contrast: 1.3)
 
         if s.photoFill > 0 {
-            let lit = FX.controls(bg, saturation: 1.15, brightness: 0.12, contrast: 1.25)
+            let lit = FX.fromPerceptual(FX.controls(FX.toPerceptual(bg), saturation: 1.15, brightness: 0.12, contrast: 1.25))
                 .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: r])
             r = FX.mix(r, lit, s.photoFill)
         }
@@ -593,7 +595,7 @@ enum TextStyler {
             let rough = FX.blend(FX.noise(e, seed: seed, grainSize: max(1, size * 0.015), strength: 0.6 * a), over: blurred, mode: "CIOverlayBlendMode")
             // A bleed grows past the edge (low threshold); erosion eats into it (high threshold).
             let bias = kind == .inkBleed ? 0.18 : -0.12
-            return FX.controls(rough, brightness: bias, contrast: 8).cropped(to: e)
+            return FX.controls(rough, brightness: bias, contrast: 18).cropped(to: e)
         }
     }
 }
@@ -913,7 +915,7 @@ struct TextStylePreset: Identifiable {
         },
         // Into the Photo
         TextStylePreset(id: "window", name: "Window to the Photo", category: "Into the Photo", fonts: ["Anton-Regular", "BebasNeue-Regular", "ArchivoBlack-Regular"]) { p, _ in
-            var s = TextStyle(); s.photoFill = 1; s.outline = 0.02; s.outlineColor = p.light; s.outerGlow = 0.3; s.outerGlowColor = RGBA(0, 0, 0, 0.6)
+            var s = TextStyle(); s.photoFill = 1; s.outline = 0.035; s.outlineColor = p.light; s.outerGlow = 0.45; s.outerGlowColor = RGBA(0, 0, 0, 0.7)
             return (s, nil)
         },
         TextStylePreset(id: "lightwrap", name: "Light Wrapped", category: "Into the Photo", fonts: ["PlayfairDisplay-Bold", "Cinzel-Bold"]) { _, _ in

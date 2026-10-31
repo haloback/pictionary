@@ -410,18 +410,29 @@ final class EffectLibrary {
     // MARK: Ink & line art
 
     /// Black lines on transparency from the photo's edges.
+    /// Black ink lines on transparent, where tones change sharply. (CILineOverlay marked nearly every
+    /// pixel of a real photo as an edge.) Expects gamma-encoded input.
     static func lines(_ i: CIImage, weight: Double, detail: Double) -> CIImage {
-        i.applyingFilter("CILineOverlay", parameters: [
-            "inputNRNoiseLevel": 0.07 - 0.05 * detail, "inputNRSharpness": 0.71,
-            "inputEdgeIntensity": 0.6 + 1.6 * weight, "inputThreshold": 0.18 - 0.1 * detail, "inputContrast": 50.0
-        ]).cropped(to: i.extent)
+        let e = i.extent
+        let soft = FX.blur(FX.mono(i), CGFloat(0.8 + 2.2 * (1 - detail)) * max(1, e.height / 1000))
+        let edges = FX.mono(soft.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 3 + 6 * weight])).cropped(to: e)
+        // Ink where the edge strength passes a threshold, ramping over a short range for clean strokes.
+        let t = 0.32 - 0.14 * detail, k = 7.0
+        let amount = FX.matrix(edges, r: (k, 0, 0), g: (k, 0, 0), b: (k, 0, 0), bias: (-t * k, -t * k, -t * k))
+            .applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+            ]).cropped(to: e)
+        return FX.solid(.black, e).applyingFilter("CIBlendWithMask", parameters: [
+            kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: amount
+        ]).cropped(to: e)
     }
 
     /// Black where `tone` (gray) is darker than a pattern, white elsewhere: the basis of hatching and stipple.
     static func toneScreen(_ tone: CIImage, _ pattern: CIImage, gain: Double) -> CIImage {
-        let sum = tone.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: pattern])
-        let halved = FX.matrix(sum, r: (0.5, 0, 0), g: (0, 0.5, 0), b: (0, 0, 0.5))
-        return FX.controls(halved, contrast: gain).cropped(to: tone.extent)
+        // Average tone and pattern. (Addition compositing also added the alphas, and un-premultiplying
+        // by alpha 2 halved everything a second time: hatching came out solid ink.)
+        let avg = FX.mix(tone, pattern.cropped(to: tone.extent), 0.5)
+        return FX.controls(avg, contrast: gain).cropped(to: tone.extent)
     }
 
     static func stripes(_ extent: CGRect, width: CGFloat, angle: CGFloat) -> CIImage {
