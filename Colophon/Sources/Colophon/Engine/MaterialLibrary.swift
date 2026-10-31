@@ -213,7 +213,7 @@ final class MaterialLibrary {
             let off = CGFloat((seed &* 7919) % 4000)
             let t = CGAffineTransform(translationX: off, y: off).concatenating(CGAffineTransform(scaleX: max(1, length), y: 1))
                 .concatenating(CGAffineTransform(rotationAngle: angle))
-            return FX.mono(base.transformed(by: t)).cropped(to: e)
+            return FX.mono(base.transformed(by: t).settingAlphaOne(in: e)).cropped(to: e)
         }
         /// Thin lines where `i` changes quickly: the difference with a slightly shifted copy, inverted.
         func contours(_ i: CIImage, _ shift: CGFloat, _ k: Double) -> CIImage {

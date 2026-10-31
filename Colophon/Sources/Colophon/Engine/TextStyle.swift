@@ -612,7 +612,7 @@ enum SurfaceGen {
         }
         /// White where v rises above t, black elsewhere, with a soft edge of width 1/k.
         func threshold(_ i: CIImage, _ t: Double, _ k: Double) -> CIImage { lin(i, k, (0.5 - t) * k) }
-        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.05).clampedToExtent()
+        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.6).clampedToExtent()
             .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.4, kCIInputAngleKey: 0.0]).cropped(to: e)
 
         switch kind {

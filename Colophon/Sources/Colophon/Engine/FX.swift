@@ -112,6 +112,9 @@ enum FX {
         let off = CGFloat((seed &* 7919) % 4000)
         var n = base.transformed(by: CGAffineTransform(translationX: off, y: off))
         if grainSize > 1.05 { n = n.transformed(by: CGAffineTransform(scaleX: grainSize, y: grainSize)) }
+        // CIRandomGenerator's alpha is random too, and every filter below would un-premultiply by it,
+        // turning uniform values into a heavy-tailed ratio (median near 1). Make it opaque first.
+        n = n.settingAlphaOne(in: extent)
         let k = strength
         n = n.applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: k, y: 0, z: 0, w: 0),
