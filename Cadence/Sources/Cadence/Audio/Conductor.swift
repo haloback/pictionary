@@ -64,6 +64,9 @@ final class Conductor: @unchecked Sendable {
         self.arranger = Arranger(session: session)
         self.tempo = session.tempo
         self.performer = Performer(key: session.key, snap: session.snap, instrument: .of(session.liveInstrument))
+        performer.keyMap = session.keyMap
+        performer.mapper = KeyMapper(key: session.key, progressionChords: session.progression.slots.map(\.chord),
+                                     colorLevel: session.style.harmony.colorLevel)
         configureAudio(for: session)
     }
 
@@ -107,6 +110,9 @@ final class Conductor: @unchecked Sendable {
         arranger = Arranger(session: recorder == nil ? newSession : openEnded(newSession))
         performer.key = newSession.key
         performer.snap = newSession.snap
+        performer.keyMap = newSession.keyMap
+        performer.mapper = KeyMapper(key: newSession.key, progressionChords: newSession.progression.slots.map(\.chord),
+                                     colorLevel: newSession.style.harmony.colorLevel)
         if performer.instrument.id != newSession.liveInstrument {
             performer.instrument = .of(newSession.liveInstrument)
         }

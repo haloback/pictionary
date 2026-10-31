@@ -91,6 +91,7 @@ public struct Session: Codable, Hashable, Sendable {
     public var tempo: Double
     public var autoTempo: Bool = true
     public var snap: SnapStrength = .guided
+    public var keyMap: KeyMap = .anyKey
     /// What your hands sound like.
     public var liveInstrument: InstrumentID
     public var tracks: [Track]
@@ -160,6 +161,15 @@ public struct Session: Codable, Hashable, Sendable {
         liveInstrument = style.liveInstrument
         let recorded = tracks.filter { $0.isRecorded }
         tracks = Session.bandTracks(for: style) + recorded
+    }
+
+    /// Uses a famous progression in the current key (switching to minor if it's a minor one).
+    public mutating func apply(named: NamedProgression) {
+        if named.minor != key.scale.isMinorish {
+            key = Key(tonic: key.tonic, scale: named.minor ? .naturalMinor : .major)
+        }
+        progression = named.progression(tonic: key.tonic, beatsPerBar: beatsPerBar)
+        progressionSource = named.name
     }
 
     public mutating func regenerateProgression() {

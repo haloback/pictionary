@@ -258,3 +258,85 @@ final class MIDITests: XCTestCase {
         XCTAssertTrue(contents.notes.contains { $0.channel == 9 })
     }
 }
+
+final class KeyMapTests: XCTestCase {
+    let fm9 = Chord(root: 5, quality: .minor9)
+
+    func testWhiteKeysWalkTheScaleInAnyKey() {
+        let mapper = KeyMapper(key: Key(tonic: 3, scale: .dorian), progressionChords: [], colorLevel: 1)   // E♭ Dorian
+        let whites = (48..<84).filter(KeyMapper.isWhite)
+        let pitches = whites.map(mapper.scalePitch(forKey:))
+        XCTAssertEqual(pitches, pitches.sorted())
+        XCTAssertEqual(Set(pitches).count, pitches.count)
+        XCTAssertTrue(pitches.allSatisfy { Key(tonic: 3, scale: .dorian).contains($0) })
+        XCTAssertEqual(mod12(mapper.scalePitch(forKey: 60)), 3)          // middle C plays the tonic
+        // Pentatonic: still strictly rising, still in key.
+        let pent = KeyMapper(key: Key(tonic: 9, scale: .minorPentatonic), progressionChords: [], colorLevel: 0)
+        let pp = whites.map(pent.scalePitch(forKey:))
+        XCTAssertEqual(pp, pp.sorted())
+        XCTAssertEqual(Set(pp).count, pp.count)
+    }
+
+    func testBlackKeysPlayChordTones() {
+        let mapper = KeyMapper(key: Key(tonic: 5, scale: .dorian), progressionChords: [], colorLevel: 1)
+        for k in (48..<84).filter({ !KeyMapper.isWhite($0) }) {
+            XCTAssertTrue(fm9.pitchClasses.contains(mod12(mapper.chordTone(forKey: k, chord: fm9))))
+        }
+    }
+
+    func testOneKeyChords() {
+        let prog = [Chord(root: 2, quality: .minor7), Chord(root: 7, quality: .dominant7)]
+        let mapper = KeyMapper(key: Key(tonic: 0, scale: .major), progressionChords: prog, colorLevel: 1)
+        XCTAssertEqual(mapper.chord(forKey: 60)?.root, 0)                 // C = I
+        XCTAssertEqual(mapper.chord(forKey: 62)?.quality.isMinor, true)   // D = ii
+        XCTAssertEqual(mapper.chord(forKey: 61), prog[0])                 // C♯ = progression chord 1
+        XCTAssertEqual(mapper.chord(forKey: 63), prog[1])
+
+        let p = Performer(key: Key(tonic: 0, scale: .major), snap: .guided, instrument: .of(.grandPiano))
+        p.keyMap = .chordKeys
+        p.mapper = mapper
+        let ons = p.noteOn(67, velocity: 100, time: 1, beatPhase: 0, chord: fm9).filter(\.isOn).map(\.pitch)
+        XCTAssertGreaterThanOrEqual(ons.count, 3)
+        let g = mapper.chord(forKey: 67)!
+        XCTAssertTrue(ons.allSatisfy { g.pitchClasses.contains(mod12($0)) }, "\(ons)")
+        _ = p.noteOff(67)
+        XCTAssertTrue(p.soundingPitches.isEmpty)
+        // Low keys add a bass note underneath.
+        let low = p.noteOn(43, velocity: 100, time: 2, beatPhase: 0, chord: fm9).filter(\.isOn).map(\.pitch)
+        XCTAssertEqual(mod12(low.min()!), 7)
+    }
+}
+
+final class ReharmonizerTests: XCTestCase {
+    let c = Key(tonic: 0, scale: .major)
+
+    func testSuggestionsCoverTheClassics() {
+        let g7 = Chord(root: 7, quality: .dominant7)
+        let ideas = Reharmonizer.suggestions(for: g7, next: Chord(root: 0, quality: .major7), key: c)
+        XCTAssertTrue(ideas.contains { $0.chord == Chord(root: 1, quality: .dominant7) && $0.kind == .substitute }, "tritone sub")
+        XCTAssertTrue(ideas.contains { $0.chord.quality == .dominant13 && $0.kind == .color })
+        XCTAssertFalse(ideas.contains { $0.chord == g7 })
+
+        let f = Chord(root: 5, quality: .major)
+        let fIdeas = Reharmonizer.suggestions(for: f, next: Chord(root: 9, quality: .minor), key: c)
+        XCTAssertTrue(fIdeas.contains { $0.chord == Chord(root: 5, quality: .minor) && $0.kind == .borrowed }, "borrowed iv")
+        XCTAssertTrue(fIdeas.contains { $0.chord == Chord(root: 4, quality: .dominant7) && $0.kind == .leading }, "V7/vi")
+        XCTAssertTrue(fIdeas.contains { $0.chord == Chord(root: 2, quality: .minor) && $0.kind == .substitute }, "ii shares notes with IV")
+    }
+
+    func testNamedProgressionsBuildInKey() {
+        XCTAssertGreaterThanOrEqual(NamedProgression.library.count, 20)
+        let blues = NamedProgression.library.first { $0.name == "Twelve-Bar Blues" }!
+        XCTAssertEqual(blues.progression(tonic: 9, beatsPerBar: 4).slots.count, 12)
+        let axis = NamedProgression.library.first { $0.name == "Axis" }!
+        XCTAssertEqual(axis.romanSummary, "I – V – vi – IV")
+        var s = Session(style: StyleLibrary.style(id: "modern-pop"))
+        s.key = Key(tonic: 7, scale: .major)
+        s.apply(named: axis)
+        XCTAssertEqual(s.progression.slots.map(\.chord.root), [7, 2, 4, 0])
+        let epic = NamedProgression.library.first { $0.name == "Epic Minor" }!
+        s.apply(named: epic)
+        XCTAssertTrue(s.key.scale.isMinorish)
+        XCTAssertEqual(epic.romanSummary, "i – VI – III – VII")
+    }
+}

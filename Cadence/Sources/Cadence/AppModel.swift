@@ -119,6 +119,34 @@ final class AppModel {
     func setTempo(_ bpm: Double) { mutate { $0.tempo = min(max(bpm.rounded(), 40), 300) } }
     func setAutoTempo(_ on: Bool) { mutate { $0.autoTempo = on } }
     func setSnap(_ s: SnapStrength) { mutate { $0.snap = s } }
+    func setKeyMap(_ m: KeyMap) { mutate { $0.keyMap = m } }
+
+    var keyMapper: KeyMapper {
+        KeyMapper(key: session.key, progressionChords: session.progression.slots.map(\.chord), colorLevel: style.harmony.colorLevel)
+    }
+
+    func apply(named: NamedProgression) {
+        mutate { $0.apply(named: named) }
+        message = "\(named.name): \(session.progression.slots.map { chordName($0.chord) }.joined(separator: " – "))"
+    }
+
+    func reharmonizations(for index: Int) -> [Reharmonizer.Suggestion] {
+        let slots = session.progression.slots
+        guard let slot = slots[safe: index] else { return [] }
+        return Reharmonizer.suggestions(for: slot.chord, next: slots[safe: (index + 1) % slots.count]?.chord, key: session.key)
+    }
+
+    /// Splits a chord's time in half and puts a chord that leads into the next one in the second half.
+    func insertLeadIn(at index: Int, chord: Chord) {
+        mutate { s in
+            guard s.progression.slots.indices.contains(index) else { return }
+            let half = s.progression.slots[index].beats / 2
+            guard half >= 1 else { s.progression.slots[index].chord = chord; return }
+            s.progression.slots[index].beats = half
+            s.progression.slots.insert(ChordSlot(chord: chord, beats: half), at: index + 1)
+            s.progressionSource = "Edited"
+        }
+    }
     func setLiveInstrument(_ id: InstrumentID) { mutate { $0.liveInstrument = id } }
 
     func updateTrack(_ id: UUID, _ change: (inout Track) -> Void) {

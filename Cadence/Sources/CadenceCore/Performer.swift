@@ -24,6 +24,9 @@ public final class Performer {
     public var instrument: InstrumentProfile
     /// Notes pressed within this many seconds of each other count as one mash.
     public var mashWindow: Double = 0.04
+    public var keyMap: KeyMap = .anyKey
+    /// Key → chord/scale mapping for the white-key and one-key-chord modes.
+    public var mapper: KeyMapper
 
     private var owners: [Int: [Int]] = [:]       // pressed key -> sounding pitches
     private var refCount: [Int: Int] = [:]       // sounding pitch -> owners
@@ -32,11 +35,13 @@ public final class Performer {
     private var groupStrummed = false
     private var monoNote: Int?
     private var lastInput: Int?
+    private var lastChordVoicing: [Int]?
 
     public init(key: Key, snap: SnapStrength, instrument: InstrumentProfile) {
         self.key = key
         self.snap = snap
         self.instrument = instrument
+        self.mapper = KeyMapper(key: key, progressionChords: [], colorLevel: 1)
     }
 
     public var soundingPitches: [Int] { refCount.filter { $0.value > 0 }.map(\.key).sorted() }
@@ -106,6 +111,16 @@ public final class Performer {
     ///   - beatPhase: position within the current beat, 0..<1.
     ///   - chord: the chord sounding now.
     public func noteOn(_ input: Int, velocity: Int, time: Double, beatPhase: Double, chord: Chord) -> [LiveOutput] {
+        if keyMap == .chordKeys { return playChordKey(input, velocity: shapeVelocity(velocity)) }
+        // White-key mode: map to the scale (or a chord tone) first; those notes
+        // are already right, so only Strict snaps them further.
+        var source = input
+        var alreadyInKey = false
+        if keyMap == .whiteKeysScale {
+            mapper.key = key
+            source = KeyMapper.isWhite(input) ? mapper.scalePitch(forKey: input) : mapper.chordTone(forKey: input, chord: chord)
+            alreadyInKey = snap != .strict
+        }
         var out: [LiveOutput] = []
         if time - groupStart > mashWindow {
             groupStart = time
@@ -133,7 +148,7 @@ public final class Performer {
         }
         if groupStrummed { return out }
 
-        let pitch = clampToRange(snapPitch(input, chord: chord, inMash: inMash, strongBeat: strongBeat))
+        let pitch = clampToRange(alreadyInKey ? source : snapPitch(source, chord: chord, inMash: inMash, strongBeat: strongBeat))
 
         if instrument.monophonic {
             if inMash, let current = monoNote, pitch <= current { return out }   // keep the top voice of a mash
@@ -151,6 +166,32 @@ public final class Performer {
 
         if soundingPitches.count >= instrument.maxVoices, refCount[pitch, default: 0] == 0 { return out }
         start(pitch, velocity: vel, input: input, into: &out)
+        return out
+    }
+
+    /// One key, one chord: voiced around the key you pressed, voice-led from the
+    /// last chord, strummed on guitars, top note only on solo instruments.
+    private func playChordKey(_ input: Int, velocity: Int) -> [LiveOutput] {
+        mapper.key = key
+        guard let chord = mapper.chord(forKey: input) else { return [] }
+        var out: [LiveOutput] = []
+        let lo = min(max(instrument.range.lowerBound, input - 7), instrument.range.upperBound - 24)
+        let range = lo...min(instrument.range.upperBound, lo + 26)
+        var notes = VoicingEngine.voice(chord, style: instrument.liveVoicing, range: range, previous: lastChordVoicing)
+        lastChordVoicing = notes
+        if instrument.monophonic, let top = notes.last { notes = [top] }
+        notes = Array(notes.suffix(instrument.maxVoices))
+        // Low keys add the bass note underneath, like a left hand.
+        if input < 48, !instrument.monophonic, let bottom = notes.first {
+            var bass = bottom - 12 - mod12(bottom - chord.bassNote)
+            if bass >= bottom { bass -= 12 }
+            if bass >= instrument.range.lowerBound { notes.insert(bass, at: 0) }
+        }
+        let spread = instrument.articulation == .strum ? instrument.strumMs / 1000 : 0
+        for (i, p) in notes.enumerated() {
+            start(p, velocity: Int(Double(velocity) * (1 - Double(i) * 0.02)), input: input, delay: Double(i) * spread, into: &out)
+        }
+        lastInput = input
         return out
     }
 

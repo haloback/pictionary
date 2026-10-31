@@ -38,6 +38,7 @@ struct ProgressionCard: View {
                         SectionLabel("\(model.isPlaying ? "Now playing" : "Progression") · chord \(slot + 1) of \(model.session.progression.slots.count) · \(model.session.progressionSource)")
                     }
                     Spacer()
+                    FamousProgressionsMenu()
                     Button("Type chords") { model.showChordEditor = true }.buttonStyle(PillButtonStyle())
                     Button("Import .mid") { model.openImportPanel() }.buttonStyle(PillButtonStyle())
                     Button { model.regenerateProgression() } label: { Label("Reharmonize", systemImage: "sparkles") }
@@ -131,7 +132,20 @@ struct ChordCardView: View {
 
     var body: some View {
         Menu {
-            Section("Replace with") {
+            let ideas = model.reharmonizations(for: index)
+            ForEach([Reharmonizer.Kind.color, .substitute, .borrowed], id: \.self) { kind in
+                Section(kind.rawValue) {
+                    ForEach(ideas.filter { $0.kind == kind }, id: \.self) { s in
+                        Button("\(model.chordName(s.chord))   ·  \(s.reason)") { model.replaceChord(at: index, with: s.chord) }
+                    }
+                }
+            }
+            Section("Lead into the next chord (splits this one)") {
+                ForEach(ideas.filter { $0.kind == .leading }, id: \.self) { s in
+                    Button("\(model.chordName(s.chord))   ·  \(s.reason)") { model.insertLeadIn(at: index, chord: s.chord) }
+                }
+            }
+            Menu("Any chord in the key") {
                 ForEach(model.chordSuggestions(for: index), id: \.self) { c in
                     Button("\(model.chordName(c))   \(c.roman(in: model.session.key))") { model.replaceChord(at: index, with: c) }
                 }
@@ -302,6 +316,7 @@ struct InstrumentCard: View {
                     }
                 }
                 Text(current.character).font(.system(size: 14)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                KeyMapPicker()
             }
         }
     }
@@ -458,5 +473,49 @@ struct AddLayerMenu: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+}
+
+@MainActor
+struct FamousProgressionsMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu {
+            let moods = NamedProgression.library.reduce(into: [String]()) { if !$0.contains($1.mood) { $0.append($1.mood) } }
+            ForEach(moods, id: \.self) { mood in
+                Section(mood) {
+                    ForEach(NamedProgression.library.filter { $0.mood == mood }) { p in
+                        Button("\(p.name)   \(p.romanSummary)") { model.apply(named: p) }
+                    }
+                }
+            }
+        } label: {
+            Text("Famous progressions").font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 14).frame(minHeight: 34)
+                .background(Theme.card, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.stroke))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Start from a well-known progression, in your current key")
+    }
+}
+
+/// How your keys map to notes: anywhere (snapped), white keys = scale, or one key = one chord.
+@MainActor
+struct KeyMapPicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("Keys", selection: Binding(get: { model.session.keyMap }, set: { model.setKeyMap($0) })) {
+                ForEach(KeyMap.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Text(model.session.keyMap.explanation).font(.system(size: 12)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

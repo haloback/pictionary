@@ -281,6 +281,10 @@ struct Inspector: View {
                     Text(model.session.snap.explanation).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel("Keys")
+                    KeyMapPicker()
+                }
+                VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Your hands")
                     HStack {
                         Text(InstrumentProfile.of(model.session.liveInstrument).name).font(.system(size: 14, weight: .semibold))
@@ -460,6 +464,19 @@ struct KeyboardView: View {
 
     func isBlack(_ p: Int) -> Bool { [1, 3, 6, 8, 10].contains(mod12(p)) }
 
+    /// What each key does in the current key-mapping mode.
+    func keyLabel(_ p: Int, chord: Chord) -> String? {
+        let mapper = model.keyMapper
+        switch model.session.keyMap {
+        case .anyKey:
+            return !isBlack(p) && mod12(p) == 0 ? "C\(p / 12 - 1)" : nil
+        case .whiteKeysScale:
+            return model.noteName(isBlack(p) ? mapper.chordTone(forKey: p, chord: chord) : mapper.scalePitch(forKey: p))
+        case .chordKeys:
+            return mapper.chord(forKey: p).map { model.chordName($0) }
+        }
+    }
+
     @ViewBuilder
     func keys(size: CGSize, chord: Chord) -> some View {
         let whites = (low..<high).filter { !isBlack($0) }
@@ -496,8 +513,9 @@ struct KeyboardView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if !black && mod12(p) == 0 {
-                    Text("C\(p / 12 - 1)").font(.system(size: 9)).foregroundStyle(.black.opacity(0.5)).padding(.bottom, 4)
+                if let label = keyLabel(p, chord: chord) {
+                    Text(label).font(.system(size: black ? 8 : 9, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.5)
+                        .foregroundStyle(black ? Color.white.opacity(0.8) : Color.black.opacity(0.6)).padding(.bottom, 4).padding(.horizontal, 1)
                 }
             }
             .gesture(DragGesture(minimumDistance: 0)
