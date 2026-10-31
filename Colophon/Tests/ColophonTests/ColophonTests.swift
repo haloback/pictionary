@@ -1,4 +1,5 @@
 import CoreImage
+import ImageIO
 import XCTest
 @testable import Colophon
 
@@ -589,6 +590,64 @@ final class SampleRenderTests: XCTestCase {
         n += 1
         sheet(["grunge", "distressed", "watercolor", "brush", "splatter", "crumpled", "burnedges", "halftone"].flatMap { ["mask.\($0).soft.f", "mask.\($0).hard.b"] },
               String(format: "%02d-materials-masks.png", n), "Texture masks (soft and hard)")
+        // Real photos (public domain, fetched by CI into COLOPHON_PHOTOS): ink effects and the
+        // into-the-photo title styles where they belong, on an actual photograph.
+        if let pdir = ProcessInfo.processInfo.environment["COLOPHON_PHOTOS"],
+           let names = try? FileManager.default.contentsOfDirectory(atPath: pdir) {
+            let photos: [(String, Data, CGImage)] = names.sorted().filter { $0.hasSuffix(".jpg") }.compactMap { name in
+                let url = URL(fileURLWithPath: pdir).appendingPathComponent(name)
+                guard let data = try? Data(contentsOf: url), data.count > 10_000,
+                      let src = CGImageSourceCreateWithData(data as CFData, nil),
+                      let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+                return (String(name.dropLast(4)), data, cg)
+            }
+            let palette = [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]
+            let inkIDs = ["ink.ink-drawing.black.1", "ink.engraving.sepia.1", "ink.pencil-sketch.black.1", "ink.crosshatch.navy.1",
+                          "ink.ink-wash.black.1", "ink.graphic-novel.black.1", "ink.screen-print.palette.1", "ink.stipple.black.1",
+                          "ink.linocut.black.2", "ink.cyanotype.black.1"]
+            let photoStyles = ["window", "fog", "haunted", "bloodrust", "painted on full", "molten", "gilded", "frozen"]
+            for (pi, photo) in photos.enumerated() {
+                let base = CIImage(cgImage: photo.2)
+                let ec = EffectContext(scale: base.extent.height / 1000, seed: 5, palette: palette)
+                // The untouched photo first, for reference.
+                let orig = String(format: "%02d-photo-%@-original.png", n, photo.0)
+                if Exporter.write(photo.2, to: out.appendingPathComponent(orig), format: .png, quality: 1) {
+                    manifest.append(["file": orig, "name": "Original photo", "family": "Real photo: " + photo.0, "font": ""])
+                    n += 1
+                }
+                for id in inkIDs where pi < 2 || id.contains("ink-drawing") || id.contains("engraving") {
+                    guard let p = EffectLibrary.shared.preset(id),
+                          let cg = Gfx.render(p.apply(base, ec).cropped(to: base.extent), extent: base.extent) else { continue }
+                    let file = String(format: "%02d-photo-%@-%@.png", n, photo.0, id.replacingOccurrences(of: ".", with: "-"))
+                    _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                    manifest.append(["file": file, "name": p.name, "family": "Real photo: " + photo.0, "font": ""])
+                    n += 1
+                }
+                // Title styles over the photo, as a full cover.
+                for q in photoStyles {
+                    guard let st = lib.preset(q) ?? lib.search(q, family: nil, genre: nil).first else { continue }
+                    var doc = CoverDocument()
+                    let w = 800, h = Int((800.0 * Double(photo.2.height) / Double(photo.2.width)).rounded())
+                    doc.canvas = CanvasSpec(width: w, height: h)
+                    doc.palette = palette
+                    let id = doc.addAsset(photo.1)
+                    let roles = PaletteRoles(doc.palette)
+                    var title = Layer.text("The Salt\nOrchard", role: .title, frame: NRect(0.08, 0.06, 0.84, 0.3),
+                                           font: st.fonts.first(where: FontCatalog.isAvailable) ?? "Didot", color: roles.light)
+                    if var t = title.textContent {
+                        st.apply(to: &t, palette: roles)
+                        t.letterCase = .upper
+                        title.textContent = t
+                    }
+                    doc.layers = [Layer.image(id, frame: .full), title]
+                    guard let img = CoverRenderer.shared.render(doc, size: CGSize(width: w, height: h), quality: .full) else { continue }
+                    let file = String(format: "%02d-photo-%@-style-%@.png", n, photo.0, st.id.replacingOccurrences(of: ".", with: "-"))
+                    _ = Exporter.write(img, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                    manifest.append(["file": file, "name": st.name + " (title style)", "family": "Real photo: " + photo.0, "font": FontCatalog.displayName(title.textContent?.fontName ?? "")])
+                    n += 1
+                }
+            }
+        }
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("manifest.json"))
     }
