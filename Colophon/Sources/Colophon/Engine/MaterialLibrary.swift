@@ -189,6 +189,18 @@ final class MaterialLibrary {
             noise(e, seed, 1).applyingFilter("CICrystallize", parameters: [kCIInputRadiusKey: max(2, r), kCIInputCenterKey: CIVector(x: e.midX, y: e.midY)]).cropped(to: e)
         }
         func edges(_ i: CIImage, _ intensity: Double) -> CIImage { FX.mono(i.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: intensity])).cropped(to: i.extent) }
+        /// Exact clamped remap (v - 0.5) * k + c. Unlike CIColorControls' contrast it doesn't depend on
+        /// where the source's mid-gray sits in Core Image's linear working space.
+        func remap(_ i: CIImage, _ k: Double, _ c: Double) -> CIImage {
+            FX.matrix(i, r: (k, 0, 0), g: (k, 0, 0), b: (k, 0, 0), bias: (c - 0.5 * k, c - 0.5 * k, c - 0.5 * k))
+                .applyingFilter("CIColorClamp", parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]).cropped(to: i.extent)
+        }
+        /// Smooth noise lifted so its mid-gray sits at 0.5 in the working space.
+        func smoothMid(_ e: CGRect, _ seed: Int, _ n: Int) -> CIImage {
+            smooth(e, seed, n).applyingFilter("CIGammaAdjust", parameters: ["inputPower": 0.4545]).cropped(to: e)
+        }
         func streaks(_ e: CGRect, _ seed: Int, _ radius: CGFloat, _ angle: Double) -> CIImage {
             noise(e, seed, 1).clampedToExtent().applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: radius, kCIInputAngleKey: angle]).cropped(to: e)
         }
@@ -238,9 +250,13 @@ final class MaterialLibrary {
                 return FX.blend(FX.controls(seams, brightness: 0.4, contrast: 0.6), over: grain, mode: "CIMultiplyBlendMode")
             },
             Structure(id: "crumpled", name: "Crumpled Paper", category: "Wood & Paper", tags: ["paper", "crumpled", "creased"]) { e, u, s in
-                let n = FX.blur(smooth(e, s, cells(e, u, 1.2)), u * 0.05)
-                let shifted = n.transformed(by: CGAffineTransform(translationX: 2, y: 2))
-                return FX.controls(FX.blend(shifted, over: n, mode: "CIDifferenceBlendMode").applyingFilter("CIColorInvert"), contrast: 3)
+                // Creases: where two offset copies of soft noise cross, the difference falls to zero.
+                let n = FX.blur(smoothMid(e, s, cells(e, u, 1.2)), u * 0.05)
+                let d = max(2, u * 0.25)
+                let shifted = n.clampedToExtent().transformed(by: CGAffineTransform(translationX: d, y: d)).cropped(to: e)
+                let diff = FX.mono(FX.blend(shifted, over: n, mode: "CIDifferenceBlendMode"))
+                let creases = remap(diff, -6, -2)  // 1 - 6 * diff
+                return FX.blend(creases, over: remap(n, 1.2, 0.55), mode: "CIMultiplyBlendMode")
             },
             Structure(id: "fibers", name: "Paper Fibers", category: "Wood & Paper", tags: ["paper", "fibers", "handmade"]) { e, u, s in
                 FX.blend(FX.controls(streaks(e, s &+ 3, u * 0.4, 0.8), contrast: 2), over: FX.controls(noise(e, s, 1), brightness: 0.3, contrast: 0.4), mode: "CIMultiplyBlendMode")
@@ -302,13 +318,20 @@ final class MaterialLibrary {
                 FX.blend(FX.controls(noise(e, s, u * 0.04), brightness: 0.4, contrast: 5), over: FX.controls(smooth(e, s &+ 1, cells(e, u, 1)), contrast: 2.5), mode: "CIMultiplyBlendMode")
             },
             Structure(id: "scratches", name: "Scratches", category: "Grunge & Wear", tags: ["scratches", "worn", "metal", "distressed"]) { e, u, s in
-                FX.controls(streaks(e, s, u * 2.5, 0.25 + Double(s % 3) * 0.6), brightness: -0.42, contrast: 14).applyingFilter("CIColorInvert")
+                // Motion-blurred noise has a spread of about 0.29 / sqrt(radius): keep only its brightest
+                // ~4% as thin scratches, whatever the scale.
+                { () -> CIImage in
+                    let r = u * 2.5
+                    let sigma = 0.29 / Double(max(1, r)).squareRoot()
+                    let lines = remap(streaks(e, s, r, 0.25 + Double(s % 3) * 0.6), 2 / sigma, -3.6)
+                    return lines.applyingFilter("CIColorInvert").cropped(to: e)
+                }()
             },
             Structure(id: "dust", name: "Dust & Specks", category: "Grunge & Wear", tags: ["dust", "film", "specks", "vintage"]) { e, u, s in
                 FX.controls(noise(e, s, u * 0.03), brightness: 0.47, contrast: 16)
             },
             Structure(id: "rust", name: "Rust Pitting", category: "Grunge & Wear", tags: ["rust", "corroded", "metal", "decay"]) { e, u, s in
-                FX.blend(noise(e, s, u * 0.03), over: FX.controls(smooth(e, s, cells(e, u, 0.8)), contrast: 3), mode: "CIOverlayBlendMode")
+                FX.blend(noise(e, s, u * 0.03), over: remap(smoothMid(e, s, cells(e, u, 0.8)), 3, 0.5), mode: "CIOverlayBlendMode")
             },
             Structure(id: "distressed", name: "Distressed Print", category: "Grunge & Wear", tags: ["distressed", "print", "worn", "vintage"]) { e, u, s in
                 FX.blend(FX.controls(noise(e, s, u * 0.02), brightness: 0.45, contrast: 12), over: FX.controls(smooth(e, s, cells(e, u, 0.6)), brightness: 0.25, contrast: 4), mode: "CIMultiplyBlendMode")
