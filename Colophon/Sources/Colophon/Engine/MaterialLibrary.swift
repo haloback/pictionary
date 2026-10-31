@@ -65,7 +65,9 @@ final class MaterialLibrary {
     func render(_ id: String, extent e: CGRect, palette: [RGBA], seed: Int = 1, scale: CGFloat = 1) -> CIImage {
         guard let m = index[id], let s = structureIndex[m.structureID] else { return FX.solid(RGBA(0.5, 0.5, 0.5), e) }
         let unit = max(4, min(e.width, e.height) * (m.bold ? 0.14 : 0.055) * max(0.2, scale))
-        let gray = FX.mono(s.make(e, unit, seed)).cropped(to: e)
+        let gray = FX.mono(s.make(e, unit, seed)).applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ]).cropped(to: e)
         if let mode = m.mask {
             switch mode {
             case .soft: return gray

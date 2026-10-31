@@ -602,7 +602,17 @@ enum SurfaceGen {
             FX.gradientMap(FX.controls(FX.smoothNoise(e, seed: seed, cells: cells), contrast: contrast), hex.map { RGBA(hex: $0) })
         }
         let cells = max(3, Int(e.width / max(8, size * 0.9)))
-        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.12).clampedToExtent()
+        // Exact linear remap of a gray image: (v - 0.5) * k + c, clamped. CIColorControls' contrast
+        // doesn't pivot where you'd expect, so thresholds built from it come out inverted or blown out.
+        func lin(_ i: CIImage, _ k: Double, _ c: Double) -> CIImage {
+            FX.matrix(i, r: (k, 0, 0), g: (k, 0, 0), b: (k, 0, 0), bias: (c - 0.5 * k, c - 0.5 * k, c - 0.5 * k))
+                .applyingFilter("CIColorClamp", parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ]).cropped(to: e)
+        }
+        /// White where v rises above t, black elsewhere, with a soft edge of width 1/k.
+        func threshold(_ i: CIImage, _ t: Double, _ k: Double) -> CIImage { lin(i, k, (0.5 - t) * k) }
+        let brushed = FX.noise(e, seed: seed, grainSize: 1, strength: 0.05).clampedToExtent()
             .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.4, kCIInputAngleKey: 0.0]).cropped(to: e)
 
         switch kind {
@@ -618,12 +628,12 @@ enum SurfaceGen {
             let seams = FX.controls(FX.mono(flakes.applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 4.0]).cropped(to: e)), contrast: 2).applyingFilter("CIColorInvert")
             return FX.blend(seams, over: leaf, mode: "CIMultiplyBlendMode")
         case .silver:
-            return FX.blend(brushed, over: ramp(["4E5358", "A9AEB4", "F2F4F6", "FAFBFC", "8D9399", "C7CBCF"], period: size * 1.05), mode: "CISoftLightBlendMode")
+            return FX.blend(brushed, over: ramp(["3E4348", "8A9096", "D6DADE", "F4F6F8", "6E747A", "AEB3B8"], period: size * 1.05), mode: "CISoftLightBlendMode")
         case .chrome:
             // Sky above a hard horizon, earth below: the classic airbrushed chrome.
             return ramp(["1B2B4A", "6E9BD6", "DCEBFF", "FFFFFF", "2A1C12", "8A5A2E", "E6B070", "FFF4D8"], period: size * 1.2)
         case .copper:
-            return FX.blend(brushed, over: ramp(["4A230E", "A8592A", "F2B488", "FFD2AE", "B8693A", "D99060"], period: size * 1.05), mode: "CISoftLightBlendMode")
+            return FX.blend(brushed, over: ramp(["4A230E", "9A4E22", "E09A6A", "F6C29A", "A85E30", "C9804E"], period: size * 1.05), mode: "CISoftLightBlendMode")
         case .bronze:
             let metal = ramp(["4A3214", "9A7034", "D9B06A", "7A5A26"], period: size)
             let patina = FX.controls(FX.smoothNoise(e, seed: seed &+ 11, cells: cells), brightness: -0.1, contrast: 3)
@@ -672,26 +682,32 @@ enum SurfaceGen {
         case .smoke:
             return noiseMap(["1A1A1E", "4A4A52", "9A9AA2", "E6E6EA"], cells: cells, contrast: 1.8)
         case .glitter:
-            let base = FX.solid(a.withLightness(max(0.25, a.hsl.l - 0.15)), e)
-            let flecks = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.012), strength: 1), saturation: 0, brightness: -0.42, contrast: 10)
-            let tinted = FX.blend(FX.solid(a.withLightness(0.85), e), over: flecks, mode: "CIMultiplyBlendMode")
-            let big = FX.controls(FX.noise(e, seed: seed &+ 5, grainSize: max(1, size * 0.03), strength: 1), saturation: 0, brightness: -0.46, contrast: 14)
+            // A mid-tone base glinting with fine colored flecks and a few white sparkles.
+            let base = FX.grain(FX.solid(a.withLightness(min(0.6, max(0.3, a.hsl.l - 0.15))), e), seed: seed &+ 9, strength: 0.25, size: max(1, size * 0.02))
+            let flecks = threshold(FX.noise(e, seed: seed, grainSize: max(1, size * 0.012), strength: 1), 0.86, 12)
+            let tinted = FX.blend(FX.solid(a.withLightness(0.82), e), over: flecks, mode: "CIMultiplyBlendMode")
+            let big = threshold(FX.noise(e, seed: seed &+ 5, grainSize: max(1, size * 0.028), strength: 1), 0.965, 30)
             return FX.blend(big, over: FX.blend(tinted, over: base, mode: "CIScreenBlendMode"), mode: "CIScreenBlendMode")
         case .thread:
-            let lines = (CIFilter(name: "CIStripesGenerator", parameters: [
-                "inputColor0": a.ciColor, "inputColor1": a.withLightness(max(0.1, a.hsl.l - 0.18)).ciColor,
-                kCIInputWidthKey: max(1, size * 0.006), kCIInputSharpnessKey: 0.3
-            ])?.outputImage ?? FX.solid(a, e)).transformed(by: CGAffineTransform(rotationAngle: .pi / 4)).cropped(to: e)
-            return FX.grain(lines, seed: seed, strength: 0.18, size: 1)
+            // Satin stitch: fine fibers laid at 45 degrees in shades of the thread color.
+            let fibers = FX.noise(e, seed: seed, grainSize: 1, strength: 1).clampedToExtent()
+                .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: max(2, size * 0.06), kCIInputAngleKey: Double.pi / 4]).cropped(to: e)
+            let l = a.hsl.l
+            return FX.gradientMap(lin(fibers, 4, 0.22), [a.withLightness(max(0.08, l - 0.2)), a, a.withLightness(min(0.95, l + 0.16))])
         case .charred:
             let base = noiseMap(["0E0806", "2A1810", "4A2C17", "1A0F0A"], cells: cells * 2, contrast: 1.8)
-            let embers = FX.controls(FX.noise(e, seed: seed, grainSize: max(1, size * 0.02), strength: 1), saturation: 0, brightness: -0.49, contrast: 14)
-            let glow = FX.blend(FX.solid(RGBA(hex: "F2661C"), e), over: embers, mode: "CIMultiplyBlendMode")
+            // Dark char split by thin glowing cracks, with a few loose embers.
+            let n = FX.smoothNoise(e, seed: seed &+ 3, cells: cells * 3)
+            let dist = FX.blend(FX.solid(RGBA(0.5, 0.5, 0.5), e), over: n, mode: "CIDifferenceBlendMode")
+            let cracks = threshold(FX.mono(dist), 0.05, -16)
+            let sparks = threshold(FX.noise(e, seed: seed, grainSize: max(1, size * 0.015), strength: 1), 0.975, 30)
+            let lit = FX.blend(sparks, over: cracks, mode: "CIScreenBlendMode")
+            let glow = FX.blend(FX.solid(RGBA(hex: "F2661C"), e), over: FX.blend(FX.blur(lit, max(1, size * 0.01)), over: lit, mode: "CIScreenBlendMode"), mode: "CIMultiplyBlendMode")
             return FX.blend(glow, over: base, mode: "CIScreenBlendMode")
         case .chalk:
             let streaks = FX.noise(e, seed: seed, grainSize: 1, strength: 1).clampedToExtent()
                 .applyingFilter("CIMotionBlur", parameters: [kCIInputRadiusKey: size * 0.12, kCIInputAngleKey: 0.25]).cropped(to: e)
-            return FX.blend(FX.controls(FX.mono(streaks), brightness: 0.25, contrast: 2.5), over: FX.solid(RGBA(hex: "F4F4F0"), e), mode: "CIMultiplyBlendMode")
+            return FX.blend(lin(streaks, 6, 0.8), over: FX.solid(RGBA(hex: "F4F4F0"), e), mode: "CIMultiplyBlendMode")
         case .stripes:
             return (CIFilter(name: "CIStripesGenerator", parameters: [
                 "inputColor0": a.ciColor, "inputColor1": b.ciColor, kCIInputWidthKey: max(2, size * 0.09), kCIInputSharpnessKey: 1
