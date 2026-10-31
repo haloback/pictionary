@@ -564,7 +564,7 @@ enum TextStyler {
         case .distressed, .grunge:
             let fine = FX.noise(e, seed: seed, grainSize: max(1, size * 0.02), strength: 1)
             let specks = FX.controls(fine, brightness: 0.55 - 0.3 * a, contrast: 6)
-            let blotch = FX.controls(FX.smoothNoise(e, seed: seed &+ 3, cells: max(5, Int(e.width / max(1, size * 0.5)))), brightness: kind == .grunge ? 0.4 - 0.3 * a : 0.3 - 0.25 * a, contrast: 4)
+            let blotch = FX.controls(FX.toPerceptual(FX.smoothNoise(e, seed: seed &+ 3, cells: max(5, Int(e.width / max(1, size * 0.5))))), brightness: kind == .grunge ? 0.4 - 0.3 * a : 0.3 - 0.25 * a, contrast: 4)
             return FX.blend(FX.blend(specks, over: blotch, mode: "CIMultiplyBlendMode"), over: m, mode: "CIMultiplyBlendMode")
         case .cracked:
             let cells = FX.noise(e, seed: seed, grainSize: 1, strength: 1)
@@ -588,7 +588,8 @@ enum TextStyler {
                 .applyingFilter("CIColorInvert")
             return FX.blend(FX.controls(seams, brightness: 0.2, contrast: 8), over: shifted, mode: "CIMultiplyBlendMode")
         case .eroded, .inkBleed:
-            let blurred = FX.blur(m, size * (kind == .inkBleed ? 0.045 : 0.03))
+            // Threshold the soft edge in perceptual space so "erode" trims the edge instead of eating the letter.
+            let blurred = FX.toPerceptual(FX.blur(m, size * (kind == .inkBleed ? 0.045 : 0.03)))
             let rough = FX.blend(FX.noise(e, seed: seed, grainSize: max(1, size * 0.015), strength: 0.6 * a), over: blurred, mode: "CIOverlayBlendMode")
             // A bleed grows past the edge (low threshold); erosion eats into it (high threshold).
             let bias = kind == .inkBleed ? 0.18 : -0.12

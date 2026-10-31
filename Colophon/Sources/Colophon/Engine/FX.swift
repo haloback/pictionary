@@ -21,6 +21,20 @@ enum FX {
         i.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
     }
 
+    /// Core Image works in linear light, where a photo's mid-gray sits near 0.21. Thresholds and
+    /// contrast (which pivot at 0.5) behave as intended only on gamma-encoded values.
+    static func toPerceptual(_ i: CIImage) -> CIImage {
+        i.applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ]).applyingFilter("CIGammaAdjust", parameters: ["inputPower": 1 / 2.2]).cropped(to: i.extent)
+    }
+
+    static func fromPerceptual(_ i: CIImage) -> CIImage {
+        i.applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ]).applyingFilter("CIGammaAdjust", parameters: ["inputPower": 2.2]).cropped(to: i.extent)
+    }
+
     static func controls(_ i: CIImage, saturation: Double = 1, brightness: Double = 0, contrast: Double = 1) -> CIImage {
         i.applyingFilter("CIColorControls", parameters: [
             kCIInputSaturationKey: saturation, kCIInputBrightnessKey: brightness, kCIInputContrastKey: contrast

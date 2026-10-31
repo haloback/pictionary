@@ -493,7 +493,7 @@ final class EffectLibrary {
             let dots = flat.applyingFilter("CIDotScreen", parameters: [kCIInputCenterKey: FX.center(i), kCIInputAngleKey: 0.6, kCIInputWidthKey: 6 * c.scale, kCIInputSharpnessKey: 0.7]).cropped(to: i.extent)
             let shadowed = FX.blendWithMask(dots, over: flat, mask: shade.applyingFilter("CIColorInvert"))
             let l = lines(i, weight: 0.8 + 0.2 * k, detail: 0.5)
-            return FX.recolor(l, ink).composited(over: shadowed)
+            return FX.recolor(l, ink).composited(over: FX.fromPerceptual(shadowed))
         }),
         ("Screen Print", { i, c, k, ink, paper in
             let p = PaletteRoles(c.palette)
@@ -506,7 +506,7 @@ final class EffectLibrary {
             var flat = i
             for _ in 0..<3 { flat = flat.applyingFilter("CIMedianFilter") }
             let poster = FX.controls(flat.applyingFilter("CIColorPosterize", parameters: ["inputLevels": 6 - 2 * k]), saturation: 1.25, contrast: 1.1)
-            return FX.recolor(lines(flat, weight: 0.6, detail: 0.2), ink).composited(over: poster)
+            return FX.recolor(lines(flat, weight: 0.6, detail: 0.2), ink).composited(over: FX.fromPerceptual(poster))
         }),
         ("Blueprint", { i, c, k, _, _ in
             let l = lines(i, weight: 0.4 + 0.4 * k, detail: 0.6).composited(over: FX.solid(.white, i.extent))
@@ -534,7 +534,8 @@ final class EffectLibrary {
                         family: .ink, swatch: ink.map { [$0, paper] } ?? [],
                         apply: { i, c in
                             let p = PaletteRoles(c.palette)
-                            return run(i, c, k, ink ?? p.dark, ink == nil ? p.light : paper)
+                            // Recipes threshold tones, so they read the photo gamma-encoded (mid-gray at 0.5).
+                            return run(FX.toPerceptual(i), c, k, ink ?? p.dark, ink == nil ? p.light : paper)
                         }))
                 }
             }
