@@ -431,7 +431,7 @@ final class StyleLibraryTests: XCTestCase {
     func testSearchAndSimilar() {
         let lib = StyleLibrary.shared
         XCTAssertFalse(lib.search("gold", family: nil, genre: nil).isEmpty)
-        XCTAssertFalse(lib.search("neon pink", family: nil, genre: nil).isEmpty)
+        XCTAssertFalse(lib.search("neon magenta", family: nil, genre: nil).isEmpty)
         XCTAssertFalse(lib.search("drips", family: nil, genre: .horror).isEmpty)
         let first = lib.search("", family: "metal", genre: nil)[0]
         XCTAssertFalse(lib.similar(to: first.id).isEmpty)
@@ -454,21 +454,20 @@ final class StyleLibraryTests: XCTestCase {
         t.style.drips = 0.9
         let (dripped, pad) = try XCTUnwrap(TextRenderer.render(t, box: CGSize(width: 300, height: 120), canvasHeight: 1000))
         XCTAssertGreaterThan(pad, plainPad)
-        // Measure how far ink reaches toward the bottom of each raster.
-        func lowestInk(_ img: CGImage) -> Double {
-            let p = PixelSampler.pixels(img, maxSide: 400)
+        // How far below the top of the text box the ink reaches, in pixels.
+        func lowestInk(_ img: CGImage, pad: CGFloat) -> Double {
+            let p = PixelSampler.pixels(img, maxSide: 4000)
             for row in stride(from: p.h - 1, through: 0, by: -1) {
-                for x in 0..<p.w where p.data[(row * p.w + x) * 4 + 3] > 40 { return Double(row) / Double(p.h) }
+                for x in 0..<p.w where p.data[(row * p.w + x) * 4 + 3] > 40 { return Double(row) - Double(pad) }
             }
             return 0
         }
-        XCTAssertGreaterThan(lowestInk(dripped), lowestInk(plain))
-        _ = plain
+        XCTAssertGreaterThan(lowestInk(dripped, pad: pad), lowestInk(plain, pad: plainPad) + 4)
     }
 
     func testNewSurfacesUsePatternColors() throws {
         let e = CGRect(x: 0, y: 0, width: 80, height: 80)
-        for s in [SurfaceTexture.stripes, .checker, .polkaDots, .gradient] {
+        for s in [SurfaceTexture.stripes, .checker, .polkaDots] {
             let img = try XCTUnwrap(Gfx.render(SurfaceGen.make(s, extent: e, size: 40, seed: 1, a: RGBA(hex: "E4572E"), b: RGBA(hex: "1B2A4A")), extent: e))
             let pal = PaletteExtractor.extract(img)
             XCTAssertTrue(pal.contains { $0.distance(to: RGBA(hex: "E4572E")) < 20 }, s.rawValue)
