@@ -279,11 +279,13 @@ enum Watercolor {
         let paperImg = FX.solid(paper, e)
         var wash = hue.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: paperImg, kCIInputMaskImageKey: density]).cropped(to: e)
         // Tide lines: pigment pools where a bloom dried.
-        let shifted = density.clampedToExtent().transformed(by: CGAffineTransform(translationX: unit * 0.04, y: unit * 0.04)).cropped(to: e)
-        let edge = FX.mono(FX.blend(shifted, over: density, mode: "CIDifferenceBlendMode"))
+        // Smooth first, so only the real bloom edges show, not every ripple in the noise.
+        let smooth = FX.blur(density, unit * 0.06)
+        let shifted = smooth.clampedToExtent().transformed(by: CGAffineTransform(translationX: unit * 0.03, y: unit * 0.03)).cropped(to: e)
+        let edge = FX.mono(FX.blend(shifted, over: smooth, mode: "CIDifferenceBlendMode"))
         let k: Double = 5 * (0.4 + wetness)
         let tide = remap(edge, -k * 2, 1 - k)   // 1 - 2k * edge
-        wash = FX.blend(FX.mix(FX.solid(.white, e), tide, 0.85), over: wash, mode: "CIMultiplyBlendMode")
+        wash = FX.blend(FX.mix(FX.solid(.white, e), tide, 0.5), over: wash, mode: "CIMultiplyBlendMode")
         // Soft bleeding edges between paints.
         wash = FX.displace(wash, by: field(e, seed: seed &+ 21, cells: cellsSmall * 2), scale: unit * CGFloat(0.03 + 0.08 * wetness))
         // Granulation last, so the paper's tooth stays put while the paint moves.

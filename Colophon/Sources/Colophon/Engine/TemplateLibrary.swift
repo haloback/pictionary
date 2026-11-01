@@ -71,6 +71,15 @@ final class TemplateLibrary {
         return doc
     }
 
+    /// Surfaces too dark to read on a dark cover.
+    static let darkFaces: Set<SurfaceTexture> = [.bronze, .rust, .charred, .wood, .leather, .copper, .stone]
+
+    static func surface(of preset: TextStylePreset, palette: PaletteRoles) -> SurfaceTexture {
+        var t = TextContent(text: "A")
+        preset.apply(to: &t, palette: palette)
+        return t.style.surface
+    }
+
     static func seed(_ s: String) -> Int {
         var h: UInt64 = 1469598103934665603
         for b in s.utf8 { h = (h ^ UInt64(b)) &* 1099511628211 }

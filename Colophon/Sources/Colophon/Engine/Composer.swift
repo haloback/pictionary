@@ -175,7 +175,8 @@ enum CoverComposer {
         }
         // Metallic and glowing styles vanish on pale grounds; there the clean type stands.
         if let styleID, !lightGround, let preset = TextStylePreset.preset(styleID),
-           let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
+           let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent,
+           !TemplateLibrary.darkFaces.contains(TemplateLibrary.surface(of: preset, palette: palette)) {
             let keepColor = t.color
             preset.apply(to: &t, palette: palette)
             if preset.category != "Light" && preset.category != "Genre" { t.color = keepColor }
