@@ -283,6 +283,12 @@ final class PaintSurface {
         // A stroke lays its paint down once: overlapping dabs only add what the stroke hasn't given a pixel yet,
         // so a half-strength glaze stays half-strength however many dabs cross a pixel.
         var given = [Float](repeating: 0, count: s.tool == .paint || s.tool == .lift ? w * h : 0)
+        // Each pixel mixes once, from its state before this stroke, so overlapping dabs leave no ridges.
+        var preIndex = [Int32](repeating: -1, count: s.tool == .paint ? w * h : 0)
+        var preKS: [Float] = []
+        var preRes: [Float] = []
+        var preCov: [Float] = []
+        var preY: [Float] = []
         for (cx, cy) in points {
             switch s.tool {
             case .paint:
@@ -296,20 +302,27 @@ final class PaintSurface {
                 }
                 dab(cx, cy, radius: radius, hardness: 1 - wet * 0.6) { i, f in
                     let target = f * strength
-                    let prev = given[i]
-                    guard target > prev + 0.0005 else { return }
+                    guard target > given[i] + 0.0005 else { return }
                     given[i] = target
-                    let a = (target - prev) / max(0.0001, 1 - prev)
+                    var slot = Int(preIndex[i])
+                    if slot < 0 {
+                        slot = preCov.count
+                        preIndex[i] = Int32(slot)
+                        for b in 0..<B { preKS.append(self.ks[i * B + b]) }
+                        for c in 0..<3 { preRes.append(self.res[i * 3 + c]) }
+                        preCov.append(self.cov[i])
+                        preY.append(self.cov[i] > 0.01 ? Spectral.luminance(self.ks, at: i * B) : brushY)
+                    }
                     // Weight each paint by its tinting strength (lightness), as real pigments behave.
-                    let pxY = self.cov[i] > 0.01 ? Spectral.luminance(self.ks, at: i * B) : brushY
-                    let old = self.cov[i] * (1 - a) * pxY
-                    let new = a * brushY
+                    let pc = preCov[slot]
+                    let old = pc * (1 - target) * preY[slot]
+                    let new = target * brushY
                     let total = old + new
                     guard total > 0.0000001 else { return }
                     let wn = new / total, wo = old / total
-                    for b in 0..<B { self.ks[i * B + b] = self.ks[i * B + b] * wo + brushKS[b] * wn }
-                    for c in 0..<3 { self.res[i * 3 + c] = self.res[i * 3 + c] * wo + brushRes[c] * wn }
-                    self.cov[i] = self.cov[i] + a * (1 - self.cov[i])
+                    for b in 0..<B { self.ks[i * B + b] = preKS[slot * B + b] * wo + brushKS[b] * wn }
+                    for c in 0..<3 { self.res[i * 3 + c] = preRes[slot * 3 + c] * wo + brushRes[c] * wn }
+                    self.cov[i] = pc + target * (1 - pc)
                 }
             case .smudge:
                 let carry = brushKS, carryRes = brushRes, carryCov = brushCov
