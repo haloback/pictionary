@@ -505,10 +505,10 @@ enum TextStyler {
             let height = shape.applyingFilter("CIHeightFieldFromMask", parameters: [kCIInputRadiusKey: size * CGFloat(0.03 + 0.07 * s.emboss)]).cropped(to: ext)
             let angle = s.embossPressed ? s.lightAngle + 180 : s.lightAngle
             let sphere = CIImage(cgImage: lightSphere(angle: angle, gloss: 0.15, chisel: false))
-            let shading = FX.mono(height.applyingFilter("CIShadedMaterial", parameters: [kCIInputShadingImageKey: sphere, kCIInputScaleKey: 4 + 10 * s.emboss]))
+            let shading = FX.mono(height.applyingFilter("CIShadedMaterial", parameters: [kCIInputShadingImageKey: sphere, kCIInputScaleKey: 8 + 18 * s.emboss]))
                 .cropped(to: ext)
             let ground = FX.mix(bg, r.composited(over: bg), s.embossTint)
-            let lit = FX.blend(shading, over: ground, mode: "CIOverlayBlendMode")
+            let lit = FX.blend(shading, over: ground, mode: "CIHardLightBlendMode")
                 .applyingFilter("CIColorClamp", parameters: [
                     "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
                 ])

@@ -147,7 +147,32 @@ enum CoverComposer {
         doc.palette = palette.colors
         doc.archetypeName = arch.label
         doc.background = palette.dark
-        if let styleID, let preset = TextStylePreset.preset(styleID),
+        // How light is the ground behind the title? Render the cover without type, tiny, and look.
+        var lightGround = false
+        if let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }) {
+            var probe = doc
+            probe.layers.removeAll { $0.textContent != nil }
+            if let img = CoverRenderer.shared.render(probe, size: CGSize(width: 40, height: 64), quality: .preview) {
+                let p = PixelSampler.pixels(img, maxSide: 64)
+                let f = doc.layers[ti].frame
+                var sum = 0.0, count = 0.0
+                let x0 = max(0, Int(f.x * Double(p.w))), x1 = min(p.w, max(x0 + 1, Int(f.maxX * Double(p.w))))
+                let y0 = max(0, Int(f.y * Double(p.h))), y1 = min(p.h, max(y0 + 1, Int(f.maxY * Double(p.h))))
+                for y in y0..<y1 {
+                    for x in x0..<x1 {
+                        let i = (y * p.w + x) * 4
+                        sum += 0.2126 * Double(p.data[i]) + 0.7152 * Double(p.data[i + 1]) + 0.0722 * Double(p.data[i + 2])
+                        count += 1
+                    }
+                }
+                lightGround = count > 0 && sum / count / 255 > 0.55
+            }
+            if lightGround, let t = doc.layers[ti].textContent, t.color.luminance > 0.35 {
+                doc.layers[ti].textContent?.color = palette.dark
+            }
+        }
+        // Metallic and glowing styles vanish on pale grounds; there the clean type stands.
+        if let styleID, !lightGround, let preset = TextStylePreset.preset(styleID),
            let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
             let keepColor = t.color
             preset.apply(to: &t, palette: palette)
@@ -208,8 +233,11 @@ enum CoverComposer {
 
     static func photo(_ c: DesignContext, _ f: NRect, index: Int = 0, effect: Bool = true) -> Layer {
         guard !c.images.isEmpty else {
-            // No photo: a generative ground stands in so every composition still works.
-            var l = Layer.fill(c.fill, colors: [c.palette.dark, c.palette.accent, c.palette.dominant, c.palette.light], frame: f, seed: c.seed)
+            // No photo: a painted material in the cover's colors stands in, so every composition still has art.
+            let art = ["mat.watercolor.palette.b", "mat.marble.palette.f", "mat.inkwash.palette.b", "mat.nebula.palette.b",
+                       "mat.aurora.palette.b", "mat.clouds.palette.b", "mat.pour.palette.f", "mat.agate.palette.f"]
+            var l = Layer.fill(.material, colors: [c.palette.dark, c.palette.accent, c.palette.light], frame: f, seed: c.seed)
+            l.fillContent?.materialID = art[abs(c.seed) % art.count]
             l.name = "Artwork"
             return l
         }

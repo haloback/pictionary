@@ -272,24 +272,25 @@ enum Watercolor {
         } else {
             ramp = PigmentMixer.expand(inks, between: 6)
         }
-        let hue = FX.gradientMap(remap(blend, 1.8, 0.5), ramp)
+        let hue = FX.gradientMap(remap(blend, 2.6, 0.5), ramp)
         // How much pigment: thinner washes show more paper.
-        let density = remap(field(e, seed: seed &+ 11, cells: max(2, cellsBig / 2 + 1)), 2.2, 0.35 + 0.45 * strength)
+        // Steep enough that washes end in shapes, with bare paper between them.
+        let density = remap(field(e, seed: seed &+ 11, cells: max(3, cellsBig)), 4.0, 0.2 + 0.5 * strength)
         let paperImg = FX.solid(paper, e)
         var wash = hue.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: paperImg, kCIInputMaskImageKey: density]).cropped(to: e)
         // Tide lines: pigment pools where a bloom dried.
         let shifted = density.clampedToExtent().transformed(by: CGAffineTransform(translationX: unit * 0.04, y: unit * 0.04)).cropped(to: e)
         let edge = FX.mono(FX.blend(shifted, over: density, mode: "CIDifferenceBlendMode"))
         let k: Double = 5 * (0.4 + wetness)
-        let tide = remap(edge, -k, 1 - 0.5 * k)   // 1 - k * edge
-        wash = FX.blend(FX.mix(FX.solid(.white, e), tide, 0.55), over: wash, mode: "CIMultiplyBlendMode")
+        let tide = remap(edge, -k * 2, 1 - k)   // 1 - 2k * edge
+        wash = FX.blend(FX.mix(FX.solid(.white, e), tide, 0.85), over: wash, mode: "CIMultiplyBlendMode")
         // Granulation: pigment settles in the paper's tooth.
         if granulation > 0 {
             let tooth = remap(FX.noise(e, seed: seed &+ 3, grainSize: max(1, unit * 0.012), strength: 1), 0.35 * granulation, 1 - 0.18 * granulation)
             wash = FX.blend(tooth, over: wash, mode: "CIMultiplyBlendMode")
         }
         // Soft bleeding edges between paints.
-        wash = FX.displace(wash, by: field(e, seed: seed &+ 21, cells: cellsSmall * 2), scale: unit * CGFloat(0.05 + 0.15 * wetness))
+        wash = FX.displace(wash, by: field(e, seed: seed &+ 21, cells: cellsSmall * 2), scale: unit * CGFloat(0.03 + 0.08 * wetness))
         return wash.cropped(to: e)
     }
 }
