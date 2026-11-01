@@ -201,7 +201,7 @@ enum SignatureLibrary {
                 doc.layers.append(fillLayer(f, r, p, seed: n * 37 + 11))
             case .photo(let r, let clip, let look, let focusY, let zoom, let index, let fallback):
                 if photos.isEmpty {
-                    var l = fillLayer(fallback, r, p, seed: n * 53 + 5)
+                    var l = fillLayer(standIn(fallback), r, p, seed: n * 53 + 5)
                     l.clipShape = clip
                     l.name = "Artwork"
                     doc.layers.append(l)
@@ -269,15 +269,45 @@ enum SignatureLibrary {
         case .radial(let a, let b):
             l = Layer.fill(.radial, colors: [a.resolve(p), b.resolve(p)], frame: r, intensity: 0.55)
         case .material(let id):
-            l = Layer.fill(.material, colors: [p.bg, p.accent, p.paper], frame: r, seed: seed)
+            l = Layer.fill(.material, colors: materialColors(id, p), frame: r, seed: seed)
             l.fillContent?.materialID = id
         case .watercolor(let paints):
-            l = Layer.fill(.wetInWet, colors: paints.map { $0.resolve(p) } + [p.paper], frame: r, seed: seed, intensity: 0.55)
+            // A soft, cloudy wash of the paints on paper: atmosphere rather than hard-edged blots.
+            l = Layer.fill(.smoke, colors: paints.map { $0.resolve(p) } + [p.paper], frame: r, seed: seed, intensity: 0.12)
         case .grain(let c):
             l = Layer.fill(.grain, colors: [c.resolve(p), c.resolve(p).withLightness(max(0, c.resolve(p).hsl.l - 0.04))], frame: r, seed: seed, intensity: 0.3)
         }
         l.name = "Ground"
         return l
+    }
+
+    /// Surface textures print tone-on-tone in the ground color (paper, cloth, stone): the texture is felt, not seen.
+    static let tonalStructures: Set<String> = ["concrete", "dust", "linen", "crumpled", "fibers", "canvas", "felt", "denim", "leather",
+                                               "granite", "slate", "scratches", "grunge", "distressed", "rust", "cracked"]
+
+    private static func materialColors(_ id: String, _ p: SigPalette) -> [RGBA] {
+        let parts = id.split(separator: ".")
+        guard parts.count >= 3, parts[2] == "palette" else { return [p.bg, p.accent, p.paper] }
+        let structure = String(parts[1])
+        let l = p.bg.hsl.l
+        if tonalStructures.contains(structure) {
+            return [p.bg.withLightness(max(0, l - 0.08)), p.bg, p.bg.withLightness(min(1, l + 0.06))]
+        }
+        if structure == "smoke" {
+            return [p.bg.withLightness(max(0, l - 0.05)), p.bg, p.muted]
+        }
+        return [p.bg, p.accent, p.paper]
+    }
+
+    /// Picture areas on a book without a photo yet: atmospheric materials stay; busy or patterned ones become a soft painted wash.
+    static let standInStructures: Set<String> = ["smoke", "nebula", "aurora", "lightleak", "stars", "marble", "inkwash", "topo"]
+
+    private static func standIn(_ f: SigFill) -> SigFill {
+        if case .material(let id) = f {
+            let parts = id.split(separator: ".")
+            if parts.count >= 2, !standInStructures.contains(String(parts[1])) { return .watercolor([.bg, .muted, .accent]) }
+        }
+        return f
     }
 
     /// The photo layer plus any tint layers its look needs (clipped to the photo).

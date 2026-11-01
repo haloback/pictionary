@@ -194,7 +194,7 @@ extension SignatureLibrary {
         e = []
         e.append(.fill(.grain(.bg), .full))
         e.append(.text(.title, NRect(0.08, 0.08, 0.84, 0.28), SigType(["DMSerifDisplay-Regular"], letterCase: .asTyped, tracking: -0.01, lineHeight: 0.9, breaks: .lines(2))))
-        e.append(.photo(NRect(0, 0.42, 1, 0.13), clip: nil, look: .mono, focusY: 0.3, zoom: 2.2, index: 0, fallback: .material("mat.inkwash.palette.f")))
+        e.append(.photo(NRect(0, 0.42, 1, 0.13), clip: nil, look: .mono, focusY: 0.42, zoom: 1.7, index: 0, fallback: .material("mat.inkwash.palette.f")))
         e.append(.text(.subtitleOr("A MEMOIR"), NRect(0.2, 0.6, 0.6, 0.02), SigType(["JosefinSans-Bold"], color: .accent, tracking: 0.4)))
         e.append(.text(.author, NRect(0.15, 0.875, 0.7, 0.04), SigType(["DMSerifDisplay-Italic"], letterCase: .asTyped)))
         out.append(SignatureDesign(id: "memoir-eyes", name: "Eyes", genre: .memoir,
@@ -317,8 +317,9 @@ extension SignatureLibrary {
 
         // Deep Field: the universe full bleed, a wide display title floating in its dark sky (science).
         e = []
-        e.append(.photo(.full, clip: nil, look: .natural, focusY: 0.5, zoom: 1, index: 0, fallback: .material("mat.nebula.palette.b")))
-        e.append(.scrim(NRect(0, 0, 1, 0.45), .hex("000000"), angle: 270, strength: 0.7))
+        e.append(.fill(.solid(.hex("000000")), .full))
+        e.append(.photo(NRect(0, 0.36, 1, 0.64), clip: nil, look: .natural, focusY: 0.5, zoom: 1, index: 0, fallback: .material("mat.nebula.palette.b")))
+        e.append(.scrim(NRect(0, 0.36, 1, 0.12), .hex("000000"), angle: 270, strength: 0.9))
         e.append(.scrim(NRect(0, 0.78, 1, 0.22), .hex("000000"), angle: 90, strength: 0.6))
         e.append(.text(.title, NRect(0.07, 0.08, 0.86, 0.22), SigType(["Syne-ExtraBold"], color: .paper, tracking: 0.02, lineHeight: 0.92, breaks: .lines(2))))
         e.append(.text(.subtitle, NRect(0.1, 0.32, 0.8, 0.022), SigType(["JosefinSans-Bold"], color: .accent, tracking: 0.2)))

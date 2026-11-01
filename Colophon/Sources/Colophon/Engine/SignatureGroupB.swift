@@ -45,8 +45,8 @@ extension SignatureLibrary {
         e.append(.fill(.solid(.bg), NRect(0, 0.66, 1, 0.34)))
         e.append(.text(.title, NRect(0.07, 0.695, 0.86, 0.14), SigType(["Montserrat-Black"], tracking: -0.01, lineHeight: 0.95, align: .left, breaks: .lines(2))))
         e.append(.shape(.rule, NRect(0.07, 0.86, 0.12, 0.004), .accent, stroke: 0, rotation: 0))
-        e.append(.text(.author, NRect(0.07, 0.885, 0.55, 0.032), SigType(["JosefinSans-Bold"], tracking: 0.2, align: .left)))
-        e.append(.text(.subtitleOr("A THRILLER"), NRect(0.6, 0.892, 0.33, 0.018), SigType(["Montserrat-Black"], color: .muted, tracking: 0.3, align: .right)))
+        e.append(.text(.author, NRect(0.07, 0.878, 0.6, 0.032), SigType(["JosefinSans-Bold"], tracking: 0.2, align: .left)))
+        e.append(.text(.subtitleOr("A THRILLER"), NRect(0.07, 0.928, 0.4, 0.016), SigType(["Montserrat-Black"], color: .muted, tracking: 0.3, align: .left)))
         out.append(SignatureDesign(id: "thriller-window-grid", name: "Window Grid", genre: .thriller,
                                    idea: "The city glows through the mullions of a high-rise window; the title sits on the dark sill beneath.",
                                    tags: ["photo", "dark", "modern", "urban", "bold type", "atmospheric"], elements: e,
@@ -264,7 +264,7 @@ extension SignatureLibrary {
         e.append(.shape(.triangle, NRect(0.12, 0.12, 0.76, 0.7), .alpha(.accent, 0.92), stroke: 0, rotation: 0))
         e.append(.shape(.ellipse, NRect(0.08, 0.79, 0.84, 0.06), .alpha(.accent, 0.92), stroke: 0, rotation: 0))
         e.append(.shape(.ellipse, NRect(0.465, 0.1, 0.07, 0.04), .accent, stroke: 0, rotation: 0))
-        e.append(.text(.title, NRect(0.27, 0.6, 0.46, 0.15), SigType(["Anton-Regular"], color: .bg, tracking: 0.02, lineHeight: 0.92, breaks: .lines(2))))
+        e.append(.text(.title, NRect(0.28, 0.56, 0.44, 0.2), SigType(["Anton-Regular"], color: .bg, tracking: 0.02, lineHeight: 0.92, breaks: .lines(2))))
         e.append(.text(.author, NRect(0.1, 0.89, 0.8, 0.035), SigType(["Montserrat-Black"], tracking: 0.3)))
         out.append(SignatureDesign(id: "mystery-under-the-lamp", name: "Under the Lamp", genre: .mystery,
                                    idea: "Noir: a single streetlamp throws a cone of light into the dark, and the title stands inside it.",
