@@ -69,6 +69,7 @@ struct EditorView: View {
 
             Button { model.showTemplates = true } label: { Label("Templates", systemImage: "rectangle.grid.3x2") }
                 .help("Thousands of ready-made designs, shown with your title")
+            RandomizeButton()
             Button { model.generateVariations() } label: { Label("New Ideas", systemImage: "sparkles") }
                 .help("Design a new batch of covers from this brief")
             Button { model.remixCurrent() } label: { Label("More Like This", systemImage: "square.stack.3d.down.right") }

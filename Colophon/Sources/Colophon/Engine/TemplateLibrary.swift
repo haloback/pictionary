@@ -1,5 +1,29 @@
 import Foundation
 
+/// Everything that makes a generated cover what it is. Covers remember their recipe, so the randomizer
+/// can re-roll some parts and keep the rest.
+struct CoverRecipe: Codable, Hashable {
+    var genre: Genre
+    var archetype: Archetype
+    var pairing: String
+    var paletteName: String
+    var palette: [RGBA]
+    var styleID: String?
+    var fill: FillStyle
+    var effect: String?
+    var borderID: String?
+    var flourish: TextFlourish
+    var seed: Int
+
+    /// Identity without the seed, for "don't show me that again".
+    var signature: Int {
+        var h = Hasher()
+        h.combine(archetype); h.combine(pairing); h.combine(paletteName); h.combine(palette)
+        h.combine(styleID); h.combine(fill); h.combine(effect); h.combine(borderID); h.combine(flourish)
+        return h.finalize()
+    }
+}
+
 /// A ready-made cover design: layout, type pairing, palette, title style, ground and trim.
 /// Applying it rebuilds the cover around the author's own title, names and photos.
 struct CoverTemplate: Identifiable, Hashable {
@@ -17,6 +41,11 @@ struct CoverTemplate: Identifiable, Hashable {
     let flourish: TextFlourish
     let tags: [String]
     var needsPhoto: Bool { !archetype.worksWithoutImage }
+
+    var recipe: CoverRecipe {
+        CoverRecipe(genre: genre, archetype: archetype, pairing: pairing, paletteName: paletteName, palette: palette, styleID: styleID,
+                    fill: fill, effect: effect, borderID: borderID, flourish: flourish, seed: TemplateLibrary.seed(id))
+    }
 
     static func == (a: CoverTemplate, b: CoverTemplate) -> Bool { a.id == b.id }
     func hash(into h: inout Hasher) { h.combine(id) }
@@ -54,21 +83,57 @@ final class TemplateLibrary {
 
     /// The template applied to `base`: keeps its book details, photos, fonts and canvas.
     func apply(_ t: CoverTemplate, to base: CoverDocument) -> CoverDocument {
-        let treatment = TemplateLibrary.pairing(named: t.pairing, genre: t.genre)
-        var doc = CoverComposer.make(base: base, archetype: t.archetype, treatment: treatment, palette: PaletteRoles(t.palette),
-                                     fill: t.fill, effect: t.effect, styleID: t.styleID, seed: TemplateLibrary.seed(t.id))
+        var doc = TemplateLibrary.build(t.recipe, base: base)
+        doc.templateID = t.id
+        return doc
+    }
+
+    /// A cover built from a recipe around `base`'s book details, photos, fonts and canvas.
+    static func build(_ r: CoverRecipe, base: CoverDocument) -> CoverDocument {
+        let treatment = pairing(named: r.pairing, genre: r.genre)
+        var doc = CoverComposer.make(base: base, archetype: r.archetype, treatment: treatment, palette: PaletteRoles(r.palette),
+                                     fill: r.fill, effect: r.effect, styleID: r.styleID, seed: r.seed)
         for i in doc.layers.indices {
             guard let role = doc.layers[i].textContent?.role, role == .subtitle || role == .series else { continue }
-            doc.layers[i].textContent?.flourish = role == .series ? .rules : t.flourish
+            doc.layers[i].textContent?.flourish = role == .series ? .rules : r.flourish
         }
-        if let bid = t.borderID, let item = DecorLibrary.shared.item(bid) {
-            let (a, b) = DecorLibrary.shared.colors(for: item, palette: PaletteRoles(t.palette))
+        if let bid = r.borderID, let item = DecorLibrary.shared.item(bid) {
+            let (a, b) = DecorLibrary.shared.colors(for: item, palette: PaletteRoles(r.palette))
             let border = Layer.decor(bid, color: a, color2: b, frame: .full)
             let i = doc.layers.firstIndex { $0.textContent != nil } ?? doc.layers.count
             doc.layers.insert(border, at: i)
         }
-        doc.templateID = t.id
+        doc.recipe = r
+        doc.templateID = nil
         return doc
+    }
+
+    /// Tags shown as filter chips in the browser.
+    static let tagChips: [String] = ["Photo", "No Photo", "Dark", "Light", "Minimal", "Bold Type", "Elegant", "Vintage", "Modern",
+                                    "Script", "Condensed", "Metallic", "Border"]
+
+    /// Look tags for a template, from its parts.
+    static func lookTags(palette: NamedPalette, pairing: TypeTreatment, archetype: Archetype, styleID: String?, border: Bool) -> [String] {
+        var t: [String] = []
+        let dark = palette.colors.first ?? .ink
+        t.append(dark.luminance < 0.08 ? "dark" : "light")
+        if archetype == .minimal || archetype == .goldenGrid { t.append("minimal") }
+        if archetype == .typographic || pairing.stacked { t.append("bold type") }
+        let f = pairing.titleFont.lowercased()
+        if ["script", "vibes", "parisienne", "pinyon", "allura", "sacramento", "brush", "kaushan"].contains(where: f.contains) { t.append("script") }
+        if ["anton", "bebas", "league", "sixcaps", "antonio", "oswald", "bigshoulders", "teko"].contains(where: f.contains) { t.append("condensed") }
+        if ["playfair", "bodoni", "didot", "cormorant", "dmserif", "prata", "pinyon", "vibes", "poiret"].contains(where: f.contains) { t.append("elegant") }
+        if ["sepia", "bronze", "harvest", "desert", "terracotta", "archive"].contains(where: palette.name.lowercased().contains)
+            || ["unifraktur", "fell", "rye", "uncial", "specialelite", "caslon", "limelight"].contains(where: f.contains) { t.append("vintage") }
+        if ["montserrat", "syne", "unbounded", "archivo", "josefin", "orbitron", "michroma", "futura", "avenir"].contains(where: f.contains) { t.append("modern") }
+        if let s = styleID, s.contains("metal") || s.contains("gold") || s.contains("chrome") || s.contains("silver") || s == "gilded" || s == "goldleaf" { t.append("metallic") }
+        if border { t.append("border") }
+        return t
+    }
+
+    func search(_ query: String, genre: Genre?, tags: Set<String>, photoOnly: Bool? = nil) -> [CoverTemplate] {
+        let wanted = tags.map { $0.lowercased() }
+        return search(query, genre: genre, photoOnly: photoOnly).filter { t in wanted.allSatisfy { t.tags.contains($0) } }
     }
 
     /// Surfaces too dark to read on a dark cover.
@@ -107,7 +172,7 @@ final class TemplateLibrary {
             let borders: [String] = TemplateLibrary.borderPool(for: genre)
             let flourishes: [TextFlourish] = [.none, .rules, .none, .diamonds, .underline, .none, .box, .dots]
             for (ai, arch) in archetypes.enumerated() {
-                for v in 0..<12 {
+                for v in 0..<20 {
                     let pairing = pairings[(v + ai) % pairings.count]
                     let pal = pals[(v * 5 + ai * 3) % pals.count]
                     let styleID: String? = (v % 4 == 3 || stylePool.isEmpty) ? nil : stylePool[(v * 7 + ai * 11) % stylePool.count]
@@ -119,8 +184,8 @@ final class TemplateLibrary {
                     let font = FontCatalog.displayName(pairing.treatment.titleFont)
                     let name = "\(pal.name) \(arch.label), \(font)"
                     var tags: [String] = [genre.label.lowercased(), arch.label.lowercased(), pal.name.lowercased(), font.lowercased(), pairing.treatment.name.lowercased()]
-                    if borderID != nil { tags.append("border") }
                     if arch.worksWithoutImage { tags.append("no photo") } else { tags.append("photo") }
+                    tags += TemplateLibrary.lookTags(palette: pal, pairing: pairing.treatment, archetype: arch, styleID: styleID, border: borderID != nil)
                     list.append(CoverTemplate(id: id, name: name, genre: genre, archetype: arch, pairing: pairing.treatment.name,
                                               paletteName: pal.name, palette: pal.colors, styleID: styleID, fill: fill, effect: effect,
                                               borderID: borderID, flourish: flourishes[(v + ai) % flourishes.count], tags: tags))
@@ -143,7 +208,7 @@ final class TemplateLibrary {
     }
 
     /// Borders that suit a genre, looked up by keyword in the decor library.
-    private static func borderPool(for genre: Genre) -> [String] {
+    static func borderPool(for genre: Genre) -> [String] {
         let words: [String]
         switch genre {
         case .fantasy, .historical: words = ["gold", "deco", "filigree", "victorian", "double", "greek"]

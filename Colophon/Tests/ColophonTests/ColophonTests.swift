@@ -721,6 +721,24 @@ final class SampleRenderTests: XCTestCase {
                   "Styles: " + newNames.joined(separator: "; "), "Emboss, watercolor, overprint")
         n += 1
 
+        // Smart randomize: twelve rolls of one cover, colors locked, then fully free.
+        var rollImgs: [CGImage] = []
+        var rollBase = tbook
+        rollBase.book.genre = .mystery
+        rollBase = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .mystery, photoOnly: false)[5], to: rollBase)
+        var recentRolls: [Int] = []
+        for k in 0..<12 {
+            var opts = SmartRandomizer.Options()
+            opts.locks = k < 6 ? [.colors] : []
+            opts.creativity = k < 6 ? 0.3 : 0.7
+            let doc = SmartRandomizer.randomize(rollBase, options: opts, recent: recentRolls, seed: 900 + k)
+            if let sig = doc.recipe?.signature { recentRolls.append(sig) }
+            if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 300, height: 480), quality: .full) { rollImgs.append(img) }
+        }
+        gridSheet(rollImgs, cols: 6, cell: CGSize(width: 300, height: 480), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-randomize.png", n),
+                  "Smart randomize: top row with colors locked (genre classics), bottom row fully free (wild)", "Templates")
+        n += 1
+
         // Paint engine: glazes that mix like pigment, and smudging.
         var paintImgs: [CGImage] = []
         func line(_ tool: PaintTool, _ hex: String, _ pts: [(Double, Double)], size: Double = 0.12, strength: Double = 0.8, wet: Double = 0.3) -> PaintStroke {

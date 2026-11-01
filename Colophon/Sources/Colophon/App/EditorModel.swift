@@ -129,6 +129,10 @@ final class EditorModel {
     var showSeries = false
     var showMaterialBackground = false
     var paintColor = RGBA(hex: "2A3B9E")
+    var randomLocks: Set<RandomAspect> = []
+    var randomCreativity = 0.35
+    var showSaveTemplate = false
+    @ObservationIgnored var recentRecipes: [Int] = []
     var paintStrength = 0.7
     var paintWetness = 0.4
     var showDecor: DecorLibrary.Kind?
@@ -501,6 +505,47 @@ final class EditorModel {
             guard let i = d.index(of: id), let n = d.layers[i].paintContent?.strokes.count, n > 0 else { return }
             d.layers[i].paintContent?.strokes[n - 1].points.append(NPoint(x: canvasX, y: canvasY))
         }
+    }
+
+    // MARK: Smart randomize and saved templates
+
+    /// Re-rolls the unlocked parts of the cover (undoable). Locked layers and locked aspects stay.
+    func smartRandomize() {
+        var opts = SmartRandomizer.Options()
+        opts.locks = randomLocks
+        opts.creativity = randomCreativity
+        let fresh = SmartRandomizer.randomize(document, options: opts, recent: recentRecipes, seed: Int.random(in: 1...999_999))
+        if let sig = fresh.recipe?.signature {
+            recentRecipes.append(sig)
+            if recentRecipes.count > 40 { recentRecipes.removeFirst() }
+        }
+        let keepSelection = selection
+        mutate { d in d = fresh }
+        selection = keepSelection.flatMap { id in document.layer(id) != nil ? id : nil }
+    }
+
+    func lockTextLayers(_ locked: Bool) {
+        mutate { d in for i in d.layers.indices where d.layers[i].textContent != nil { d.layers[i].isLocked = locked } }
+    }
+
+    func unlockAllLayers() {
+        mutate { d in for i in d.layers.indices { d.layers[i].isLocked = false } }
+    }
+
+    func saveAsTemplate(name: String, includePictures: Bool) {
+        do {
+            let t = try UserTemplateStore.shared.save(document, name: name, includePictures: includePictures)
+            toast = "Saved template \(t.name)"
+        } catch {
+            toast = "Couldn't save the template: \(error.localizedDescription)"
+        }
+    }
+
+    func applyUserTemplate(_ t: UserTemplate) {
+        let rebuilt = UserTemplateStore.apply(t, to: document)
+        mutate { d in d = rebuilt }
+        selection = nil
+        toast = "Applied \(t.name)"
     }
 
     /// Rebuilds the cover from a template around this book's title, names and photos (undoable).

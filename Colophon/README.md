@@ -58,7 +58,13 @@ It's built for people with ideas but no formal design training. The guardrails (
 - **Masks:** every structure is also available as a soft, hard or inverted gray mask.
 - **Where to use them:** Add → Material Background…, a Painted Ground's Material style, the title's Fine-Tune Style → Material → Library, and a layer's Mask → Texture, which wears the layer through grunge, paper or brush.
 
-**Templates.** 2,448 ready-made designs (12 genres × 17 layouts × 12 variations). Each pairs a layout with one of 50+ font pairings, 40 named palettes, a title style, a painted ground and, often, a border. The browser previews every template with your own title, names and photos; one click rebuilds the cover (undoable).
+**Templates.** 4,080 ready-made designs (12 genres × 17 layouts × 20 variations), filterable by genre and by look (photo, dark, light, minimal, bold type, elegant, vintage, modern, script, condensed, metallic, border). Each pairs a layout with one of 50+ font pairings, 40 named palettes, a title style, a painted ground and, often, a border. The browser previews every template with your own title, names and photos; one click rebuilds the cover (undoable).
+
+**Smart randomize.** The dice (⌘R) re-roll a cover's layout, colors, fonts, title style, background, photo look and borders, choosing like a designer: genre-appropriate type and layouts, palettes drawn from the photo and its harmonies, legible titles, and never a recent repeat. Lock any of those parts, or lock individual layers with the padlock, and only the rest changes. A creativity slider runs from genre classics to wild.
+
+**Your own templates.** Save any cover as a template (with or without its pictures), reuse it on other books (their title, names and photos drop in), and delete it when you no longer want it.
+
+**Paint and smudge.** A spectral paint engine: Paint (real pigments; wet brushes pick up and mix), Smudge (on a cover without paint it smudges a copy of the artwork), Blend and Lift.
 
 **Subtitles, taglines and series.** Type them in the brief and they appear on the cover in free space near the title, in every layout; clearing a field removes its line. Any line can carry a decoration: flanking rules ("— A NOVEL —"), dots, diamonds, a box, a band behind it, an underline or corner brackets.
 

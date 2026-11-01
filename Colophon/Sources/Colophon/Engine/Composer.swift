@@ -116,8 +116,11 @@ enum CoverComposer {
             let curatedIDs = TextStylePreset.forGenre(base.book.genre)
             let pool = genrePool
             let styles = (i % 2 == 0 || pool.isEmpty) ? curatedIDs : pool
-            if !styles.isEmpty, (i + seed) % 3 != 2,
-               let preset = TextStylePreset.preset(styles[(i * 7 + round + seed) % styles.count]),
+            let chosenStyle: String? = (!styles.isEmpty && (i + seed) % 3 != 2) ? styles[(i * 7 + round + seed) % styles.count] : nil
+            doc.recipe = CoverRecipe(genre: base.book.genre, archetype: arch, pairing: treatment.name, paletteName: "Idea",
+                                     palette: palette.colors, styleID: chosenStyle, fill: ctx.fill, effect: ctx.effect,
+                                     borderID: nil, flourish: .none, seed: ctx.seed)
+            if let chosenStyle, let preset = TextStylePreset.preset(chosenStyle),
                let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
                 // Keep the treatment's font and colors; the style adds material and depth.
                 let keepColor = t.color

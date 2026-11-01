@@ -665,6 +665,8 @@ struct CoverDocument: Codable {
     var archetypeName: String = ""
     /// The template this cover was last built from, if any.
     var templateID: String?
+    /// How this cover was generated (layout, colors, fonts, style...), for the smart randomizer.
+    var recipe: CoverRecipe?
     /// Font files the user imported, keyed by PostScript name, so the project opens anywhere.
     var fonts: [String: Data] = [:]
     var paperback = PrintSettings()
@@ -683,6 +685,7 @@ struct CoverDocument: Codable {
         palette = try c.decodeIfPresent([RGBA].self, forKey: .palette) ?? []
         archetypeName = try c.decodeIfPresent(String.self, forKey: .archetypeName) ?? ""
         templateID = try c.decodeIfPresent(String.self, forKey: .templateID)
+        recipe = try c.decodeIfPresent(CoverRecipe.self, forKey: .recipe)
         fonts = try c.decodeIfPresent([String: Data].self, forKey: .fonts) ?? [:]
         paperback = try c.decodeIfPresent(PrintSettings.self, forKey: .paperback) ?? PrintSettings()
     }

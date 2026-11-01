@@ -41,11 +41,15 @@ struct TemplateBrowserSheet: View {
     @State private var genre: Genre?
     @State private var showPhotoLayouts = true
     @State private var limit = 120
+    @State private var tags: Set<String> = []
+    @State private var mine = false
+    @State private var pendingDelete: UserTemplate?
+    private var store: UserTemplateStore { .shared }
 
     private var hasPhoto: Bool { !model.document.photoLayers.isEmpty || !model.document.assetOrder.isEmpty }
 
     private var results: [CoverTemplate] {
-        let all = TemplateLibrary.shared.search(query, genre: genre)
+        let all = TemplateLibrary.shared.search(query, genre: genre, tags: tags)
         return (hasPhoto || showPhotoLayouts) ? all : all.filter { !$0.needsPhoto }
     }
 
@@ -66,18 +70,42 @@ struct TemplateBrowserSheet: View {
                 }
                 TextField("Search palette, layout, font…", text: $query)
                     .textFieldStyle(.roundedBorder).frame(width: 220)
+                Button { dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { model.showSaveTemplate = true } } label: {
+                    Label("Save Current Cover…", systemImage: "square.and.arrow.down")
+                }
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             .padding(14)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    chip("All", selected: genre == nil) { genre = nil }
-                    ForEach(Genre.allCases) { g in chip(g.label, selected: genre == g) { genre = g } }
+                    chip("My Templates (\(store.templates.count))", selected: mine) { mine = true }
+                    Divider().frame(height: 16)
+                    chip("All", selected: !mine && genre == nil) { mine = false; genre = nil }
+                    ForEach(Genre.allCases) { g in chip(g.label, selected: !mine && genre == g) { mine = false; genre = g } }
                 }
                 .padding(.horizontal, 14)
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, 6)
+            if !mine {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Text("Look").font(.system(size: 11)).foregroundStyle(.secondary)
+                        ForEach(TemplateLibrary.tagChips, id: \.self) { tag in
+                            let key = tag.lowercased()
+                            chip(tag, selected: tags.contains(key)) {
+                                if tags.contains(key) { tags.remove(key) } else { tags.insert(key) }
+                            }
+                        }
+                        if !tags.isEmpty { Button("Clear") { tags = [] }.buttonStyle(.link).font(.system(size: 11)) }
+                    }
+                    .padding(.horizontal, 14)
+                }
+                .padding(.bottom, 10)
+            }
             Divider()
+            if mine {
+                myTemplates
+            } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 14)], spacing: 16) {
                     ForEach(results.prefix(limit)) { t in
@@ -95,11 +123,73 @@ struct TemplateBrowserSheet: View {
                     Text("No templates match “\(query)”.").foregroundStyle(.secondary).padding(40)
                 }
             }
+            }
+        }
+        .confirmationDialog("Delete “\(pendingDelete?.name ?? "")”?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
+            Button("Delete Template", role: .destructive) {
+                if let t = pendingDelete { store.delete(t.id) }
+                pendingDelete = nil
+            }
+        } message: {
+            Text("This removes the saved template. Covers already made with it are not affected.")
         }
         .frame(width: 960, height: 700)
         .onAppear { genre = model.document.book.genre }
         .onChange(of: query) { limit = 120 }
         .onChange(of: genre) { limit = 120 }
+    }
+
+    @ViewBuilder
+    private var myTemplates: some View {
+        if store.templates.isEmpty {
+            VStack(spacing: 10) {
+                Image(systemName: "square.and.arrow.down.on.square").font(.system(size: 30)).foregroundStyle(.secondary)
+                Text("No saved templates yet").font(.headline)
+                Text("Design a cover you like, then use Save Current Cover to reuse it on other books.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 14)], spacing: 16) {
+                    ForEach(store.templates) { t in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Button {
+                                model.applyUserTemplate(t)
+                                dismiss()
+                            } label: {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.1))
+                                    if let img = store.thumbnail(t.id) {
+                                        Image(decorative: img, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                                    } else {
+                                        Image(systemName: "photo").foregroundStyle(.secondary)
+                                    }
+                                }
+                                .aspectRatio(1 / 1.6, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+                            }
+                            .buttonStyle(.plain)
+                            HStack(spacing: 4) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(t.name).font(.system(size: 10.5)).lineLimit(1)
+                                    Text(t.genre.label + (t.includesPictures ? ", with pictures" : "")).font(.system(size: 9.5)).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                Button { pendingDelete = t } label: { Image(systemName: "trash") }
+                                    .buttonStyle(.borderless).help("Delete this template")
+                            }
+                        }
+                        .contextMenu {
+                            Button("Use on This Cover") { model.applyUserTemplate(t); dismiss() }
+                            Button("Delete…", role: .destructive) { pendingDelete = t }
+                        }
+                    }
+                }
+                .padding(14)
+            }
+        }
     }
 
     private func chip(_ label: String, selected: Bool, _ action: @escaping () -> Void) -> some View {

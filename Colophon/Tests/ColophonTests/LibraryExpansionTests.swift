@@ -220,4 +220,78 @@ final class LibraryExpansionTests: XCTestCase {
         XCTAssertGreaterThan(light, p.w * p.h / 50, "some bare paper should show")
         XCTAssertGreaterThan(painted, p.w * p.h / 20, "there should be paint")
     }
+
+    func testTemplatesByGenreAndTag() {
+        let lib = TemplateLibrary.shared
+        XCTAssertGreaterThanOrEqual(lib.templates.count, 4000)
+        for tag in TemplateLibrary.tagChips {
+            XCTAssertFalse(lib.search("", genre: nil, tags: [tag.lowercased()]).isEmpty, tag)
+        }
+        XCTAssertFalse(lib.search("", genre: .romance, tags: ["elegant", "light"]).isEmpty)
+    }
+
+    func testSmartRandomizeHonorsLocks() throws {
+        var base = book()
+        base = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .fantasy, photoOnly: false)[3], to: base)
+        // Lock the title layer and the colors.
+        let ti = try XCTUnwrap(base.layers.firstIndex { $0.textContent?.role == .title })
+        base.layers[ti].isLocked = true
+        base.layers[ti].textContent?.text = "MY OWN TITLE"
+        var opts = SmartRandomizer.Options()
+        opts.locks = [.colors]
+        var recent: [Int] = []
+        var signatures = Set<Int>()
+        for k in 0..<10 {
+            let out = SmartRandomizer.randomize(base, options: opts, recent: recent, seed: 100 + k)
+            let r = try XCTUnwrap(out.recipe)
+            XCTAssertEqual(r.palette, base.recipe?.palette, "colors were locked")
+            XCTAssertEqual(out.textLayer(role: .title)?.textContent?.text, "MY OWN TITLE", "locked title layer kept")
+            XCTAssertTrue(out.textLayer(role: .title)?.isLocked ?? false)
+            XCTAssertNotNil(out.textLayer(role: .author))
+            recent.append(r.signature)
+            signatures.insert(r.signature)
+        }
+        XCTAssertGreaterThanOrEqual(signatures.count, 9, "randomize should not repeat itself")
+        // Everything locked except the layout: only the archetype changes.
+        opts.locks = Set(RandomAspect.allCases).subtracting([.layout])
+        let out = SmartRandomizer.randomize(base, options: opts, recent: [], seed: 7)
+        XCTAssertNotEqual(out.recipe?.archetype, base.recipe?.archetype)
+        XCTAssertEqual(out.recipe?.pairing, base.recipe?.pairing)
+        XCTAssertEqual(out.recipe?.styleID, base.recipe?.styleID)
+        XCTAssertNotNil(CoverRenderer.shared.render(out, size: CGSize(width: 200, height: 320)))
+    }
+
+    func testRandomizeInfersRecipeForHandMadeCovers() {
+        var d = CoverDocument()
+        d.book = BookInfo(title: "Night Ferry", author: "A. Reader", genre: .thriller)
+        d.layers = [.fill(.smoke, colors: [.ink, .paper]), .text("NIGHT FERRY", role: .title, frame: NRect(0.1, 0.1, 0.8, 0.3), font: "Anton-Regular", color: .nearWhite)]
+        let out = SmartRandomizer.randomize(d, options: SmartRandomizer.Options(), recent: [], seed: 3)
+        XCTAssertNotNil(out.recipe)
+        XCTAssertNotNil(out.textLayer(role: .title))
+    }
+
+    func testSaveApplyAndDeleteUserTemplates() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("colophon-templates-\(UUID().uuidString)")
+        let store = UserTemplateStore(directory: dir)
+        var original = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .romance, photoOnly: false)[2], to: book())
+        original.book.title = "The Salt Orchard"
+        let t = try store.save(original, name: "Rose Design", includePictures: false)
+        XCTAssertEqual(store.templates.count, 1)
+        XCTAssertNotNil(store.thumbnail(t.id))
+        // Survives a relaunch.
+        let again = UserTemplateStore(directory: dir)
+        XCTAssertEqual(again.templates.first?.name, "Rose Design")
+        // On another book, that book's title replaces the template's.
+        var other = CoverDocument()
+        other.book = BookInfo(title: "Winter Lanterns", subtitle: "", author: "M. Okafor", genre: .romance)
+        let applied = UserTemplateStore.apply(t, to: other)
+        XCTAssertEqual(applied.book.title, "Winter Lanterns")
+        let titleText = applied.textLayer(role: .title)?.textContent?.text.replacingOccurrences(of: "\n", with: " ") ?? ""
+        XCTAssertTrue(titleText.lowercased().contains("winter"), titleText)
+        XCTAssertNil(applied.textLayer(role: .subtitle), "the other book has no subtitle")
+        XCTAssertNotNil(CoverRenderer.shared.render(applied, size: CGSize(width: 200, height: 320)))
+        again.delete(t.id)
+        XCTAssertTrue(again.templates.isEmpty)
+        XCTAssertTrue(UserTemplateStore(directory: dir).templates.isEmpty)
+    }
 }
