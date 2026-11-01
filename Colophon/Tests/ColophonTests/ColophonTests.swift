@@ -703,11 +703,11 @@ final class SampleRenderTests: XCTestCase {
         // Emboss, watercolor letters and overprint, on paper and on a photo-like ground.
         var newImgs: [CGImage] = []
         var newNames: [String] = []
-        let picks = ["gen.emboss.emboss-blind-medium", "gen.emboss.deboss-blind-deep", "gen.emboss.emboss-gold-foil-medium", "gen.emboss.deboss-gold-foil-medium",
+        let stylePicks = ["gen.emboss.emboss-blind-medium", "gen.emboss.deboss-blind-deep", "gen.emboss.emboss-gold-foil-medium", "gen.emboss.deboss-gold-foil-medium",
                      "gen.watercolor.hansa-yellow-ultramarine-blue", "gen.watercolor.pyrrole-orange-permanent-rose", "gen.watercolor.cerulean-blue-phthalo-green",
                      "gen.paintmix.cadmium-yellow-ultramarine-blue", "gen.overprint.fluorescent-pink-medium-blue-loose", "gen.overprint.yellow-teal-tight",
                      "gen.emboss.emboss-blind-subtle", "gen.watercolor.indigo-burnt-sienna"]
-        for (i, id) in picks.enumerated() {
+        for (i, id) in stylePicks.enumerated() {
             guard let p = StyleLibrary.shared.preset(id) ?? StyleLibrary.shared.all.first(where: { $0.id.hasPrefix(String(id.prefix(16))) }) else { continue }
             var doc = CoverDocument()
             doc.canvas = CanvasSpec(width: 600, height: 360)
