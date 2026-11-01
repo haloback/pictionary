@@ -617,7 +617,7 @@ final class SampleRenderTests: XCTestCase {
             for g in group {
                 var b = tbook
                 b.book.genre = g
-                for t in TemplateLibrary.shared.search("", genre: g, photoOnly: false).enumerated().filter({ $0.offset % 29 == 3 }).prefix(4).map(\.element) {
+                for t in TemplateLibrary.shared.search("", genre: g, photoOnly: false).filter({ !$0.isSignature }).enumerated().filter({ $0.offset % 29 == 3 }).prefix(4).map(\.element) {
                     let doc = TemplateLibrary.shared.apply(t, to: b)
                     if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 300, height: 480), quality: .full) { imgs.append(img); names.append(t.name) }
                 }
@@ -725,7 +725,7 @@ final class SampleRenderTests: XCTestCase {
         var rollImgs: [CGImage] = []
         var rollBase = tbook
         rollBase.book.genre = .mystery
-        rollBase = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .mystery, photoOnly: false)[5], to: rollBase)
+        rollBase = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .mystery, photoOnly: false).filter { !$0.isSignature }[5], to: rollBase)
         var recentRolls: [Int] = []
         for k in 0..<12 {
             var opts = SmartRandomizer.Options()

@@ -20,7 +20,7 @@ final class LibraryExpansionTests: XCTestCase {
         // One template per genre, rendered with real book details.
         let base = book()
         for g in Genre.allCases {
-            let t = try XCTUnwrap(lib.search("", genre: g, photoOnly: false).dropFirst(5).first, g.rawValue)
+            let t = try XCTUnwrap(lib.search("", genre: g, photoOnly: false).filter { !$0.isSignature }.dropFirst(5).first, g.rawValue)
             let doc = lib.apply(t, to: base)
             XCTAssertEqual(doc.templateID, t.id)
             XCTAssertNotNil(doc.textLayer(role: .title), t.id)
@@ -232,7 +232,7 @@ final class LibraryExpansionTests: XCTestCase {
 
     func testSmartRandomizeHonorsLocks() throws {
         var base = book()
-        base = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .fantasy, photoOnly: false)[3], to: base)
+        base = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .fantasy, photoOnly: false).filter { !$0.isSignature }[3], to: base)
         // Lock the title layer and the colors.
         let ti = try XCTUnwrap(base.layers.firstIndex { $0.textContent?.role == .title })
         base.layers[ti].isLocked = true
@@ -273,7 +273,7 @@ final class LibraryExpansionTests: XCTestCase {
     func testSaveApplyAndDeleteUserTemplates() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("colophon-templates-\(UUID().uuidString)")
         let store = UserTemplateStore(directory: dir)
-        var original = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .romance, photoOnly: false)[2], to: book())
+        var original = TemplateLibrary.shared.apply(TemplateLibrary.shared.search("", genre: .romance, photoOnly: false).filter { !$0.isSignature }[2], to: book())
         original.book.title = "The Salt Orchard"
         let t = try store.save(original, name: "Rose Design", includePictures: false)
         XCTAssertEqual(store.templates.count, 1)
