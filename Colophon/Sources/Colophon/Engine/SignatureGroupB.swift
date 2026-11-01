@@ -221,6 +221,8 @@ extension SignatureLibrary {
         e.append(.photo(.full, clip: nil, look: .faded, focusY: 0.3, zoom: 1, index: 0, fallback: .watercolor([.muted, .paper])))
         e.append(.fill(.solid(.alpha(.paper, 0.35)), .full))
         e.append(.fill(.solid(.alpha(.paper, 0.6)), NRect(0, 0.35, 1, 0.31)))
+        e.append(.scrim(NRect(0, 0, 1, 0.2), .paper, angle: 270, strength: 0.8))
+        e.append(.scrim(NRect(0, 0.82, 1, 0.18), .paper, angle: 90, strength: 0.8))
         e.append(.text(.author, NRect(0.1, 0.06, 0.8, 0.04), SigType(["JosefinSans-Bold"], tracking: 0.3)))
         e.append(.text(.title, NRect(0.08, 0.38, 0.84, 0.2), SigType(["PlayfairDisplay-Bold"], letterCase: .title, lineHeight: 0.95, breaks: .lines(2), flourish: .underline, flourishColor: .accent)))
         e.append(.text(.tagline, NRect(0.12, 0.61, 0.76, 0.024), SigType(["CormorantGaramond-MediumItalic"], letterCase: .asTyped)))
@@ -296,7 +298,7 @@ extension SignatureLibrary {
         // White Horizon: Nordic mystery; a cold photo above, its highlights melting into a snow-white field below.
         e = []
         e.append(.fill(.solid(.bg), .full))
-        e.append(.photo(NRect(0, 0, 1, 0.5), clip: nil, look: .duotone(.hex("12161A"), .bg), focusY: 0.55, zoom: 1, index: 0, fallback: .linear(.muted, .bg, 90)))
+        e.append(.photo(NRect(0, 0, 1, 0.5), clip: nil, look: .duotone(.hex("12161A"), .bg), focusY: 0.55, zoom: 1, index: 0, fallback: .material("mat.clouds.palette.f")))
         e.append(.shape(.rectangle, NRect(0.66, 0.474, 0.012, 0.026), .accent, stroke: 0, rotation: 0))
         e.append(.text(.title, NRect(0.08, 0.56, 0.84, 0.19), SigType(["Montserrat-Black"], tracking: 0.03, lineHeight: 0.95, align: .left, breaks: .lines(2))))
         e.append(.shape(.rule, NRect(0.08, 0.775, 0.08, 0.005), .accent, stroke: 0, rotation: 0))
@@ -386,7 +388,7 @@ extension SignatureLibrary {
         e.append(.shape(.ellipse, NRect(0.61, 0.722, 0.022, 0.018), .accent, stroke: 0, rotation: 0))
         e.append(.text(.subtitleOr("A NOVEL"), NRect(0.3, 0.835, 0.4, 0.018), SigType(["Montserrat-Black"], color: .muted, tracking: 0.4)))
         e.append(.text(.author, NRect(0.07, 0.875, 0.86, 0.045), SigType(["Montserrat-Black"], tracking: 0.3)))
-        out.append(SignatureDesign(id: "horror-mercy-drip", name: "The Drip", genre: .horror,
+        out.append(SignatureDesign(id: "horror-the-drip", name: "The Drip", genre: .horror,
                                    idea: "Visceral with restraint: one thin red drip runs from the black title down an otherwise clean white cover.",
                                    tags: ["typographic", "light", "minimal", "visceral", "bold type", "modern"], elements: e,
                                    palettes: [SigPalette("Clinic White", bg: "F4F2EE", ink: "0F0F0F", accent: "B0141B", muted: "8F8A84", paper: "FFFFFF"),

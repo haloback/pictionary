@@ -60,7 +60,7 @@ extension SignatureLibrary {
                                    palettes: [SigPalette("Basalt & Gold", bg: "17191C", ink: "EFE6D3", accent: "C9A24D", muted: "3A3D42", paper: "EFE6D3"),
                                               SigPalette("Lapis Night", bg: "0F1A33", ink: "F0E8D6", accent: "D7B567", muted: "2C3B5E", paper: "F0E8D6"),
                                               SigPalette("Ivory & Oxide", bg: "EEE6D6", ink: "1C1A17", accent: "8C3A1E", muted: "A39A88", paper: "F7F2E8")],
-                                   sample: SigSample(title: "The Last Lantern of Ostmere", author: "Bram Halloway", series: "THE LANTERN CYCLE · I", photo: "landscape")))
+                                   sample: SigSample(title: "The Lantern King", author: "Bram Halloway", series: "THE LANTERN CYCLE · I", photo: "landscape")))
 
         // F4 Hand Mirror: a fairytale portrait inside an oval glass with a slim handle.
         e = []
@@ -121,7 +121,7 @@ extension SignatureLibrary {
                                    palettes: [SigPalette("Bottle Green & Gilt", bg: "1D3B2F", ink: "E2C27A", accent: "D8B76A", muted: "12261E", paper: "EFE3C4"),
                                               SigPalette("Oxblood Cloth", bg: "561A1F", ink: "EBCF8E", accent: "E1C27A", muted: "34100F", paper: "F1E4C8"),
                                               SigPalette("Navy Buckram", bg: "18243D", ink: "E6CF96", accent: "D9C08A", muted: "0E1626", paper: "EEE4CC")],
-                                   sample: SigSample(title: "The Archive of Unwritten Doors", author: "Leopold Fenn")))
+                                   sample: SigSample(title: "The Gilt Key", author: "Leopold Fenn")))
 
         // F7 The Slit: the portrait cropped to a narrow band across the eyes.
         e = []
@@ -130,8 +130,8 @@ extension SignatureLibrary {
         e.append(.shape(.rule, NRect(0, 0.155, 1, 0.005), .accent, stroke: 0, rotation: 0))
         e.append(.photo(NRect(0, 0.16, 1, 0.15), clip: nil, look: .duotone(.bg, .accent), focusY: 0.3, zoom: 1.6, index: 0, fallback: .material("mat.smoke.palette.b")))
         e.append(.shape(.rule, NRect(0, 0.31, 1, 0.005), .accent, stroke: 0, rotation: 0))
-        e.append(.text(.title, NRect(0.07, 0.4, 0.86, 0.3), SigType(["BodoniModa-Black"], lineHeight: 0.88, breaks: .lines(2))))
-        e.append(.text(.author, NRect(0.12, 0.87, 0.76, 0.04), SigType(["BodoniModa-Bold"], tracking: 0.2)))
+        e.append(.text(.title, NRect(0.07, 0.42, 0.86, 0.24), SigType(["BodoniModa-Black"], lineHeight: 0.88, breaks: .lines(2))))
+        e.append(.text(.author, NRect(0.12, 0.86, 0.76, 0.04), SigType(["BodoniModa-Bold"], tracking: 0.2)))
         out.append(SignatureDesign(id: "fantasy-the-slit", name: "The Slit", genre: .fantasy,
                                    idea: "Only the eyes survive: the portrait is cut to a blood-washed slit across a black cover.",
                                    tags: ["photo", "dark", "grimdark", "moody", "serif", "bold type"], elements: e,
@@ -187,7 +187,7 @@ extension SignatureLibrary {
         e.append(.shape(.rule, NRect(0.08, 0.8, 0.84, 0.003), .ink, stroke: 0, rotation: 0))
         e.append(.text(.author, NRect(0.08, 0.82, 0.55, 0.035), SigType(["Montserrat-Black"], letterCase: .title, align: .left)))
         e.append(.text(.subtitleOr("A NOVEL"), NRect(0.62, 0.827, 0.3, 0.016), SigType(["Montserrat-Black"], color: .muted, tracking: 0.3, align: .right)))
-        out.append(SignatureDesign(id: "scienceFiction-orbital-diagram", name: "Orbital Diagram", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-orbital-diagram", name: "Orbital Diagram", genre: .scienceFiction,
                                    idea: "The cover is a scientific figure: hairline orbits around a star, and one red world the story happens on.",
                                    tags: ["graphic", "light", "hard sf", "swiss", "minimal", "modern"], elements: e,
                                    palettes: [SigPalette("Lab White & Signal", bg: "F2F0EB", ink: "111111", accent: "FF4F1F", muted: "6E6E6A", paper: "F2F0EB"),
@@ -201,9 +201,9 @@ extension SignatureLibrary {
         e.append(.photo(NRect(0, 0.5, 1, 0.5), clip: nil, look: .natural, focusY: 0.4, zoom: 1, index: 0, fallback: .material("mat.nebula.palette.b")))
         e.append(.scrim(NRect(0, 0.5, 1, 0.16), .bg, angle: 270, strength: 0.9))
         e.append(.text(.author, NRect(0.08, 0.06, 0.84, 0.024), SigType(["JosefinSans-Bold"], tracking: 0.5)))
-        e.append(.text(.title, NRect(0.08, 0.16, 0.84, 0.18), SigType(["Syncopate-Bold"], tracking: 0.08, lineHeight: 1.05, breaks: .lines(2))))
-        e.append(.text(.tagline, NRect(0.08, 0.37, 0.84, 0.02), SigType(["JosefinSans-Bold"], color: .muted, tracking: 0.3)))
-        out.append(SignatureDesign(id: "scienceFiction-planet-limb", name: "Planet Limb", genre: .scienceFiction,
+        e.append(.text(.title, NRect(0.08, 0.13, 0.84, 0.3), SigType(["Syncopate-Bold"], tracking: 0.02, lineHeight: 1.0, breaks: .stacked)))
+        e.append(.text(.tagline, NRect(0.08, 0.455, 0.84, 0.02), SigType(["JosefinSans-Bold"], color: .muted, tracking: 0.3)))
+        out.append(SignatureDesign(id: "sciencefiction-planet-limb", name: "Planet Limb", genre: .scienceFiction,
                                    idea: "Half the cover is pure vacuum; the other half is the curve of a world, with wide type floating in the silence between.",
                                    tags: ["photo", "dark", "hard sf", "minimal", "wide type", "atmospheric"], elements: e,
                                    palettes: [SigPalette("Vacuum", bg: "000000", ink: "F4F4F4", accent: "9FC6FF", muted: "9A9A9A", paper: "F4F4F4"),
@@ -222,7 +222,7 @@ extension SignatureLibrary {
         e.append(.text(.title, NRect(0.07, 0.06, 0.86, 0.36), SigType(["LeagueGothic-Regular"], lineHeight: 0.86, align: .left, breaks: .stacked)))
         e.append(.text(.author, NRect(0.07, 0.445, 0.6, 0.03), SigType(["Oswald-Bold"], tracking: 0.25, align: .left)))
         e.append(.text(.subtitleOr("A NOVEL"), NRect(0.07, 0.485, 0.5, 0.017), SigType(["Oswald-Bold"], color: .muted, tracking: 0.35, align: .left)))
-        out.append(SignatureDesign(id: "scienceFiction-carrier-wave", name: "Carrier Wave", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-carrier-wave", name: "Carrier Wave", genre: .scienceFiction,
                                    idea: "A single signal pulses up from the bottom edge in fading rings toward a giant condensed title.",
                                    tags: ["graphic", "dark", "hard sf", "condensed", "bold type", "modern"], elements: e,
                                    palettes: [SigPalette("Deep Field & Phosphor", bg: "0A0D10", ink: "EDEFEA", accent: "9CF06A", muted: "8A968E", paper: "EDEFEA"),
@@ -240,13 +240,13 @@ extension SignatureLibrary {
         e.append(.text(.title, NRect(0.07, 0.52, 0.86, 0.2), SigType(["Unbounded-ExtraBold"], tracking: 0.02, lineHeight: 0.95, breaks: .lines(2))))
         e.append(.text(.series, NRect(0.1, 0.755, 0.8, 0.02), SigType(["Montserrat-Black"], color: .accent, tracking: 0.35)))
         e.append(.text(.author, NRect(0.12, 0.89, 0.76, 0.034), SigType(["Montserrat-Black"], tracking: 0.3)))
-        out.append(SignatureDesign(id: "scienceFiction-rank-insignia", name: "Rank Insignia", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-rank-insignia", name: "Rank Insignia", genre: .scienceFiction,
                                    idea: "Three gold chevrons, the rank stripes of a fleet, stand alone against the galaxy like a uniform patch.",
                                    tags: ["photo", "dark", "space opera", "epic", "bold type", "military"], elements: e,
                                    palettes: [SigPalette("Admiralty", bg: "0B1030", ink: "F3F0E8", accent: "E5B94E", muted: "3B2A6B", paper: "F3F0E8"),
                                               SigPalette("Red Giant", bg: "1A0608", ink: "F6ECE4", accent: "F08A3C", muted: "6B1E2A", paper: "F6ECE4"),
                                               SigPalette("Teal Nebula", bg: "041A1E", ink: "EAF7F4", accent: "7FF0D8", muted: "1E4F5A", paper: "EAF7F4")],
-                                   sample: SigSample(title: "Admiral of Nothing", author: "Rhys Calloway", series: "THE MERIDIAN WAR · ONE", photo: "space")))
+                                   sample: SigSample(title: "The Last Admiral", author: "Rhys Calloway", series: "THE MERIDIAN WAR · ONE", photo: "space")))
 
         // S5 Signal Block: a duotone heroine, cut across by a solid block of hot color that carries the title.
         e = []
@@ -257,7 +257,7 @@ extension SignatureLibrary {
         e.append(.text(.title, NRect(0.07, 0.67, 0.86, 0.18), SigType(["Anton-Regular"], color: .bg, lineHeight: 0.92, align: .left, breaks: .lines(2))))
         e.append(.shape(.rule, NRect(0.07, 0.87, 0.2, 0.004), .bg, stroke: 0, rotation: 0))
         e.append(.text(.author, NRect(0.07, 0.89, 0.86, 0.035), SigType(["Oswald-Bold"], color: .bg, tracking: 0.3, align: .left)))
-        out.append(SignatureDesign(id: "scienceFiction-signal-block", name: "Signal Block", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-signal-block", name: "Signal Block", genre: .scienceFiction,
                                    idea: "A hard duotone portrait is cut off at the chest by a slab of signal color, and the title is printed straight onto the slab.",
                                    tags: ["photo", "dark", "space opera", "bold type", "condensed", "modern"], elements: e,
                                    palettes: [SigPalette("Navy & Amber", bg: "0E1A33", ink: "0E1A33", accent: "F5A623", muted: "5E6B85", paper: "F3EEE4"),
@@ -274,13 +274,13 @@ extension SignatureLibrary {
         e.append(.shape(.ellipse, NRect(0.04, 0.47, 1.1, 0.6875), .accent, stroke: 0, rotation: 0))
         e.append(.shape(.ellipse, NRect(0.1, 0.5, 1.1, 0.6875), .bg, stroke: 0, rotation: 0))
         e.append(.shape(.ellipse, NRect(-0.18, 0.69, 1.36, 0.12), .alpha(.paper, 0.85), stroke: 0.003, rotation: -12))
-        out.append(SignatureDesign(id: "scienceFiction-ringed-crescent", name: "Ringed Crescent", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-ringed-crescent", name: "Ringed Crescent", genre: .scienceFiction,
                                    idea: "A planet too big for the cover rises in the dark, lit on one thin edge and crossed by the hairline of its ring.",
                                    tags: ["graphic", "dark", "space opera", "epic", "wide type", "minimal"], elements: e,
                                    palettes: [SigPalette("Void & Solar", bg: "05070D", ink: "EEF1F6", accent: "F0A04B", muted: "9AA6BA", paper: "EEF1F6"),
                                               SigPalette("Violet Dusk", bg: "0D0618", ink: "F1EAF8", accent: "C77DFF", muted: "A495B8", paper: "F1EAF8"),
                                               SigPalette("Ice Giant", bg: "020A12", ink: "EAF5FB", accent: "7FD3FF", muted: "8FA6B6", paper: "EAF5FB")],
-                                   sample: SigSample(title: "The Halo Sovereign", author: "Esme Taranis", series: "THE SILVERED EMPIRE · I")))
+                                   sample: SigSample(title: "Halo Throne", author: "Esme Taranis", series: "THE SILVERED EMPIRE · I")))
 
         // S7 Misregistered: the title printed twice, slightly out of register, like a feed that won't hold still.
         e = []
@@ -291,7 +291,7 @@ extension SignatureLibrary {
         e.append(.text(.title, NRect(0.07, 0.2, 0.86, 0.5), SigType(["DMSerifDisplay-Regular"], letterCase: .title, lineHeight: 0.9, align: .left, breaks: .stacked)))
         e.append(.shape(.rule, NRect(0.07, 0.86, 0.86, 0.0025), .ink, stroke: 0, rotation: 0))
         e.append(.text(.author, NRect(0.07, 0.875, 0.6, 0.032), SigType(["JosefinSans-Bold"], letterCase: .title, tracking: 0.05, align: .left)))
-        out.append(SignatureDesign(id: "scienceFiction-misregistered", name: "Misregistered", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-misregistered", name: "Misregistered", genre: .scienceFiction,
                                    idea: "The title is printed twice, a hair out of register, so the near future feels like a signal that won't quite hold still.",
                                    tags: ["typographic", "light", "near future", "literary", "serif", "modern"], elements: e,
                                    palettes: [SigPalette("Newsprint & Cyan", bg: "EDEAE2", ink: "1A1A1A", accent: "1FB5C9", muted: "8B877D", paper: "EDEAE2"),
@@ -307,7 +307,7 @@ extension SignatureLibrary {
         e.append(.photo(NRect(0.365, 0.208, 0.27, 0.354), clip: .roundedRect, look: .tint(.accent), focusY: 0.3, zoom: 1.2, index: 0, fallback: .linear(.accent, .muted, 90)))
         e.append(.text(.title, NRect(0.08, 0.66, 0.84, 0.17), SigType(["LibreCaslonDisplay-Regular"], letterCase: .title, lineHeight: 0.95, breaks: .lines(2))))
         e.append(.text(.subtitleOr("A NOVEL"), NRect(0.3, 0.87, 0.4, 0.018), SigType(["Montserrat-Black"], color: .muted, tracking: 0.4)))
-        out.append(SignatureDesign(id: "scienceFiction-lit-screen", name: "Lit Screen", genre: .scienceFiction,
+        out.append(SignatureDesign(id: "sciencefiction-lit-screen", name: "Lit Screen", genre: .scienceFiction,
                                    idea: "One small glowing screen in a vast quiet field: the only face left is the one inside the device.",
                                    tags: ["photo", "light", "near future", "literary", "minimal", "serif"], elements: e,
                                    palettes: [SigPalette("Concrete & Glow", bg: "DCD9D2", ink: "1E1F22", accent: "4B7BFF", muted: "6E6C66", paper: "F2F0EB"),
@@ -332,7 +332,7 @@ extension SignatureLibrary {
                                    palettes: [SigPalette("Kraft & Stamp Red", bg: "CDB48C", ink: "2A2118", accent: "A8261E", muted: "7A6448", paper: "F3EBDD"),
                                               SigPalette("Field Grey", bg: "B4B3A7", ink: "1F211C", accent: "7A1E1A", muted: "6E6F66", paper: "EEECE4"),
                                               SigPalette("Navy Ledger", bg: "1F2A3A", ink: "EDE6D6", accent: "D0A84E", muted: "6A7584", paper: "EDE6D6")],
-                                   sample: SigSample(title: "The Lantern Bridge", author: "Margit Havelka", photo: "landscape")))
+                                   sample: SigSample(title: "The Linden Bridge", author: "Margit Havelka", photo: "landscape")))
 
         // H2 Searchlights: two pale beams cross the night over a blacked-out skyline.
         e = []
