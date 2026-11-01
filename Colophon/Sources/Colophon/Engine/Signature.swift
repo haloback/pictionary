@@ -201,8 +201,14 @@ enum SignatureLibrary {
                 doc.layers.append(fillLayer(f, r, p, seed: n * 37 + 11))
             case .photo(let r, let clip, let look, let focusY, let zoom, let index, let fallback):
                 if photos.isEmpty {
+                    // Softened over the ground so the stand-in reads as quiet atmosphere until a photo arrives.
+                    var under = Layer.fill(.solid, colors: [p.bg], frame: r)
+                    under.clipShape = clip
+                    under.name = "Artwork Ground"
+                    doc.layers.append(under)
                     var l = fillLayer(standIn(fallback), r, p, seed: n * 53 + 5)
                     l.clipShape = clip
+                    l.opacity = 0.72
                     l.name = "Artwork"
                     doc.layers.append(l)
                 } else {
