@@ -71,6 +71,7 @@ struct LayerInspector: View {
                     case .fill: FillSection(layer: b)
                     case .shape: ShapeSection(layer: b)
                     case .decor: DecorSection(layer: b)
+                    case .paint: PaintSection(layer: b)
                     }
                     if b.wrappedValue.textContent == nil {
                         AdjustSection(layer: b)

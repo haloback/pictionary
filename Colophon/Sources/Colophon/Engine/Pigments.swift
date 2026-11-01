@@ -178,6 +178,23 @@ enum PigmentMixer {
         return RGBA(encode(v[0]), encode(v[1]), encode(v[2]), alpha)
     }
 
+    /// The fitted reflectance spectrum of a color (36 samples, 380–730 nm).
+    static func reflectance(_ c: RGBA) -> [Double] { fit(c).reflectance }
+
+    /// Linear-sRGB contribution of each wavelength band at full reflectance (white-balanced),
+    /// for `bands` equal groups of the 36 samples. Summing band reflectance × column gives the color.
+    static func bandMatrix(bands: Int) -> [[Double]] {
+        let per = count / bands
+        var cols: [[Double]] = []
+        for b in 0..<bands {
+            var R = [Double](repeating: 0, count: count)
+            for i in (b * per)..<min(count, (b + 1) * per) { R[i] = 1 }
+            let v = rawLinear(R)
+            cols.append([v.0 / white.0, v.1 / white.1, v.2 / white.2])
+        }
+        return cols
+    }
+
     /// `t` of the way from `a` to `b`, mixed like paint.
     static func mix(_ a: RGBA, _ b: RGBA, _ t: Double) -> RGBA {
         let k = min(1, max(0, t))

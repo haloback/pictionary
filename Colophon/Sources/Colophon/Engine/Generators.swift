@@ -94,9 +94,10 @@ enum Generators {
             let paper = cols.max { $0.luminance < $1.luminance } ?? RGBA(hex: "FBF7EE")
             var inks = cols.filter { $0 != paper }
             if inks.isEmpty { inks = [RGBA(hex: "2A3B9E"), RGBA(hex: "F7D917")] }
-            let wash = Watercolor.paint(extent: rect, pigments: inks, paper: paper.withLightness(max(paper.hsl.l, 0.93)), seed: f.seed,
-                                        scale: unit * 0.12, wetness: 0.4 + 0.5 * k, strength: 0.5 + 0.4 * k)
-            if let img = Gfx.render(wash, extent: rect) { ctx.draw(img, in: rect) }
+            if let img = Watercolor.simulate(size: rect.size, pigments: inks, paper: paper.withLightness(max(paper.hsl.l, 0.93)), seed: f.seed,
+                                             wetness: 0.4 + 0.5 * k, strength: 0.45 + 0.4 * k, coverage: 0.35 + 0.5 * k) {
+                ctx.draw(img, in: rect)
+            }
 
         case .material:
             let id = f.materialID ?? "mat.marble.palette.f"

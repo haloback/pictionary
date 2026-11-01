@@ -721,6 +721,39 @@ final class SampleRenderTests: XCTestCase {
                   "Styles: " + newNames.joined(separator: "; "), "Emboss, watercolor, overprint")
         n += 1
 
+        // Paint engine: glazes that mix like pigment, and smudging.
+        var paintImgs: [CGImage] = []
+        func line(_ tool: PaintTool, _ hex: String, _ pts: [(Double, Double)], size: Double = 0.12, strength: Double = 0.8, wet: Double = 0.3) -> PaintStroke {
+            PaintStroke(tool: tool, color: RGBA(hex: hex), size: size, strength: strength, wetness: wet, points: pts.map { NPoint(x: $0.0, y: $0.1) })
+        }
+        func wave(_ y: Double, _ amp: Double, _ phase: Double) -> [(Double, Double)] {
+            stride(from: 0.05, through: 0.95, by: 0.01).map { x in (x, y + amp * sin(x * 9 + phase)) }
+        }
+        let paintScenes: [[PaintStroke]] = [
+            [line(.paint, "F7D917", wave(0.35, 0.05, 0), size: 0.22, strength: 1), line(.paint, "2A3B9E", wave(0.5, 0.05, 1), size: 0.22, strength: 0.55),
+             line(.paint, "D7263D", wave(0.65, 0.05, 2), size: 0.22, strength: 0.55)],
+            [line(.paint, "D8457A", wave(0.3, 0.08, 0), size: 0.25, strength: 1), line(.paint, "F2661C", wave(0.45, 0.08, 2), size: 0.25, strength: 1),
+             line(.paint, "3C8DC5", wave(0.6, 0.08, 4), size: 0.25, strength: 1),
+             line(.smudge, "FFFFFF", (0..<40).map { k in (0.1 + 0.02 * Double(k), 0.25 + 0.012 * Double(k)) }, size: 0.1, strength: 0.85),
+             line(.smudge, "FFFFFF", (0..<40).map { k in (0.9 - 0.02 * Double(k), 0.3 + 0.011 * Double(k)) }, size: 0.1, strength: 0.85)],
+            [line(.paint, "0B6E5A", wave(0.4, 0.06, 1), size: 0.3, strength: 1, wet: 0.8), line(.paint, "F7D917", wave(0.5, 0.06, 3), size: 0.3, strength: 0.8, wet: 0.8),
+             line(.blend, "FFFFFF", wave(0.45, 0.02, 0), size: 0.3, strength: 0.8)]
+        ]
+        for strokes in paintScenes {
+            var p = PaintContent()
+            p.strokes = strokes
+            guard let ctx = Gfx.context(400, 400) else { continue }
+            ctx.setFillColor(RGBA(hex: "FBF7EE").cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 400))
+            if let img = PaintEngine.shared.render(p, size: CGSize(width: 400, height: 400), layerID: UUID(), doc: CoverDocument()) {
+                ctx.draw(img, in: CGRect(x: 0, y: 0, width: 400, height: 400))
+            }
+            if let img = ctx.makeImage() { paintImgs.append(img) }
+        }
+        gridSheet(paintImgs, cols: 3, cell: CGSize(width: 400, height: 400), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-paint-engine.png", n),
+                  "Paint engine: yellow glazed with blue and red (greens and oranges where they cross); rose, orange and blue smudged together; wet green and yellow melted with the blend brush", "Color mixing")
+        n += 1
+
         // Real photos (public domain, fetched by CI into COLOPHON_PHOTOS): ink effects and the
         // into-the-photo title styles where they belong, on an actual photograph.
         if let pdir = ProcessInfo.processInfo.environment["COLOPHON_PHOTOS"],
@@ -753,6 +786,25 @@ final class SampleRenderTests: XCTestCase {
                     _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
                     manifest.append(["file": file, "name": p.name, "family": "Real photo: " + photo.0, "font": ""])
                     n += 1
+                }
+                // Smudge the photo itself: a paint layer that starts from it.
+                if pi < 2 {
+                    var p = PaintContent()
+                    var pdoc = CoverDocument()
+                    let aid = pdoc.addAsset(photo.1)
+                    p.baseAssetID = aid
+                    for k in 0..<6 {
+                        let y0 = 0.15 + 0.13 * Double(k)
+                        p.strokes.append(PaintStroke(tool: .smudge, color: .white, size: 0.08, strength: 0.85, wetness: 0,
+                                                     points: stride(from: 0.1, through: 0.9, by: 0.01).map { NPoint(x: $0, y: y0 + 0.05 * sin($0 * 8 + Double(k))) }))
+                    }
+                    let sz = CGSize(width: 600, height: (600.0 * Double(photo.2.height) / Double(photo.2.width)).rounded())
+                    if let img = PaintEngine.shared.render(p, size: sz, layerID: UUID(), doc: pdoc) {
+                        let file = String(format: "%02d-photo-%@-smudged.png", n, photo.0)
+                        _ = Exporter.write(img, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                        manifest.append(["file": file, "name": "Smudged with the finger tool", "family": "Real photo: " + photo.0, "font": ""])
+                        n += 1
+                    }
                 }
                 // Title styles over the photo, as a full cover.
                 for q in photoStyles {

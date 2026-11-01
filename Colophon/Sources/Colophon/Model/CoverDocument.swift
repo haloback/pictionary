@@ -450,6 +450,8 @@ enum LayerContent: Codable, Hashable {
     case text(TextContent)
     /// Borders, corner flourishes, dividers, badges and banners from `DecorLibrary`.
     case decor(DecorContent)
+    /// Mixed and smudged paint (`PaintEngine`).
+    case paint(PaintContent)
 }
 
 enum MaskGradientKind: String, Codable, CaseIterable, Identifiable {
@@ -588,6 +590,11 @@ struct Layer: Codable, Hashable, Identifiable {
         set { if let n = newValue { content = .fill(n) } }
     }
 
+    var paintContent: PaintContent? {
+        get { if case .paint(let x) = content { return x }; return nil }
+        set { if let n = newValue { content = .paint(n) } }
+    }
+
     var decorContent: DecorContent? {
         get { if case .decor(let x) = content { return x }; return nil }
         set { if let n = newValue { content = .decor(n) } }
@@ -605,6 +612,7 @@ struct Layer: Codable, Hashable, Identifiable {
         case .shape(let s): return s.kind.symbol
         case .text: return "textformat"
         case .decor: return "rectangle.dashed"
+        case .paint: return "paintbrush"
         }
     }
 
@@ -615,6 +623,7 @@ struct Layer: Codable, Hashable, Identifiable {
         case .shape(let s): return s.kind.label
         case .text(let t): return t.role.label
         case .decor(let x): return DecorLibrary.shared.item(x.itemID).map { $0.kind.rawValue.capitalized } ?? "Decor"
+        case .paint(let p): return "Paint, \(p.strokes.count) strokes"
         }
     }
 

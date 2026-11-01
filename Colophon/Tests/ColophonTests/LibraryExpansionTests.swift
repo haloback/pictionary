@@ -160,4 +160,64 @@ final class LibraryExpansionTests: XCTestCase {
             XCTAssertNotNil(CoverRenderer.shared.render(doc, size: CGSize(width: 600, height: 400), quality: .full), id)
         }
     }
+
+    private func strokeLine(_ tool: PaintTool, _ c: RGBA, x0: Double, x1: Double, y: Double, size: Double = 0.2, strength: Double = 0.8, wet: Double = 0.2) -> PaintStroke {
+        PaintStroke(tool: tool, color: c, size: size, strength: strength, wetness: wet,
+                    points: stride(from: x0, through: x1, by: 0.02).map { NPoint(x: $0, y: y) })
+    }
+
+    func testPaintMixesAndSmudges() throws {
+        // Yellow, then a translucent blue glaze over it: the overlap must read green, like paint.
+        var p = PaintContent()
+        p.strokes = [strokeLine(.paint, RGBA(hex: "F7D917"), x0: 0.1, x1: 0.9, y: 0.5, strength: 1),
+                     strokeLine(.paint, RGBA(hex: "2A3B9E"), x0: 0.1, x1: 0.9, y: 0.5, strength: 0.5)]
+        var doc = CoverDocument()
+        doc.canvas = CanvasSpec(width: 400, height: 400)
+        let img = try XCTUnwrap(PaintEngine.shared.render(p, size: CGSize(width: 400, height: 400), layerID: UUID(), doc: doc))
+        let px = PixelSampler.pixels(img, maxSide: 400)
+        let i = (px.h / 2 * px.w + px.w / 2) * 4
+        let r = Int(px.data[i]), g = Int(px.data[i + 1]), b = Int(px.data[i + 2])
+        XCTAssertGreaterThan(g, r, "blue over yellow should be green, got \(r),\(g),\(b)")
+        XCTAssertGreaterThan(g, b, "blue over yellow should be green, got \(r),\(g),\(b)")
+        // Nothing painted at the corner.
+        XCTAssertLessThan(px.data[3], 10)
+        // Smudging drags color sideways into empty space.
+        var q = PaintContent()
+        q.strokes = [strokeLine(.paint, RGBA(hex: "D7263D"), x0: 0.1, x1: 0.3, y: 0.5),
+                     strokeLine(.smudge, .white, x0: 0.2, x1: 0.8, y: 0.5, size: 0.15, strength: 0.9)]
+        let img2 = try XCTUnwrap(PaintEngine.shared.render(q, size: CGSize(width: 400, height: 400), layerID: UUID(), doc: doc))
+        let p2 = PixelSampler.pixels(img2, maxSide: 400)
+        let j = (p2.h / 2 * p2.w + Int(0.55 * Double(p2.w))) * 4
+        XCTAssertGreaterThan(p2.data[j + 3], 20, "smudge should carry paint into the empty area")
+    }
+
+    func testIncrementalPaintMatchesFullReplay() throws {
+        var doc = CoverDocument()
+        doc.canvas = CanvasSpec(width: 300, height: 300)
+        var p = PaintContent()
+        p.strokes = [strokeLine(.paint, RGBA(hex: "0B6E5A"), x0: 0.2, x1: 0.8, y: 0.3)]
+        let id = UUID()
+        _ = PaintEngine.shared.render(p, size: CGSize(width: 300, height: 300), layerID: id, doc: doc)
+        p.strokes.append(strokeLine(.paint, RGBA(hex: "D8457A"), x0: 0.2, x1: 0.8, y: 0.6))
+        p.strokes.append(strokeLine(.blend, .white, x0: 0.2, x1: 0.8, y: 0.45, size: 0.3))
+        let a = try XCTUnwrap(PaintEngine.shared.render(p, size: CGSize(width: 300, height: 300), layerID: id, doc: doc))
+        let b = try XCTUnwrap(PaintEngine.shared.render(p, size: CGSize(width: 300, height: 300), layerID: UUID(), doc: doc))
+        let pa = PixelSampler.pixels(a, maxSide: 300), pb = PixelSampler.pixels(b, maxSide: 300)
+        var diff = 0
+        for k in 0..<min(pa.data.count, pb.data.count) { diff = max(diff, abs(Int(pa.data[k]) - Int(pb.data[k]))) }
+        XCTAssertLessThanOrEqual(diff, 2)
+    }
+
+    func testWatercolorSimulationShowsPaperAndMixes() throws {
+        let img = try XCTUnwrap(Watercolor.simulate(size: CGSize(width: 320, height: 480), pigments: [RGBA(hex: "2A3B9E"), RGBA(hex: "F7D917")],
+                                                    paper: RGBA(hex: "FBF7EE"), seed: 5))
+        let p = PixelSampler.pixels(img, maxSide: 320)
+        var light = 0, painted = 0
+        for k in stride(from: 0, to: p.w * p.h * 4, by: 4) {
+            let l = (Int(p.data[k]) + Int(p.data[k + 1]) + Int(p.data[k + 2])) / 3
+            if l > 235 { light += 1 } else if l < 200 { painted += 1 }
+        }
+        XCTAssertGreaterThan(light, p.w * p.h / 50, "some bare paper should show")
+        XCTAssertGreaterThan(painted, p.w * p.h / 20, "there should be paint")
+    }
 }

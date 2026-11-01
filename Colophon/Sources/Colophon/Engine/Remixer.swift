@@ -109,6 +109,8 @@ enum Remixer {
                 x.color = map(x.color)
                 x.color2 = x.color2.map(map)
                 d.layers[j].content = .decor(x)
+            case .paint:
+                break
             case .image:
                 break
             }

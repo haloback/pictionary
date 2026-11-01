@@ -48,7 +48,17 @@ struct CompareRef: Identifiable {
 }
 
 enum CanvasTool: String {
-    case select, erase, restore
+    case select, erase, restore, paint, smudge, blend, lift
+
+    var paintTool: PaintTool? {
+        switch self {
+        case .paint: return .paint
+        case .smudge: return .smudge
+        case .blend: return .blend
+        case .lift: return .lift
+        default: return nil
+        }
+    }
 }
 
 enum LayerAlign {
@@ -118,6 +128,9 @@ final class EditorModel {
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     var showSeries = false
     var showMaterialBackground = false
+    var paintColor = RGBA(hex: "2A3B9E")
+    var paintStrength = 0.7
+    var paintWetness = 0.4
     var showDecor: DecorLibrary.Kind?
     var showTemplates = false
     var showFonts = false
@@ -438,6 +451,58 @@ final class EditorModel {
         selection = l.id
     }
 
+    // MARK: Painting
+
+    @ObservationIgnored private var paintKey = ""
+    @ObservationIgnored private var paintLayerID: UUID?
+
+    /// The paint layer strokes go to: the selected one, or a new one. Smudge, blend and lift on a cover without
+    /// paint start from a copy of the artwork, so they move the photo's own colors.
+    private func paintTarget(for tool: PaintTool) -> UUID? {
+        if let l = selectedLayer, l.paintContent != nil { return l.id }
+        if tool == .paint, let top = document.layers.last(where: { $0.paintContent != nil }) { return top.id }
+        var content = PaintContent()
+        if tool != .paint {
+            var art = document
+            art.layers.removeAll { $0.textContent != nil || $0.decorContent != nil }
+            let h: CGFloat = 1400
+            if let img = CoverRenderer.shared.render(art, size: CGSize(width: (h / CGFloat(document.canvas.aspect)).rounded(), height: h), quality: .full),
+               let data = AssetStore.encode(img) {
+                var id = UUID()
+                mutate { d in id = d.addAsset(data) }
+                content.baseAssetID = id
+            }
+        }
+        var l = Layer(name: tool == .paint ? "Paint" : "Smudged Artwork", content: .paint(content), frame: .full)
+        l.name = tool == .paint ? "Paint" : "Smudged Artwork"
+        mutate { d in
+            let i = d.layers.firstIndex { $0.textContent != nil || $0.decorContent != nil } ?? d.layers.count
+            d.layers.insert(l, at: i)
+        }
+        selection = l.id
+        return l.id
+    }
+
+    func beginPaintStroke(_ tool: PaintTool, canvasX: Double, canvasY: Double) {
+        guard let id = paintTarget(for: tool) else { return }
+        paintLayerID = id
+        paintKey = "paint-\(UUID().uuidString)"
+        let stroke = PaintStroke(tool: tool, color: paintColor, size: brushSize, strength: paintStrength, wetness: paintWetness,
+                                 points: [NPoint(x: canvasX, y: canvasY)])
+        mutate(undoKey: paintKey) { d in
+            if let i = d.index(of: id) { d.layers[i].paintContent?.strokes.append(stroke) }
+        }
+    }
+
+    func extendPaintStroke(canvasX: Double, canvasY: Double) {
+        guard let id = paintLayerID, let l = document.layer(id), let last = l.paintContent?.strokes.last?.points.last else { return }
+        guard hypot(canvasX - last.x, canvasY - last.y) > brushSize * 0.08 else { return }
+        mutate(undoKey: paintKey) { d in
+            guard let i = d.index(of: id), let n = d.layers[i].paintContent?.strokes.count, n > 0 else { return }
+            d.layers[i].paintContent?.strokes[n - 1].points.append(NPoint(x: canvasX, y: canvasY))
+        }
+    }
+
     /// Rebuilds the cover from a template around this book's title, names and photos (undoable).
     func applyTemplate(_ t: CoverTemplate) {
         let rebuilt = TemplateLibrary.shared.apply(t, to: document)
@@ -587,6 +652,8 @@ final class EditorModel {
             case .decor(var x):
                 x.color = c
                 d.layers[i].content = .decor(x)
+            case .paint:
+                break
             case .image:
                 d.layers[i].effects.append(EffectInstance(presetID: "wash.\(EffectLibrary.slug(ColorBook.vivid.min { $0.color.distance(to: c) < $1.color.distance(to: c) }!.name)).color", amount: 0.6))
             }

@@ -141,6 +141,8 @@ final class CoverRenderer {
             image = Generators.render(f, size: CGSize(width: w, height: h))
         case .shape(let s):
             image = ShapeRenderer.render(s, size: CGSize(width: w, height: h), canvasWidth: canvas.width)
+        case .paint(let p):
+            image = PaintEngine.shared.render(p, size: CGSize(width: w, height: h), layerID: layer.id, doc: doc)
         case .decor(let x):
             image = DecorLibrary.shared.render(x, size: CGSize(width: w, height: h), canvasHeight: canvas.height)
         case .text(let t):

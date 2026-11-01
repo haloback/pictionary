@@ -77,6 +77,11 @@ struct CanvasArea: View {
                 }
             })
             .simultaneousGesture(SpatialTapGesture().onEnded { v in
+                if let pt = model.tool.paintTool {
+                    let (x, y) = normalized(v.location, rect)
+                    model.beginPaintStroke(pt, canvasX: x, canvasY: y)
+                    return
+                }
                 if model.tool != .select {
                     if let id = brushTarget {
                         let (x, y) = normalized(v.location, rect)
@@ -188,6 +193,16 @@ struct CanvasArea: View {
         DragGesture(minimumDistance: 2)
             .onChanged { v in
                 hoverPoint = v.location
+                if let pt = model.tool.paintTool {
+                    let (x, y) = normalized(v.location, rect)
+                    if !painting {
+                        painting = true
+                        let (sx, sy) = normalized(v.startLocation, rect)
+                        model.beginPaintStroke(pt, canvasX: sx, canvasY: sy)
+                    }
+                    model.extendPaintStroke(canvasX: x, canvasY: y)
+                    return
+                }
                 if model.tool != .select {
                     guard let id = brushTarget else { return }
                     let (x, y) = normalized(v.location, rect)
@@ -252,7 +267,16 @@ struct CanvasArea: View {
         return model.document.photoLayers.first?.id
     }
 
+    @ViewBuilder
     private var brushBanner: some View {
+        if model.tool.paintTool != nil {
+            PaintToolbar()
+        } else {
+            maskBanner
+        }
+    }
+
+    private var maskBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: model.tool == .erase ? "eraser" : "paintbrush.pointed")
             Text(model.tool == .erase ? "Erasing from \(model.document.layer(brushTarget)?.name ?? "photo")" : "Restoring \(model.document.layer(brushTarget)?.name ?? "photo")")

@@ -54,6 +54,7 @@ struct EditorView: View {
                         Button(s.label) { model.addFill(s) }
                     }
                 }
+                Button { model.tool = .paint } label: { Label("Paint & Smudge", systemImage: "paintbrush") }
                 Button { model.showMaterialBackground = true } label: { Label("Material Background…", systemImage: "square.grid.3x3.square") }
                 Divider()
                 Button { model.showDecor = .border } label: { Label("Border…", systemImage: "rectangle.dashed") }
