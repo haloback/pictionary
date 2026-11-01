@@ -269,8 +269,10 @@ enum TextRenderer {
     /// Returns the rendered text and the padding added around the box for strokes and glows.
     static func render(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> (CGImage, CGFloat)? {
         guard box.width >= 1, box.height >= 1 else { return nil }
-        let size = resolvedSize(t, box: box, canvasHeight: canvasHeight)
-        let m = measure(t, size: size, wrapWidth: t.autoFit ? nil : box.width)
+        // Decorations need room beside or around the type, so it fits a smaller box.
+        let fitBox = CGSize(width: box.width * t.flourish.textWidthShare, height: box.height * t.flourish.textHeightShare)
+        let size = resolvedSize(t, box: fitBox, canvasHeight: canvasHeight)
+        let m = measure(t, size: size, wrapWidth: t.autoFit ? nil : fitBox.width)
         let neon = t.texture == .neon
         let glowColor: RGBA? = neon ? t.color : t.glowColor
         let glowRadius = neon ? max(t.glowRadius, 0.35) : t.glowRadius
@@ -368,6 +370,19 @@ enum TextRenderer {
         fillCtx.restoreGState()
         guard var fill = fillCtx.makeImage() else { return nil }
         fill = texture(fill, t.texture, size: size, seed: seed(t.text)) ?? fill
+
+        if t.flourish != .none, !m.bounds.isEmpty {
+            var minX = CGFloat.greatestFiniteMagnitude, maxX = -CGFloat.greatestFiniteMagnitude
+            for (i, b) in m.bounds.enumerated() {
+                minX = min(minX, positions[i].x + b.minX)
+                maxX = max(maxX, positions[i].x + b.minX + b.width)
+            }
+            let textRect = CGRect(x: minX, y: bottomY, width: max(1, maxX - minX), height: max(1, topY - bottomY))
+            let boxRect = CGRect(x: pad, y: pad, width: box.width, height: box.height)
+            let deco = t.flourishColor ?? t.color
+            let band = t.flourishColor ?? (t.color.hsl.l > 0.5 ? RGBA.nearBlack.withAlpha(0.82) : RGBA.nearWhite.withAlpha(0.88))
+            t.flourish.draw(in: out, text: textRect, box: boxRect, size: size, color: deco, bandColor: band)
+        }
 
         // The layered style engine takes over the face, outlines, depth and wear.
         if t.style.isActive, let styled = TextStyler.compose(mask: mask, fill: fill, style: t.style, color: t.color, fontSize: size, seed: seed(t.text)) {

@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: EditorModel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Fonts downloaded from the Google Fonts library in earlier sessions.
+        DispatchQueue.global(qos: .utility).async { FontLibrary.shared.registerCached() }
         // Needed when launched as a bare executable (swift run) rather than an .app bundle.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)

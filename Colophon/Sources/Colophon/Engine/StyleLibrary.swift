@@ -443,6 +443,36 @@ final class StyleLibrary {
                 }
             }
         }
+        family("outline", "Outlines", tags: ["outline", "stroke", "hollow", "line", "contour", "clean"],
+               genres: [.thriller, .youngAdult, .nonfiction, .scienceFiction, .literary, .mystery]) { add in
+            let kinds: [(String, String)] = [("hollow-fine", "Hollow, Fine"), ("hollow-bold", "Hollow, Bold"), ("double", "Double Outline"),
+                                             ("triple", "Triple Outline"), ("inner", "Inner Line"), ("dashed", "Dashed Outline"),
+                                             ("hollow-shadow", "Hollow, Shadowed"), ("thick", "Thick Sticker Outline"), ("offset", "Offset Outline")]
+            let fonts = ["Anton-Regular", "BebasNeue-Regular", "Montserrat-Black", "PlayfairDisplay-Black", "Oswald-Bold", "ArchivoBlack-Regular", "Righteous-Regular", "Cinzel-Bold"]
+            var n = 0
+            for (kid, kname) in kinds {
+                for c in [("White", RGBA.nearWhite), ("Black", RGBA.nearBlack)] + vivid.prefix(14).map({ ($0.name, $0.color) }) {
+                    let col: RGBA = c.1
+                    let opp: RGBA = ColorAdvisor.opposite(col)
+                    add("\(kid)-\(slug(c.0))", "\(kname), \(c.0)", rotate(fonts, n), ["outline", c.0.lowercased()]) { p, _ in
+                        var s = TextStyle()
+                        switch kid {
+                        case "hollow-fine": s.hollow = 0.025
+                        case "hollow-bold": s.hollow = 0.05
+                        case "double": s.outline = 0.025; s.outlineColor = opp; s.outline2 = 0.025; s.outline2Color = col
+                        case "triple": s.outline = 0.02; s.outlineColor = p.dark; s.outline2 = 0.02; s.outline2Color = col; s.outline3 = 0.02; s.outline3Color = p.dark
+                        case "inner": s.innerOutline = 0.012; s.innerOutlineInset = 0.025; s.innerOutlineColor = opp; s.dropShadow = 0.3
+                        case "dashed": s.outline = 0.02; s.outlineDash = 0.06; s.outlineColor = col; s.hollow = 0.02
+                        case "hollow-shadow": s.hollow = 0.035; s.dropShadow = 0.6
+                        case "thick": s.outline = 0.06; s.outlineColor = opp; s.dropShadow = 0.4
+                        default: s.hollow = 0.03; s.echo = 0.25; s.echoColor = opp; s.extrudeAngle = 315
+                        }
+                        return (s, col)
+                    }
+                    n += 1
+                }
+            }
+        }
         family("burn", "Wood Burn & Chalk", tags: ["burnt", "chalk", "rustic", "handmade", "western"], genres: [.historical, .cozy, .fantasy, .literary]) { add in
             for (iName, k) in [("Light", 0.3), ("Medium", 0.5), ("Deep", 0.7), ("Scorched", 0.9)] {
                 for grain in [0.0, 0.4] {

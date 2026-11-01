@@ -337,3 +337,54 @@ struct StyleControls: View {
         RGBAPicker(label: label, color: Binding(get: { b.wrappedValue ?? fallback }, set: { b.wrappedValue = $0 }))
     }
 }
+
+/// Outlines up front: stroke, hollow letters, double and triple rings, inner line and dashes.
+struct OutlineControls: View {
+    @Binding var t: TextContent
+    private var s: Binding<TextStyle> { $t.style }
+
+    private func color(_ label: String, _ b: Binding<RGBA?>, fallback: RGBA) -> some View {
+        RGBAPicker(label: label, color: Binding(get: { b.wrappedValue ?? fallback }, set: { b.wrappedValue = $0 }))
+    }
+
+    private func preset(_ name: String, _ apply: @escaping (inout TextStyle) -> Void) -> some View {
+        Button(name) {
+            var st = t.style
+            st.outline = 0; st.outline2 = 0; st.outline3 = 0; st.hollow = 0; st.innerOutline = 0; st.outlineDash = 0
+            apply(&st)
+            t.style = st
+        }
+        .controlSize(.small)
+    }
+
+    var body: some View {
+        let dark = t.color.hsl.l > 0.5 ? RGBA.nearBlack : RGBA.nearWhite
+        PanelSection("Outline", trailing: AnyView(Button("None") {
+            t.style.outline = 0; t.style.outline2 = 0; t.style.outline3 = 0; t.style.hollow = 0; t.style.innerOutline = 0; t.style.outlineDash = 0
+        }.buttonStyle(.link).font(.system(size: 11)))) {
+            HStack(spacing: 4) {
+                preset("Stroke") { $0.outline = 0.03; $0.outlineColor = dark }
+                preset("Hollow") { $0.hollow = 0.03 }
+                preset("Double") { $0.outline = 0.025; $0.outlineColor = dark; $0.outline2 = 0.025; $0.outline2Color = t.color }
+                preset("Triple") { $0.outline = 0.02; $0.outlineColor = dark; $0.outline2 = 0.02; $0.outline2Color = t.color; $0.outline3 = 0.02; $0.outline3Color = dark }
+                preset("Inner") { $0.innerOutline = 0.012; $0.innerOutlineInset = 0.025 }
+            }
+            ValueSlider(label: "Outline", value: s.outline, range: 0...0.1) { String(format: "%.0f", $0 * 1000) }
+            if s.wrappedValue.outline > 0 {
+                color("Color", s.outlineColor, fallback: dark)
+                ValueSlider(label: "Dashes", value: s.outlineDash, range: 0...0.15) { $0 == 0 ? "Solid" : String(format: "%.0f", $0 * 1000) }
+            }
+            ValueSlider(label: "2nd Outline", value: s.outline2, range: 0...0.1) { String(format: "%.0f", $0 * 1000) }
+            if s.wrappedValue.outline2 > 0 { color("2nd Color", s.outline2Color, fallback: .nearWhite) }
+            ValueSlider(label: "3rd Outline", value: s.outline3, range: 0...0.1) { String(format: "%.0f", $0 * 1000) }
+            if s.wrappedValue.outline3 > 0 { color("3rd Color", s.outline3Color, fallback: dark) }
+            ValueSlider(label: "Hollow Letters", value: s.hollow, range: 0...0.1) { $0 == 0 ? "Off" : String(format: "%.0f", $0 * 1000) }
+            if s.wrappedValue.hollow > 0 { color("Stroke Color", s.hollowColor, fallback: t.color) }
+            ValueSlider(label: "Inner Line", value: s.innerOutline, range: 0...0.05) { $0 == 0 ? "Off" : String(format: "%.0f", $0 * 1000) }
+            if s.wrappedValue.innerOutline > 0 {
+                ValueSlider(label: "Inset", value: s.innerOutlineInset, range: 0.005...0.08) { String(format: "%.0f", $0 * 1000) }
+                color("Line Color", s.innerOutlineColor, fallback: dark)
+            }
+        }
+    }
+}

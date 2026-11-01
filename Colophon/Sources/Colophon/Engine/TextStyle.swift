@@ -94,6 +94,17 @@ struct TextStyle: Codable, Hashable {
     var outlineColor: RGBA?
     var outline2 = 0.0
     var outline2Color: RGBA?
+    var outline3 = 0.0
+    var outline3Color: RGBA?
+    /// Dash length (fraction of font size) for the first outline; 0 = solid.
+    var outlineDash = 0.0
+    /// Hollow letters: only a stroke of this width (fraction of font size) on the glyph edge; 0 = filled.
+    var hollow = 0.0
+    var hollowColor: RGBA?
+    /// A line just inside each letter, `innerOutlineInset` in from the edge.
+    var innerOutline = 0.0
+    var innerOutlineColor: RGBA?
+    var innerOutlineInset = 0.03
     var outerGlow = 0.0
     var outerGlowColor: RGBA?
     /// 3D depth as a fraction of the font size.
@@ -151,7 +162,7 @@ struct TextStyle: Codable, Hashable {
 
     /// Extra room the effects need around the type, in multiples of the font size.
     var paddingFactor: Double {
-        outline + outline2 + outerGlow * 0.7 + extrude * 1.1 + longShadow * 2.6 + (wear == .inkBleed ? 0.04 : 0) + glitch * 0.05
+        outline + outline2 + outline3 + hollow * 0.5 + outerGlow * 0.7 + extrude * 1.1 + longShadow * 2.6 + (wear == .inkBleed ? 0.04 : 0) + glitch * 0.05
             + drips * 0.9 + dropShadow * 0.12 + echo * 0.36 + smokeTrail * 1.2
     }
 }
@@ -176,6 +187,14 @@ extension TextStyle {
         outlineColor = try c.decodeIfPresent(RGBA.self, forKey: .outlineColor)
         outline2 = try d(.outline2, 0)
         outline2Color = try c.decodeIfPresent(RGBA.self, forKey: .outline2Color)
+        outline3 = try d(.outline3, 0)
+        outline3Color = try c.decodeIfPresent(RGBA.self, forKey: .outline3Color)
+        outlineDash = try d(.outlineDash, 0)
+        hollow = try d(.hollow, 0)
+        hollowColor = try c.decodeIfPresent(RGBA.self, forKey: .hollowColor)
+        innerOutline = try d(.innerOutline, 0)
+        innerOutlineColor = try c.decodeIfPresent(RGBA.self, forKey: .innerOutlineColor)
+        innerOutlineInset = try d(.innerOutlineInset, 0.03)
         outerGlow = try d(.outerGlow, 0)
         outerGlowColor = try c.decodeIfPresent(RGBA.self, forKey: .outerGlowColor)
         extrude = try d(.extrude, 0)
@@ -299,13 +318,30 @@ enum TextStyler {
             let shadow = colored(RGBA(0, 0, 0, 0.45), alpha: stitches, extent: ext).transformed(by: CGAffineTransform(translationX: 1, y: -1)).cropped(to: ext)
             face = thread.composited(over: shadow.composited(over: face))
         }
+        if s.innerOutline > 0 {
+            let inset = max(0.5, size * CGFloat(s.innerOutlineInset))
+            let w = max(0.8, size * CGFloat(s.innerOutline))
+            let a = erode(alpha, inset, extent: ext), b = erode(alpha, inset + w, extent: ext)
+            let ring = a.applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: b])
+            let lineColor = s.innerOutlineColor ?? (color.hsl.l > 0.5 ? color.withLightness(0.15) : color.withLightness(0.92))
+            face = colored(lineColor, alpha: ring, extent: ext).composited(over: face)
+        }
         face = face.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha])
+        if s.hollow > 0 {
+            // Only a stroke centred on the glyph edge: the letters become see-through.
+            let half = max(0.6, size * CGFloat(s.hollow) / 2)
+            let ring = dilate(alpha, half).applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: erode(alpha, half, extent: ext)])
+                .cropped(to: ext)
+            let strokeFace = face.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: ring])
+            face = s.hollowColor.map { colored($0, alpha: ring, extent: ext) }
+                ?? colored(color, alpha: ring, extent: ext).composited(over: strokeFace)
+        }
 
         // 5. Behind the face, back to front: long shadow, extrusion, glow, outlines.
         var behind = CIImage.empty().cropped(to: ext)
         var shape = alpha
-        let o1 = CGFloat(s.outline) * size, o2 = CGFloat(s.outline2) * size
-        let outer = o1 + o2 > 0 ? dilate(alpha, o1 + o2) : alpha
+        let o1 = CGFloat(s.outline) * size, o2 = CGFloat(s.outline2) * size, o3 = CGFloat(s.outline3) * size
+        let outer = o1 + o2 + o3 > 0 ? dilate(alpha, o1 + o2 + o3) : alpha
         let lightRad = s.lightAngle * .pi / 180
         if s.smokeTrail > 0 {
             let smoke = colored(s.smokeColor ?? color.withLightness(0.85).withAlpha(0.7), alpha: alpha, extent: ext)
@@ -349,12 +385,29 @@ enum TextStyler {
             let soft = FX.blur(colored(g, alpha: dilate(alpha, size * 0.02), extent: ext), size * CGFloat(0.12 + 0.35 * s.outerGlow))
             behind = soft.composited(over: soft.composited(over: behind))
         }
+        if o3 > 0 {
+            shape = dilate(alpha, o1 + o2 + o3)
+            behind = colored(s.outline3Color ?? color.withLightness(max(0.06, color.hsl.l - 0.5)), alpha: shape, extent: ext).composited(over: behind)
+        }
         if o2 > 0 {
-            shape = dilate(alpha, o1 + o2)
-            behind = colored(s.outline2Color ?? color.withLightness(0.95), alpha: shape, extent: ext).composited(over: behind)
+            if o3 <= 0 { shape = dilate(alpha, o1 + o2) }
+            behind = colored(s.outline2Color ?? color.withLightness(0.95), alpha: dilate(alpha, o1 + o2), extent: ext).composited(over: behind)
         }
         if o1 > 0 {
-            behind = colored(s.outlineColor ?? color.withLightness(max(0.06, color.hsl.l - 0.5)), alpha: dilate(alpha, o1), extent: ext).composited(over: behind)
+            let c1 = s.outlineColor ?? color.withLightness(max(0.06, color.hsl.l - 0.5))
+            if s.outlineDash > 0 {
+                // Dashes: the ring outside the letters, cut by a checkerboard so dashes stay short on any edge.
+                let ring = dilate(alpha, o1).applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: alpha])
+                let cells = (CIFilter(name: "CICheckerboardGenerator", parameters: [
+                    kCIInputCenterKey: CIVector(x: ext.midX, y: ext.midY),
+                    "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1), "inputColor1": CIColor(red: 0, green: 0, blue: 0, alpha: 0),
+                    kCIInputWidthKey: max(2, size * CGFloat(s.outlineDash)), kCIInputSharpnessKey: 1
+                ])?.outputImage ?? CIImage.empty()).cropped(to: ext)
+                let dashes = ring.applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: cells])
+                behind = colored(c1, alpha: dashes, extent: ext).composited(over: behind)
+            } else {
+                behind = colored(c1, alpha: dilate(alpha, o1), extent: ext).composited(over: behind)
+            }
         }
         var out = face.composited(over: behind)
 
@@ -419,6 +472,11 @@ enum TextStyler {
         FX.solid(c, extent).applyingFilter("CIBlendWithAlphaMask", parameters: [
             kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha
         ])
+    }
+
+    static func erode(_ alpha: CIImage, _ r: CGFloat, extent: CGRect) -> CIImage {
+        guard r > 0.4 else { return alpha }
+        return alpha.applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: r]).cropped(to: extent)
     }
 
     static func dilate(_ alpha: CIImage, _ r: CGFloat) -> CIImage {

@@ -355,6 +355,9 @@ struct TextContent: Codable, Hashable {
     var arc: Double = 0
     /// The layered style: material, relief, outlines, depth, wear and blending into the photo.
     var style = TextStyle()
+    /// Rules, dots, a box or a band drawn with the line (subtitles, taglines, series names).
+    var flourish: TextFlourish = .none
+    var flourishColor: RGBA?
 }
 
 extension TextContent {
@@ -380,6 +383,8 @@ extension TextContent {
         texture = try c.decodeIfPresent(TextTexture.self, forKey: .texture) ?? .none
         arc = try c.decodeIfPresent(Double.self, forKey: .arc) ?? 0
         style = try c.decodeIfPresent(TextStyle.self, forKey: .style) ?? TextStyle()
+        flourish = try c.decodeIfPresent(TextFlourish.self, forKey: .flourish) ?? .none
+        flourishColor = try c.decodeIfPresent(RGBA.self, forKey: .flourishColor)
     }
 }
 
@@ -432,6 +437,8 @@ enum LayerContent: Codable, Hashable {
     case fill(FillContent)
     case shape(ShapeContent)
     case text(TextContent)
+    /// Borders, corner flourishes, dividers, badges and banners from `DecorLibrary`.
+    case decor(DecorContent)
 }
 
 enum MaskGradientKind: String, Codable, CaseIterable, Identifiable {
@@ -570,6 +577,11 @@ struct Layer: Codable, Hashable, Identifiable {
         set { if let n = newValue { content = .fill(n) } }
     }
 
+    var decorContent: DecorContent? {
+        get { if case .decor(let x) = content { return x }; return nil }
+        set { if let n = newValue { content = .decor(n) } }
+    }
+
     var shapeContent: ShapeContent? {
         get { if case .shape(let s) = content { return s }; return nil }
         set { if let n = newValue { content = .shape(n) } }
@@ -581,6 +593,7 @@ struct Layer: Codable, Hashable, Identifiable {
         case .fill: return "paintbrush.pointed"
         case .shape(let s): return s.kind.symbol
         case .text: return "textformat"
+        case .decor: return "rectangle.dashed"
         }
     }
 
@@ -590,11 +603,17 @@ struct Layer: Codable, Hashable, Identifiable {
         case .fill(let f): return f.style.label
         case .shape(let s): return s.kind.label
         case .text(let t): return t.role.label
+        case .decor(let x): return DecorLibrary.shared.item(x.itemID).map { $0.kind.rawValue.capitalized } ?? "Decor"
         }
     }
 
     static func text(_ text: String, role: TextRole, frame: NRect, font: String, color: RGBA) -> Layer {
         Layer(name: role.label, content: .text(TextContent(text: text, role: role, fontName: font, color: color)), frame: frame)
+    }
+
+    static func decor(_ itemID: String, color: RGBA, color2: RGBA? = nil, frame: NRect) -> Layer {
+        let name = DecorLibrary.shared.item(itemID)?.name ?? "Decor"
+        return Layer(name: name, content: .decor(DecorContent(itemID: itemID, color: color, color2: color2)), frame: frame)
     }
 
     static func image(_ id: UUID, frame: NRect = .full, name: String = "Photo") -> Layer {
@@ -624,6 +643,8 @@ struct CoverDocument: Codable {
     /// The colors this design is built from.
     var palette: [RGBA] = []
     var archetypeName: String = ""
+    /// The template this cover was last built from, if any.
+    var templateID: String?
     /// Font files the user imported, keyed by PostScript name, so the project opens anywhere.
     var fonts: [String: Data] = [:]
     var paperback = PrintSettings()
@@ -641,6 +662,7 @@ struct CoverDocument: Codable {
         assetOrder = try c.decodeIfPresent([UUID].self, forKey: .assetOrder) ?? []
         palette = try c.decodeIfPresent([RGBA].self, forKey: .palette) ?? []
         archetypeName = try c.decodeIfPresent(String.self, forKey: .archetypeName) ?? ""
+        templateID = try c.decodeIfPresent(String.self, forKey: .templateID)
         fonts = try c.decodeIfPresent([String: Data].self, forKey: .fonts) ?? [:]
         paperback = try c.decodeIfPresent(PrintSettings.self, forKey: .paperback) ?? PrintSettings()
     }

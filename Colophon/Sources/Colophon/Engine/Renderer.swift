@@ -141,6 +141,8 @@ final class CoverRenderer {
             image = Generators.render(f, size: CGSize(width: w, height: h))
         case .shape(let s):
             image = ShapeRenderer.render(s, size: CGSize(width: w, height: h), canvasWidth: canvas.width)
+        case .decor(let x):
+            image = DecorLibrary.shared.render(x, size: CGSize(width: w, height: h), canvasHeight: canvas.height)
         case .text(let t):
             if case let (img, p)? = TextRenderer.render(t, box: CGSize(width: w, height: h), canvasHeight: canvas.height) {
                 image = img

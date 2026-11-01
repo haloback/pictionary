@@ -383,5 +383,13 @@ enum BookSync {
             default: break
             }
         }
+        // A supporting line typed into the brief appears on the cover; clearing it removes the line.
+        for role in SupportingText.roles where SupportingText.text(role, b) != SupportingText.text(role, old) {
+            if SupportingText.text(role, b).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                d.layers.removeAll { $0.textContent?.role == role }
+            } else {
+                SupportingText.ensure(role, in: &d)
+            }
+        }
     }
 }

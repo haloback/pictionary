@@ -55,11 +55,19 @@ struct EditorView: View {
                     }
                 }
                 Button { model.showMaterialBackground = true } label: { Label("Material Background…", systemImage: "square.grid.3x3.square") }
+                Divider()
+                Button { model.showDecor = .border } label: { Label("Border…", systemImage: "rectangle.dashed") }
+                Button { model.showDecor = .corners } label: { Label("Corner Ornaments…", systemImage: "square.dashed") }
+                Button { model.showDecor = .divider } label: { Label("Divider…", systemImage: "minus") }
+                Button { model.showDecor = .badge } label: { Label("Badge or Seal…", systemImage: "seal") }
+                Button { model.showDecor = .banner } label: { Label("Banner or Ribbon…", systemImage: "flag") }
             } label: {
                 Label("Add", systemImage: "plus")
             }
             .help("Add a photo, text, shape or painted texture")
 
+            Button { model.showTemplates = true } label: { Label("Templates", systemImage: "rectangle.grid.3x2") }
+                .help("Thousands of ready-made designs, shown with your title")
             Button { model.generateVariations() } label: { Label("New Ideas", systemImage: "sparkles") }
                 .help("Design a new batch of covers from this brief")
             Button { model.remixCurrent() } label: { Label("More Like This", systemImage: "square.stack.3d.down.right") }

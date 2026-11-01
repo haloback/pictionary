@@ -105,6 +105,10 @@ enum Remixer {
                 s.fill = s.fill.map(map)
                 s.stroke = s.stroke.map(map)
                 d.layers[j].content = .shape(s)
+            case .decor(var x):
+                x.color = map(x.color)
+                x.color2 = x.color2.map(map)
+                d.layers[j].content = .decor(x)
             case .image:
                 break
             }

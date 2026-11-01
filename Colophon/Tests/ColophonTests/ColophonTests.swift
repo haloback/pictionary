@@ -1,4 +1,5 @@
 import CoreImage
+import CoreText
 import ImageIO
 import XCTest
 @testable import Colophon
@@ -590,6 +591,94 @@ final class SampleRenderTests: XCTestCase {
         n += 1
         sheet(["grunge", "distressed", "watercolor", "brush", "splatter", "crumpled", "burnedges", "halftone"].flatMap { ["mask.\($0).soft.f", "mask.\($0).hard.b"] },
               String(format: "%02d-materials-masks.png", n), "Texture masks (soft and hard)")
+        // Contact sheets for the template, decor, outline and line-decoration libraries.
+        func gridSheet(_ imgs: [CGImage], cols: Int, cell: CGSize, bg: RGBA, _ file: String, _ name: String, _ family: String) {
+            let rows = (imgs.count + cols - 1) / cols
+            let pad: CGFloat = 12
+            let W = Int(CGFloat(cols) * (cell.width + pad) + pad), H = Int(CGFloat(rows) * (cell.height + pad) + pad)
+            guard rows > 0, let ctx = Gfx.context(W, H) else { return }
+            ctx.setFillColor(bg.cgColor)
+            ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+            for (i, img) in imgs.enumerated() {
+                let x = pad + CGFloat(i % cols) * (cell.width + pad)
+                let y = CGFloat(H) - pad - CGFloat(i / cols + 1) * (cell.height + pad) + pad
+                ctx.draw(img, in: CGRect(x: x, y: y, width: cell.width, height: cell.height))
+            }
+            if let cg = ctx.makeImage() {
+                _ = Exporter.write(cg, to: out.appendingPathComponent(file), format: .png, quality: 1)
+                manifest.append(["file": file, "name": name, "family": family, "font": ""])
+            }
+        }
+        var tbook = CoverDocument()
+        tbook.book = BookInfo(title: "The Salt Orchard", subtitle: "A Novel", author: "Ines Valcourt", tagline: "Some debts are paid in water.", genre: .fantasy)
+        for (gi, group) in [[Genre.fantasy, .romance, .thriller, .mystery], [.literary, .scienceFiction, .horror, .historical], [.youngAdult, .cozy, .nonfiction, .memoir]].enumerated() {
+            var imgs: [CGImage] = []
+            var names: [String] = []
+            for g in group {
+                var b = tbook
+                b.book.genre = g
+                for t in TemplateLibrary.shared.search("", genre: g, photoOnly: false).enumerated().filter({ $0.offset % 29 == 3 }).prefix(4).map(\.element) {
+                    let doc = TemplateLibrary.shared.apply(t, to: b)
+                    if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 300, height: 480), quality: .full) { imgs.append(img); names.append(t.name) }
+                }
+            }
+            gridSheet(imgs, cols: 4, cell: CGSize(width: 300, height: 480), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-templates-%02d.png", n, gi),
+                      "Templates: " + names.joined(separator: "; "), "Templates")
+            n += 1
+        }
+        let decorPalette = PaletteRoles([RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")])
+        for kind in DecorLibrary.Kind.allCases {
+            let items = DecorLibrary.shared.search("", kind: kind)
+            let step = max(1, items.count / 16)
+            var imgs: [CGImage] = []
+            var names: [String] = []
+            let cell = (kind == .border || kind == .corners) ? CGSize(width: 240, height: 384) : CGSize(width: 300, height: 180)
+            for item in items.enumerated().filter({ $0.offset % step == 0 }).prefix(16).map(\.element) {
+                guard let ctx = Gfx.context(Int(cell.width), Int(cell.height)) else { continue }
+                ctx.setFillColor(RGBA(hex: "1B2A4A").cgColor)
+                ctx.fill(CGRect(origin: .zero, size: cell))
+                let (a, b) = DecorLibrary.shared.colors(for: item, palette: decorPalette)
+                let f = (kind == .border || kind == .corners) ? CGRect(origin: .zero, size: cell) : CGRect(x: 20, y: 20, width: cell.width - 40, height: cell.height - 40)
+                if let img = DecorLibrary.shared.render(DecorContent(itemID: item.id, color: a, color2: b), size: f.size, canvasHeight: (kind == .border || kind == .corners) ? cell.height : cell.height * 3) {
+                    ctx.draw(img, in: f)
+                }
+                if let img = ctx.makeImage() { imgs.append(img); names.append(item.name) }
+            }
+            gridSheet(imgs, cols: 4, cell: cell, bg: RGBA(hex: "2A2A2D"), String(format: "%02d-decor-%@.png", n, kind.rawValue),
+                      "\(kind.rawValue.capitalized): " + names.joined(separator: "; "), "Borders & ornaments")
+            n += 1
+        }
+        // Outlines and line decorations.
+        var outlineImgs: [CGImage] = []
+        var outlineNames: [String] = []
+        let outlineSet = StyleLibrary.shared.all.filter { $0.id.hasPrefix("gen.outline") }
+        for st in outlineSet.enumerated().filter({ $0.offset % 16 == 2 }).map(\.element) {
+            var doc = CoverDocument()
+            doc.canvas = CanvasSpec(width: 600, height: 300)
+            doc.palette = [RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]
+            var title = Layer.text("SALT", role: .title, frame: NRect(0.08, 0.12, 0.84, 0.76), font: st.fonts.first(where: FontCatalog.isAvailable) ?? "Anton-Regular", color: .nearWhite)
+            if var t = title.textContent { st.apply(to: &t, palette: PaletteRoles(doc.palette)); title.textContent = t }
+            doc.layers = [Layer.fill(.meshBlend, colors: [RGBA(hex: "13404A"), RGBA(hex: "1B2A4A"), RGBA(hex: "F2A541")], seed: 9), title]
+            if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 600, height: 300), quality: .full) { outlineImgs.append(img); outlineNames.append(st.name) }
+        }
+        gridSheet(outlineImgs, cols: 3, cell: CGSize(width: 600, height: 300), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-outlines.png", n),
+                  "Outlines: " + outlineNames.joined(separator: "; "), "Outlines")
+        n += 1
+        var flourishImgs: [CGImage] = []
+        for f in TextFlourish.allCases {
+            var doc = CoverDocument()
+            doc.canvas = CanvasSpec(width: 600, height: 160)
+            var line = Layer.text("A Novel", role: .subtitle, frame: NRect(0.06, 0.2, 0.88, 0.6), font: "Cinzel-Bold", color: RGBA(hex: "E7C877"))
+            line.textContent?.letterCase = .upper
+            line.textContent?.tracking = 0.2
+            line.textContent?.flourish = f
+            doc.layers = [Layer.fill(.solid, colors: [RGBA(hex: "1B2A4A")]), line]
+            if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 600, height: 160), quality: .full) { flourishImgs.append(img) }
+        }
+        gridSheet(flourishImgs, cols: 2, cell: CGSize(width: 600, height: 160), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-flourishes.png", n),
+                  "Line decorations: " + TextFlourish.allCases.map(\.label).joined(separator: "; "), "Subtitles & taglines")
+        n += 1
+
         // Real photos (public domain, fetched by CI into COLOPHON_PHOTOS): ink effects and the
         // into-the-photo title styles where they belong, on an actual photograph.
         if let pdir = ProcessInfo.processInfo.environment["COLOPHON_PHOTOS"],
@@ -650,6 +739,42 @@ final class SampleRenderTests: XCTestCase {
         }
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("manifest.json"))
+    }
+}
+
+extension SampleRenderTests {
+    /// Downloads a few Google Fonts families and renders a specimen (CI only; needs the network).
+    @MainActor
+    func testRenderFontSpecimens() async throws {
+        guard let dir = ProcessInfo.processInfo.environment["COLOPHON_SAMPLES"] else { throw XCTSkip("COLOPHON_SAMPLES not set") }
+        let out = URL(fileURLWithPath: dir)
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        let lib = FontLibrary.shared
+        let wanted = ["Lobster", "Cormorant", "Bebas Neue", "Playfair Display", "Abril Fatface", "Pacifico", "Cinzel", "Oswald",
+                      "Dancing Script", "Bangers", "Josefin Sans", "Merriweather", "Righteous", "Special Elite", "Spectral", "Fredoka"]
+        var lines: [(String, String)] = []
+        for name in wanted {
+            guard let fam = lib.family(named: name) else { continue }
+            if let names = try? await lib.install(fam), let ps = names.first { lines.append((fam.name, ps)) }
+        }
+        guard !lines.isEmpty else { throw XCTSkip("No fonts could be downloaded") }
+        let W = 1200, rowH = 92, H = rowH * lines.count + 40
+        let ctx = try XCTUnwrap(Gfx.context(W, H))
+        ctx.setFillColor(RGBA(hex: "F4F1E8").cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        for (i, (family, ps)) in lines.enumerated() {
+            let y = CGFloat(H - 20 - (i + 1) * rowH) + 24
+            let big = NSAttributedString(string: "The Salt Orchard", attributes: [
+                .font: FontCatalog.ctFont(ps, size: 52), NSAttributedString.Key(kCTForegroundColorAttributeName as String): RGBA(hex: "1B2A4A").cgColor])
+            let small = NSAttributedString(string: family, attributes: [
+                .font: FontCatalog.ctFont("Helvetica", size: 15), NSAttributedString.Key(kCTForegroundColorAttributeName as String): RGBA(hex: "8A8F98").cgColor])
+            ctx.textPosition = CGPoint(x: 30, y: y)
+            CTLineDraw(CTLineCreateWithAttributedString(small), ctx)
+            ctx.textPosition = CGPoint(x: 260, y: y)
+            CTLineDraw(CTLineCreateWithAttributedString(big), ctx)
+        }
+        let img = try XCTUnwrap(ctx.makeImage())
+        XCTAssertTrue(Exporter.write(img, to: out.appendingPathComponent("99-font-specimen.png"), format: .png, quality: 1))
     }
 }
 

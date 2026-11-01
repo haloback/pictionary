@@ -70,6 +70,7 @@ struct LayerInspector: View {
                     case .image: ImageSection(layer: b)
                     case .fill: FillSection(layer: b)
                     case .shape: ShapeSection(layer: b)
+                    case .decor: DecorSection(layer: b)
                     }
                     if b.wrappedValue.textContent == nil {
                         AdjustSection(layer: b)
@@ -96,6 +97,7 @@ private struct TextSection: View {
     @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
     @State private var showFonts = false
+    @State private var showLibrary = false
 
     private var t: Binding<TextContent> {
         Binding(get: { layer.textContent ?? TextContent(text: "") }, set: { layer.textContent = $0 })
@@ -140,6 +142,16 @@ private struct TextSection: View {
             .popover(isPresented: $showFonts, arrowEdge: .leading) {
                 FontPicker(selection: t.fontName, sample: t.wrappedValue.text).environment(model)
             }
+            Button { showLibrary = true } label: { Label("Browse 1,894 Google Fonts…", systemImage: "textformat.size") }
+                .controlSize(.small)
+                .sheet(isPresented: $showLibrary) {
+                    FontBrowserSheet(sample: t.wrappedValue.text) { name in
+                        if let data = FontLibrary.shared.fontData(postScriptName: name) {
+                            model.mutate { d in d.fonts[name] = data }
+                        }
+                        t.wrappedValue.fontName = name
+                    }
+                }
             FieldRow("Case") {
                 Picker("", selection: t.letterCase) { ForEach(LetterCase.allCases) { Text($0.label).tag($0) } }.labelsHidden()
             }
@@ -188,6 +200,22 @@ private struct TextSection: View {
                 ValueSlider(label: "Radius", value: t.glowRadius, range: 0.05...0.8)
             }
         }
+        PanelSection("Decoration") {
+            FieldRow("With the line") {
+                Picker("", selection: t.flourish) { ForEach(TextFlourish.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            if t.wrappedValue.flourish != .none {
+                Toggle("Own color", isOn: Binding(get: { t.wrappedValue.flourishColor != nil }, set: { on in
+                    t.wrappedValue.flourishColor = on ? PaletteRoles(model.document.palette).accent : nil
+                })).controlSize(.small)
+                if let fc = t.wrappedValue.flourishColor {
+                    RGBAPicker(label: "Color", color: Binding(get: { fc }, set: { t.wrappedValue.flourishColor = $0 }))
+                }
+            }
+            Text("Flanking rules, a box or a band: the classic way to set a subtitle, tagline or \"A Novel\".")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        OutlineControls(t: t)
         StyleControls(t: t)
         PanelSection("Depth") {
             Toggle(isOn: t.behindSubject) {

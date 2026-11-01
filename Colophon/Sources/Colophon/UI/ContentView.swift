@@ -28,6 +28,10 @@ struct ContentView: View {
         .sheet(isPresented: $model.showPaperback) { PaperbackSheet().environment(model) }
         .sheet(isPresented: $model.showCompare) { CompareSheet().environment(model) }
         .sheet(isPresented: $model.showShortcuts) { ShortcutsSheet() }
+        .sheet(isPresented: Binding(get: { model.showDecor != nil }, set: { if !$0 { model.showDecor = nil } })) {
+            DecorBrowserSheet(kind: model.showDecor, palette: model.document.palette) { model.addDecor($0) }
+        }
+        .sheet(isPresented: $model.showTemplates) { TemplateBrowserSheet().environment(model) }
         .sheet(isPresented: $model.showMaterialBackground) {
             MaterialPickerSheet(purpose: .background, palette: model.document.palette) { model.addMaterialFill($0) }
         }

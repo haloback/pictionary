@@ -58,6 +58,16 @@ It's built for people with ideas but no formal design training. The guardrails (
 - **Masks:** every structure is also available as a soft, hard or inverted gray mask.
 - **Where to use them:** Add → Material Background…, a Painted Ground's Material style, the title's Fine-Tune Style → Material → Library, and a layer's Mask → Texture, which wears the layer through grunge, paper or brush.
 
+**Templates.** 2,448 ready-made designs (12 genres × 17 layouts × 12 variations). Each pairs a layout with one of 50+ font pairings, 40 named palettes, a title style, a painted ground and, often, a border. The browser previews every template with your own title, names and photos; one click rebuilds the cover (undoable).
+
+**Subtitles, taglines and series.** Type them in the brief and they appear on the cover in free space near the title, in every layout; clearing a field removes its line. Any line can carry a decoration: flanking rules ("— A NOVEL —"), dots, diamonds, a box, a band behind it, an underline or corner brackets.
+
+**Fonts.** 69 bundled display faces, plus the full Google Fonts library: 1,894 families (3,588 styles), all OFL, Apache or UFL licensed for commercial use. Browse by category, download a family on demand, and it is cached, registered and embedded in your project file.
+
+**Outlines.** Stroke, double and triple outlines, hollow letters, an inner line, and dashed outlines, with one-click presets in the text inspector, plus an Outlines family of 144 generated title styles.
+
+**Borders and ornaments.** Thousands of procedural borders (lines, beads, Greek key, deco and filigree corners, film strip, torn and brush edges…) in many corner treatments, weights and insets, plus corner ornaments, dividers, badges and seals, and banners and ribbons with editable text. Add → Border, Corner Ornaments, Divider, Badge or Banner.
+
 **Everyday polish.**
 - **Fonts:** import your own; they're embedded in the project.
 - **Editing:** eyedropper, copy/paste text style, align buttons, and photo adjustments (exposure, contrast, saturation, warmth, sharpness, blur).

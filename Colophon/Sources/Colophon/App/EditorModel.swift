@@ -118,6 +118,9 @@ final class EditorModel {
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     var showSeries = false
     var showMaterialBackground = false
+    var showDecor: DecorLibrary.Kind?
+    var showTemplates = false
+    var showFonts = false
     var copiedTextStyle: TextContent?
 
     @ObservationIgnored private var undoStack: [CoverDocument] = []
@@ -435,6 +438,32 @@ final class EditorModel {
         selection = l.id
     }
 
+    /// Rebuilds the cover from a template around this book's title, names and photos (undoable).
+    func applyTemplate(_ t: CoverTemplate) {
+        let rebuilt = TemplateLibrary.shared.apply(t, to: document)
+        mutate { d in d = rebuilt }
+        selection = nil
+        toast = "Applied \(t.name)"
+    }
+
+    /// A border, corner set, divider, badge or banner, colored from the cover palette.
+    func addDecor(_ itemID: String) {
+        guard let item = DecorLibrary.shared.item(itemID) else { return }
+        let (a, b) = DecorLibrary.shared.colors(for: item, palette: PaletteRoles(document.palette))
+        var l = Layer.decor(itemID, color: a, color2: b, frame: item.defaultFrame)
+        l.name = item.name
+        // Borders sit above the art and below the type; ornaments go on top.
+        mutate { d in
+            if item.kind == .border || item.kind == .corners {
+                let i = d.layers.firstIndex { $0.textContent != nil } ?? d.layers.count
+                d.layers.insert(l, at: i)
+            } else {
+                d.layers.append(l)
+            }
+        }
+        selection = l.id
+    }
+
     /// A full-cover ground printed from the material library.
     func addMaterialFill(_ materialID: String) {
         let p = PaletteRoles(document.palette)
@@ -555,6 +584,9 @@ final class EditorModel {
             case .fill(var f):
                 if f.colors.isEmpty { f.colors = [c] } else { f.colors[0] = c }
                 d.layers[i].content = .fill(f)
+            case .decor(var x):
+                x.color = c
+                d.layers[i].content = .decor(x)
             case .image:
                 d.layers[i].effects.append(EffectInstance(presetID: "wash.\(EffectLibrary.slug(ColorBook.vivid.min { $0.color.distance(to: c) < $1.color.distance(to: c) }!.name)).color", amount: 0.6))
             }

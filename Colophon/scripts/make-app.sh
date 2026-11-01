@@ -16,6 +16,7 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 mkdir -p "$APP/Contents/Resources/Fonts"
 cp Fonts/*.ttf "$APP/Contents/Resources/Fonts/"
 cp -R Fonts/licenses "$APP/Contents/Resources/Fonts/licenses"
+cp Resources/google-fonts.json "$APP/Contents/Resources/google-fonts.json"
 
 # App icon, drawn with Core Graphics at build time.
 if swift scripts/make-icon.swift build/AppIcon.iconset >/dev/null 2>&1; then

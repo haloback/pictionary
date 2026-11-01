@@ -106,6 +106,8 @@ enum CoverComposer {
                 aspect: base.canvas.aspect, seed: rng.int(1_000_000))
             var doc = base
             doc.layers = build(arch, &ctx)
+            // Layouts without a slot for the subtitle, tagline or series still get them, in free space.
+            SupportingText.ensureAll(&doc)
             doc.palette = palette.colors
             doc.archetypeName = arch.label
             doc.background = palette.dark
@@ -127,6 +129,33 @@ enum CoverComposer {
             docs.append(doc)
         }
         return docs
+    }
+
+    /// One cover from explicit choices: the engine behind templates.
+    static func make(base: CoverDocument, archetype arch: Archetype, treatment: TypeTreatment, palette: PaletteRoles,
+                     fill: FillStyle, effect: String?, styleID: String?, seed: Int) -> CoverDocument {
+        let style = GenreStyle.of(base.book.genre)
+        let images = base.assetOrder.filter { base.assets[$0.uuidString] != nil }
+        let first = images.first
+        let focus = first.map { AssetStore.shared.focus($0, data: base.assetData($0)) } ?? NRect(0.25, 0.25, 0.5, 0.5)
+        if let first { _ = AssetStore.shared.mask(first, data: base.assetData(first)) }
+        var ctx = DesignContext(book: base.book, style: style, treatment: treatment, palette: palette, images: images, focus: focus,
+                                effect: effect, fill: fill, aspect: base.canvas.aspect, seed: seed)
+        var doc = base
+        doc.layers = build(arch, &ctx)
+        SupportingText.ensureAll(&doc)
+        doc.palette = palette.colors
+        doc.archetypeName = arch.label
+        doc.background = palette.dark
+        if let styleID, let preset = TextStylePreset.preset(styleID),
+           let ti = doc.layers.firstIndex(where: { $0.textContent?.role == .title }), var t = doc.layers[ti].textContent {
+            let keepColor = t.color
+            preset.apply(to: &t, palette: palette)
+            if preset.category != "Light" && preset.category != "Genre" { t.color = keepColor }
+            doc.layers[ti].textContent = t
+        }
+        Polisher.polish(&doc, palette: palette)
+        return doc
     }
 
     // MARK: - Building blocks
