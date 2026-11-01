@@ -517,8 +517,10 @@ final class EditorModel {
         let fresh = SmartRandomizer.randomize(document, options: opts, recent: recentRecipes, seed: Int.random(in: 1...999_999))
         if let sig = fresh.recipe?.signature {
             recentRecipes.append(sig)
-            if recentRecipes.count > 40 { recentRecipes.removeFirst() }
+        } else if let cur = SmartRandomizer.signatureOf(fresh) {
+            recentRecipes.append(TemplateLibrary.seed("sig." + cur.0.id))
         }
+        if recentRecipes.count > 40 { recentRecipes.removeFirst() }
         let keepSelection = selection
         mutate { d in d = fresh }
         selection = keepSelection.flatMap { id in document.layer(id) != nil ? id : nil }

@@ -80,6 +80,10 @@ struct TemplateBrowserSheet: View {
                 HStack(spacing: 6) {
                     chip("My Templates (\(store.templates.count))", selected: mine) { mine = true }
                     Divider().frame(height: 16)
+                    chip("Signature", selected: !mine && tags.contains("signature")) {
+                        mine = false
+                        if tags.contains("signature") { tags.remove("signature") } else { tags.insert("signature") }
+                    }
                     chip("All", selected: !mine && genre == nil) { mine = false; genre = nil }
                     ForEach(Genre.allCases) { g in chip(g.label, selected: !mine && genre == g) { mine = false; genre = g } }
                 }
@@ -227,11 +231,17 @@ private struct TemplateTile: View {
                 .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(current ? Color.accentColor : Color.black.opacity(0.1), lineWidth: current ? 2 : 0.5))
                 .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
                 Text(template.name).font(.system(size: 10.5)).lineLimit(2).foregroundStyle(.primary)
-                Text(template.genre.label + (template.needsPhoto ? ", photo" : "")).font(.system(size: 9.5)).foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    if template.isSignature {
+                        Image(systemName: "seal.fill").font(.system(size: 8.5)).foregroundStyle(Color.accentColor)
+                    }
+                    Text(template.genre.label + (template.isSignature ? ", Signature" : template.needsPhoto ? ", photo" : ""))
+                        .font(.system(size: 9.5)).foregroundStyle(.secondary)
+                }
             }
         }
         .buttonStyle(.plain)
-        .help(template.name)
+        .help(template.signatureID.flatMap { SignatureLibrary.design($0)?.idea }.map { template.name + "\n" + $0 } ?? template.name)
         .task(id: template.id + signature) {
             image = TemplateThumbs.shared.cached(template.id, signature: signature)
             if image == nil { image = await TemplateThumbs.shared.thumb(template, base: base, signature: signature) }

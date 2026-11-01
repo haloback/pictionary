@@ -64,6 +64,10 @@ enum SmartRandomizer {
     /// A new cover with the unlocked parts re-rolled. `recent` holds signatures not to repeat.
     static func randomize(_ doc: CoverDocument, options: Options, recent: [Int], seed: Int) -> CoverDocument {
         var rng = SeededRNG(seed: seed)
+        if var sig = signatureRoll(doc, options: options, recent: recent, rng: &rng) {
+            restoreLockedLayers(from: doc, into: &sig)
+            return sig
+        }
         let old = currentRecipe(doc)
         var best = old
         for _ in 0..<12 {
@@ -74,6 +78,43 @@ enum SmartRandomizer {
         var out = TemplateLibrary.build(best, base: doc)
         restoreLockedLayers(from: doc, into: &out)
         return out
+    }
+
+    /// The Signature design and palette a cover was made from, if any ("sig.<design>.<palette>").
+    static func signatureOf(_ doc: CoverDocument) -> (SignatureDesign, Int)? {
+        guard let id = doc.templateID, id.hasPrefix("sig.") else { return nil }
+        let parts = id.split(separator: ".")
+        guard parts.count == 3, let d = SignatureLibrary.design(String(parts[1])), let pi = Int(parts[2]) else { return nil }
+        return (d, pi)
+    }
+
+    /// Hand-composed Signature layouts join the mix: on a Signature cover with the layout locked, its other palettes;
+    /// with the layout free, sometimes a whole Signature design for the genre. Nil means roll a recipe instead.
+    private static func signatureRoll(_ doc: CoverDocument, options o: Options, recent: [Int], rng: inout SeededRNG) -> CoverDocument? {
+        let layoutFree = !o.locks.contains(.layout)
+        let colorsFree = !o.locks.contains(.colors)
+        let current = signatureOf(doc)
+        if let cur = current, !layoutFree {
+            let design = cur.0
+            let pi = cur.1
+            guard colorsFree, design.palettes.count > 1 else { return nil }
+            var next = rng.int(design.palettes.count - 1)
+            if next >= pi { next += 1 }
+            return SignatureLibrary.build(design, palette: next, base: doc)
+        }
+        // A Signature design brings its own palette and type, so only when those may change.
+        guard layoutFree, colorsFree, !o.locks.contains(.fonts) else { return nil }
+        let c = min(1, max(0, o.creativity))
+        let chance = current == nil ? 0.3 : 0.55
+        guard rng.unit() < chance else { return nil }
+        let genre = doc.book.genre
+        var pool = SignatureLibrary.all.filter { $0.genre == genre }
+        if pool.isEmpty || rng.unit() < c * 0.5 { pool = SignatureLibrary.all }
+        let currentID = current?.0.id
+        var fresh: [SignatureDesign] = []
+        for d in pool where d.id != currentID && !recent.contains(TemplateLibrary.seed("sig." + d.id)) { fresh.append(d) }
+        guard let design = pick(fresh.isEmpty ? pool : fresh, &rng) else { return nil }
+        return SignatureLibrary.build(design, palette: rng.int(design.palettes.count), base: doc)
     }
 
     private static func pick<T>(_ items: [T], _ rng: inout SeededRNG) -> T? {

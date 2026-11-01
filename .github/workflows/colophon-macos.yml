@@ -40,7 +40,10 @@ jobs:
           curl -fsSL -A "$ua" -m 60 -o build/photos/a-aldrin.jpg "https://images-assets.nasa.gov/image/as11-40-5903/as11-40-5903~medium.jpg" || true
           curl -fsSL -A "$ua" -m 60 -o build/photos/b-monalisa.jpg "https://commons.wikimedia.org/wiki/Special:FilePath/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg?width=1000" || true
           curl -fsSL -A "$ua" -m 60 -o build/photos/c-earth.jpg "https://images-assets.nasa.gov/image/as17-148-22727/as17-148-22727~medium.jpg" || true
-          ls -la build/photos
+          mkdir -p build/photos/sig
+          curl -fsSL -A "$ua" -m 60 -o build/photos/sig/portrait.jpg "https://commons.wikimedia.org/wiki/Special:FilePath/1665_Girl_with_a_Pearl_Earring.jpg?width=1000" || true
+          curl -fsSL -A "$ua" -m 60 -o build/photos/sig/landscape.jpg "https://commons.wikimedia.org/wiki/Special:FilePath/Caspar_David_Friedrich_-_Wanderer_above_the_sea_of_fog.jpg?width=1000" || true
+          ls -la build/photos build/photos/sig
       - name: Render style samples
         env:
           COLOPHON_SAMPLES: ${{ github.workspace }}/Colophon/build/samples

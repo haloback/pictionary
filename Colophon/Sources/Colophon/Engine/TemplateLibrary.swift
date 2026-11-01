@@ -40,7 +40,12 @@ struct CoverTemplate: Identifiable, Hashable {
     let borderID: String?
     let flourish: TextFlourish
     let tags: [String]
-    var needsPhoto: Bool { !archetype.worksWithoutImage }
+    /// Set for the hand-composed Signature collection: the design and which of its palettes.
+    var signatureID: String? = nil
+    var signaturePalette = 0
+    /// Signature designs paint their picture areas when the book has no photo yet.
+    var needsPhoto: Bool { signatureID == nil && !archetype.worksWithoutImage }
+    var isSignature: Bool { signatureID != nil }
 
     var recipe: CoverRecipe {
         CoverRecipe(genre: genre, archetype: archetype, pairing: pairing, paletteName: paletteName, palette: palette, styleID: styleID,
@@ -83,6 +88,9 @@ final class TemplateLibrary {
 
     /// The template applied to `base`: keeps its book details, photos, fonts and canvas.
     func apply(_ t: CoverTemplate, to base: CoverDocument) -> CoverDocument {
+        if let sid = t.signatureID, let design = SignatureLibrary.design(sid) {
+            return SignatureLibrary.build(design, palette: t.signaturePalette, base: base)
+        }
         var doc = TemplateLibrary.build(t.recipe, base: base)
         doc.templateID = t.id
         return doc
@@ -154,7 +162,7 @@ final class TemplateLibrary {
     // MARK: Building
 
     private init() {
-        var list: [CoverTemplate] = []
+        var list: [CoverTemplate] = TemplateLibrary.signatureTemplates()
         let palettes = TemplateLibrary.palettes
         let archetypes = Archetype.allCases
         for genre in Genre.allCases {
@@ -196,6 +204,24 @@ final class TemplateLibrary {
         var idx: [String: CoverTemplate] = [:]
         for t in list { idx[t.id] = t }
         index = idx
+    }
+
+    /// The Signature collection, every design in each of its palettes, listed first.
+    static func signatureTemplates() -> [CoverTemplate] {
+        var list: [CoverTemplate] = []
+        for d in SignatureLibrary.all {
+            for (pi, p) in d.palettes.enumerated() {
+                var tags: [String] = ["signature", d.genre.label.lowercased(), d.name.lowercased(), p.name.lowercased()]
+                tags += d.tags.map { $0.lowercased() }
+                if !tags.contains("photo") && d.usesPhoto { tags.append("photo") }
+                if !d.usesPhoto && !tags.contains("no photo") { tags.append("no photo") }
+                if !tags.contains("dark") && !tags.contains("light") { tags.append(p.bg.luminance < 0.2 ? "dark" : "light") }
+                list.append(CoverTemplate(id: "sig.\(d.id).\(pi)", name: "\(d.name), \(p.name)", genre: d.genre, archetype: .typographic,
+                                          pairing: "", paletteName: p.name, palette: p.colors, styleID: nil, fill: .solid, effect: nil,
+                                          borderID: nil, flourish: .none, tags: tags, signatureID: d.id, signaturePalette: pi))
+            }
+        }
+        return list
     }
 
     static func pairing(named name: String, genre: Genre) -> TypeTreatment {
