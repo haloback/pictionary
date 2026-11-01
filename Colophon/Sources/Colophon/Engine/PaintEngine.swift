@@ -280,6 +280,9 @@ final class PaintSurface {
             }
         }
         var scratchKS = [Float](repeating: 0, count: B)
+        // A stroke lays its paint down once: overlapping dabs only add what the stroke hasn't given a pixel yet,
+        // so a half-strength glaze stays half-strength however many dabs cross a pixel.
+        var given = [Float](repeating: 0, count: s.tool == .paint || s.tool == .lift ? w * h : 0)
         for (cx, cy) in points {
             switch s.tool {
             case .paint:
@@ -292,7 +295,11 @@ final class PaintSurface {
                     for c in 0..<3 { brushRes[c] += (under.res[c] - brushRes[c]) * pick }
                 }
                 dab(cx, cy, radius: radius, hardness: 1 - wet * 0.6) { i, f in
-                    let a = f * strength
+                    let target = f * strength
+                    let prev = given[i]
+                    guard target > prev + 0.0005 else { return }
+                    given[i] = target
+                    let a = (target - prev) / max(0.0001, 1 - prev)
                     // Weight each paint by its tinting strength (lightness), as real pigments behave.
                     let pxY = self.cov[i] > 0.01 ? Spectral.luminance(self.ks, at: i * B) : brushY
                     let old = self.cov[i] * (1 - a) * pxY
@@ -331,7 +338,11 @@ final class PaintSurface {
                 }
             case .lift:
                 dab(cx, cy, radius: radius, hardness: 0.4) { i, f in
-                    self.cov[i] *= 1 - f * strength
+                    let target = f * strength
+                    let prev = given[i]
+                    guard target > prev + 0.0005 else { return }
+                    given[i] = target
+                    self.cov[i] *= 1 - (target - prev) / max(0.0001, 1 - prev)
                 }
             }
         }
@@ -416,7 +427,7 @@ extension Watercolor {
         let inks: [RGBA] = pigments.isEmpty ? [RGBA(hex: "2A3B9E"), RGBA(hex: "F7D917")] : pigments
         let inkKS: [[Float]] = inks.map { Spectral.pigment($0).ks }
         let unit = Float(min(w, h)) * Float(bloomScale)
-        let blooms = Int(6 + 18 * coverage)
+        let blooms = Int(4 + 12 * coverage)
         guard let mctx = Gfx.grayContext(w, h), let mdata = mctx.data else { return nil }
         let mbpr = mctx.bytesPerRow
         let mpx = mdata.bindMemory(to: UInt8.self, capacity: mbpr * h)
@@ -425,7 +436,7 @@ extension Watercolor {
             mctx.setFillColor(gray: 0, alpha: 1)
             mctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
             let cx = CGFloat(rng.range(-0.1, 1.1)) * CGFloat(w), cy = CGFloat(rng.range(-0.1, 1.1)) * CGFloat(h)
-            let r = CGFloat(unit) * CGFloat(rng.range(0.15, 0.45))
+            let r = CGFloat(unit) * CGFloat(rng.range(0.12, 0.34))
             let path = CGMutablePath()
             let verts = 28
             var radii: [CGFloat] = []
