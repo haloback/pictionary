@@ -169,6 +169,8 @@ enum CoverComposer {
             }
             if lightGround, let t = doc.layers[ti].textContent, t.color.luminance > 0.35 {
                 doc.layers[ti].textContent?.color = palette.dark
+            } else if !lightGround, let t = doc.layers[ti].textContent, t.color.luminance < 0.3 {
+                doc.layers[ti].textContent?.color = palette.light
             }
         }
         // Metallic and glowing styles vanish on pale grounds; there the clean type stands.

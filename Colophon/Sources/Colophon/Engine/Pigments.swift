@@ -284,13 +284,13 @@ enum Watercolor {
         let k: Double = 5 * (0.4 + wetness)
         let tide = remap(edge, -k * 2, 1 - k)   // 1 - 2k * edge
         wash = FX.blend(FX.mix(FX.solid(.white, e), tide, 0.85), over: wash, mode: "CIMultiplyBlendMode")
-        // Granulation: pigment settles in the paper's tooth.
-        if granulation > 0 {
-            let tooth = remap(FX.noise(e, seed: seed &+ 3, grainSize: max(1, unit * 0.012), strength: 1), 0.35 * granulation, 1 - 0.18 * granulation)
-            wash = FX.blend(tooth, over: wash, mode: "CIMultiplyBlendMode")
-        }
         // Soft bleeding edges between paints.
         wash = FX.displace(wash, by: field(e, seed: seed &+ 21, cells: cellsSmall * 2), scale: unit * CGFloat(0.03 + 0.08 * wetness))
+        // Granulation last, so the paper's tooth stays put while the paint moves.
+        if granulation > 0 {
+            let tooth = remap(FX.blur(FX.noise(e, seed: seed &+ 3, grainSize: 1, strength: 1), 0.6), 0.22 * granulation, 1 - 0.1 * granulation)
+            wash = FX.blend(tooth, over: wash, mode: "CIMultiplyBlendMode")
+        }
         return wash.cropped(to: e)
     }
 }
