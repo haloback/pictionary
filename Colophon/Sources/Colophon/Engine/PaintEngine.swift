@@ -314,14 +314,15 @@ final class PaintSurface {
             case .smudge:
                 let carry = brushKS, carryRes = brushRes, carryCov = brushCov
                 dab(cx, cy, radius: radius, hardness: 0.3) { i, f in
-                    let a = f * strength
+                    let a = f * strength * 0.55
                     for b in 0..<B { self.ks[i * B + b] += (carry[b] - self.ks[i * B + b]) * a }
                     for c in 0..<3 { self.res[i * 3 + c] += (carryRes[c] - self.res[i * 3 + c]) * a }
                     self.cov[i] += (carryCov - self.cov[i]) * a
                 }
                 // The finger slowly takes on the colors it drags through.
                 let under = sample(Int(cx), Int(cy), radius: Int(radius * 0.4))
-                let take = 0.18 + 0.3 * (1 - strength)
+                // A finger mostly carries what it just touched: colors smear along the stroke and fade out.
+                let take = 0.45 + 0.35 * (1 - strength)
                 for b in 0..<B { brushKS[b] += (under.ks[b] - brushKS[b]) * take }
                 for c in 0..<3 { brushRes[c] += (under.res[c] - brushRes[c]) * take }
                 brushCov += (under.cov - brushCov) * take
@@ -438,13 +439,20 @@ extension Watercolor {
             let cx = CGFloat(rng.range(-0.1, 1.1)) * CGFloat(w), cy = CGFloat(rng.range(-0.1, 1.1)) * CGFloat(h)
             let r = CGFloat(unit) * CGFloat(rng.range(0.12, 0.34))
             let path = CGMutablePath()
-            let verts = 28
+            // Ragged, fractal edge: a few big lobes plus fine jitter, like water spreading into paper fibers.
+            let verts = 90
+            let lobes = Int(rng.range(2, 5))
+            let phase = rng.range(0, 6.28)
             var radii: [CGFloat] = []
-            for _ in 0..<verts { radii.append(r * CGFloat(rng.range(0.7, 1.25))) }
+            for v in 0..<verts {
+                let t = Double(v) / Double(verts) * 2 * Double.pi
+                let big = 1 + 0.22 * sin(Double(lobes) * t + phase) + 0.1 * sin(Double(lobes * 2 + 1) * t + phase * 1.7)
+                radii.append(r * CGFloat(big) * CGFloat(rng.range(0.94, 1.06)))
+            }
             for v in 0..<verts {
                 let a = CGFloat(v) / CGFloat(verts) * 2 * .pi
-                let rr = (radii[v] + radii[(v + 1) % verts] + radii[(v + verts - 1) % verts]) / 3
-                let p = CGPoint(x: cx + cos(a) * rr * 1.2, y: cy + sin(a) * rr)
+                let rr = (radii[v] * 2 + radii[(v + 1) % verts] + radii[(v + verts - 1) % verts]) / 4
+                let p = CGPoint(x: cx + cos(a) * rr * 1.15, y: cy + sin(a) * rr)
                 if v == 0 { path.move(to: p) } else { path.addLine(to: p) }
             }
             path.closeSubpath()
@@ -456,6 +464,19 @@ extension Watercolor {
             let b = inkKS[(k + 1 + rng.int(max(1, inkKS.count))) % inkKS.count]
             let conc = Float(0.25 + 0.6 * strength) * Float(rng.range(0.6, 1.1))
             let tilt = Float(rng.range(-1, 1))
+            // Uneven pigment inside the wash: a coarse random grid, smoothly interpolated.
+            let gridN = 6
+            var grid: [Float] = []
+            for _ in 0..<(gridN * gridN) { grid.append(Float(rng.range(0.45, 1.35))) }
+            func uneven(_ x: Int, _ y: Int) -> Float {
+                let gx = Float(x) / Float(max(1, w - 1)) * Float(gridN - 1), gy = Float(y) / Float(max(1, h - 1)) * Float(gridN - 1)
+                let x0 = min(gridN - 2, Int(gx)), y0 = min(gridN - 2, Int(gy))
+                let fx = gx - Float(x0), fy = gy - Float(y0)
+                let sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy)
+                let a0 = grid[y0 * gridN + x0] * (1 - sx) + grid[y0 * gridN + x0 + 1] * sx
+                let a1 = grid[(y0 + 1) * gridN + x0] * (1 - sx) + grid[(y0 + 1) * gridN + x0 + 1] * sx
+                return a0 * (1 - sy) + a1 * sy
+            }
             for y in 0..<h {
                 let rowSrc = y * mbpr
                 for x in 0..<w {
@@ -464,25 +485,38 @@ extension Watercolor {
                     let i = y * w + x
                     // A gradient of the two paints across the bloom: wet-in-wet charge.
                     let t = min(1, max(0, 0.5 + tilt * (Float(x) - Float(cx)) / max(1, Float(r) * 2)))
+                    let cc = conc * uneven(x, y)
                     for c in 0..<B {
-                        ks[i * B + c] += m * conc * (a[c] * (1 - t) + b[c] * t)
+                        ks[i * B + c] += m * cc * (a[c] * (1 - t) + b[c] * t)
                     }
                     wetAll[i] = max(wetAll[i], m)
                 }
             }
             // Tide line: pigment carried to the rim of this bloom as it dries.
-            let edgeBlur = max(1, Int(r * 0.08))
-            var blurred = [Float](repeating: 0, count: n)
+            let edgeBlur = max(1, Int(r * 0.07))
+            var maskF = [Float](repeating: 0, count: n)
+            for y in 0..<h { for x in 0..<w { maskF[y * w + x] = Float(mpx[y * mbpr + x]) / 255 } }
+            // Separable box blur, both directions, so the rim forms all the way round.
+            var horiz = [Float](repeating: 0, count: n)
             for y in 0..<h {
-                let rowSrc = y * mbpr
                 var acc: Float = 0
-                var count: Float = 0
-                var x0 = 0
+                for x in 0..<min(w, edgeBlur) { acc += maskF[y * w + x] }
                 for x in 0..<w {
-                    acc += Float(mpx[rowSrc + x]) / 255; count += 1
-                    if x - x0 > 2 * edgeBlur { acc -= Float(mpx[rowSrc + x0]) / 255; count -= 1; x0 += 1 }
-                    let cxp = x - edgeBlur
-                    if cxp >= 0 { blurred[y * w + cxp] = acc / count }
+                    let add = x + edgeBlur, sub = x - edgeBlur - 1
+                    if add < w { acc += maskF[y * w + add] }
+                    if sub >= 0 { acc -= maskF[y * w + sub] }
+                    horiz[y * w + x] = acc / Float(2 * edgeBlur + 1)
+                }
+            }
+            var blurred = [Float](repeating: 0, count: n)
+            for x in 0..<w {
+                var acc: Float = 0
+                for y in 0..<min(h, edgeBlur) { acc += horiz[y * w + x] }
+                for y in 0..<h {
+                    let add = y + edgeBlur, sub = y - edgeBlur - 1
+                    if add < h { acc += horiz[add * w + x] }
+                    if sub >= 0 { acc -= horiz[sub * w + x] }
+                    blurred[y * w + x] = acc / Float(2 * edgeBlur + 1)
                 }
             }
             let rim = Float(0.5 + 0.9 * wetness) * conc
@@ -491,7 +525,7 @@ extension Watercolor {
                 for x in 0..<w {
                     let m = Float(mpx[rowSrc + x]) / 255
                     guard m > 0.5 else { continue }
-                    let e = max(0, m - blurred[y * w + x]) * 2.5
+                    let e = max(0, m - blurred[y * w + x]) * 3.2
                     guard e > 0.01 else { continue }
                     let i = y * w + x
                     for c in 0..<B { ks[i * B + c] += e * rim * (a[c] + b[c]) * 0.5 }
@@ -499,7 +533,7 @@ extension Watercolor {
             }
         }
         // Diffusion inside the wet areas: neighboring paints flow into each other and mix.
-        let iterations = Int(2 + 6 * wetness)
+        let iterations = Int(4 + 10 * wetness)
         var tmp = ks
         for _ in 0..<iterations {
             for y in 1..<(h - 1) {
