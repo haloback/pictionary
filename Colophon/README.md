@@ -66,6 +66,12 @@ It's built for people with ideas but no formal design training. The guardrails (
 
 **Outlines.** Stroke, double and triple outlines, hollow letters, an inner line, and dashed outlines, with one-click presets in the text inspector, plus an Outlines family of 144 generated title styles.
 
+**Realistic color mixing.** Colors can mix the way paint does, not the way light does: blue and yellow make green, red and yellow make orange, and white makes a tint. Each color is lifted to a reflectance spectrum and mixed with Kubelka-Munk theory. It drives "Mix like paint" gradients for text and backgrounds, a Mix Paint button, and 24 real watercolor pigments (ultramarine, hansa yellow, burnt sienna, Payne's gray…).
+
+**Watercolor.** A wet-in-wet watercolor ground where paints bloom into each other, dilute toward the paper, leave tide lines where they dry and granulate in the paper's tooth; and watercolor letters with pigment pooling at their edges.
+
+**Emboss, deboss and overprint.** The paper or photo itself rises or presses in as the letters (blind, inked or foil-stamped), and risograph-style two-ink overprints. Hundreds of new generated styles: 132 emboss and deboss, 300 watercolor letters (every pigment pair), 155 paint-mixed gradients and 176 overprints. Layers also gain Linear Burn (glaze) and Linear Dodge blend modes.
+
 **Borders and ornaments.** Thousands of procedural borders (lines, beads, Greek key, deco and filigree corners, film strip, torn and brush edges…) in many corner treatments, weights and insets, plus corner ornaments, dividers, badges and seals, and banners and ribbons with editable text. Add → Border, Corner Ornaments, Divider, Badge or Banner.
 
 **Everyday polish.**

@@ -89,6 +89,15 @@ enum Generators {
             ctx.setFillColor(c(0).cgColor)
             ctx.fill(rect)
 
+        case .wetInWet:
+            // Paper is the lightest color; the rest are the paints.
+            let paper = cols.max { $0.luminance < $1.luminance } ?? RGBA(hex: "FBF7EE")
+            var inks = cols.filter { $0 != paper }
+            if inks.isEmpty { inks = [RGBA(hex: "2A3B9E"), RGBA(hex: "F7D917")] }
+            let wash = Watercolor.paint(extent: rect, pigments: inks, paper: paper.withLightness(max(paper.hsl.l, 0.93)), seed: f.seed,
+                                        scale: unit * 0.12, wetness: 0.4 + 0.5 * k, strength: 0.5 + 0.4 * k)
+            if let img = Gfx.render(wash, extent: rect) { ctx.draw(img, in: rect) }
+
         case .material:
             let id = f.materialID ?? "mat.marble.palette.f"
             if let img = MaterialLibrary.shared.renderImage(id, size: CGSize(width: w, height: h), palette: cols, seed: f.seed) {
@@ -96,12 +105,13 @@ enum Generators {
             }
 
         case .linear:
-            Gfx.linearGradient(ctx, rect, cols, angle: f.angle)
+            Gfx.linearGradient(ctx, rect, f.paintMix == true ? PigmentMixer.expand(cols) : cols, angle: f.angle)
 
         case .radial:
             ctx.setFillColor(c(cols.count - 1).cgColor)
             ctx.fill(rect)
-            if let g = CGGradient(colorsSpace: Gfx.sRGB, colors: cols.map(\.cgColor) as CFArray, locations: nil) {
+            let radialCols = f.paintMix == true ? PigmentMixer.expand(cols) : cols
+            if let g = CGGradient(colorsSpace: Gfx.sRGB, colors: radialCols.map(\.cgColor) as CFArray, locations: nil) {
                 let center = CGPoint(x: W * 0.5, y: H * CGFloat(Golden.major))
                 ctx.drawRadialGradient(g, startCenter: center, startRadius: 0, endCenter: center,
                                        endRadius: big * CGFloat(0.5 + 0.7 * k), options: [.drawsAfterEndLocation])

@@ -679,6 +679,48 @@ final class SampleRenderTests: XCTestCase {
                   "Line decorations: " + TextFlourish.allCases.map(\.label).joined(separator: "; "), "Subtitles & taglines")
         n += 1
 
+        // Paint mixing: RGB gradient (top) against paint-mixed gradient (bottom) for classic pairs.
+        var mixImgs: [CGImage] = []
+        let pairs: [(String, String)] = [("2A3B9E", "F7D917"), ("D7263D", "2A3B9E"), ("D7263D", "F7D917"), ("0B6E5A", "D8457A"), ("3C8DC5", "F2661C"), ("4B2A7A", "F7D917")]
+        for (a, b) in pairs {
+            guard let ctx = Gfx.context(600, 160) else { continue }
+            Gfx.linearGradient(ctx, CGRect(x: 0, y: 80, width: 600, height: 80), [RGBA(hex: a), RGBA(hex: b)], angle: 0)
+            Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: 600, height: 80), PigmentMixer.ramp(RGBA(hex: a), RGBA(hex: b), steps: 15), angle: 0)
+            if let img = ctx.makeImage() { mixImgs.append(img) }
+        }
+        gridSheet(mixImgs, cols: 2, cell: CGSize(width: 600, height: 160), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-paint-mixing.png", n),
+                  "Light mixing (top of each pair) vs paint mixing (bottom): blue+yellow, red+blue, red+yellow, phthalo green+rose, cerulean+orange, violet+yellow", "Color mixing")
+        n += 1
+        var wcImgs: [CGImage] = []
+        let wcSets: [[String]] = [["2A3B9E", "F7D917"], ["D8457A", "F2661C"], ["0B6E5A", "3C8DC5", "F7D917"], ["4B2A7A", "D8457A"], ["9C4A2E", "2A3B9E"], ["26304A", "C99A3B"]]
+        for (i, set) in wcSets.enumerated() {
+            let f = FillContent(style: .wetInWet, colors: set.map { RGBA(hex: $0) } + [RGBA(hex: "FBF7EE")], seed: 11 + i, intensity: 0.6)
+            if let img = Generators.render(f, size: CGSize(width: 320, height: 480)) { wcImgs.append(img) }
+        }
+        gridSheet(wcImgs, cols: 3, cell: CGSize(width: 320, height: 480), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-watercolor-fills.png", n),
+                  "Wet-in-wet watercolor backgrounds: ultramarine+hansa yellow, rose+orange, phthalo green+cerulean+yellow, violet+rose, burnt sienna+ultramarine, indigo+ochre", "Color mixing")
+        n += 1
+        // Emboss, watercolor letters and overprint, on paper and on a photo-like ground.
+        var newImgs: [CGImage] = []
+        var newNames: [String] = []
+        let picks = ["gen.emboss.emboss-blind-medium", "gen.emboss.deboss-blind-deep", "gen.emboss.emboss-gold-foil-medium", "gen.emboss.deboss-gold-foil-medium",
+                     "gen.watercolor.hansa-yellow-ultramarine-blue", "gen.watercolor.pyrrole-orange-permanent-rose", "gen.watercolor.cerulean-blue-phthalo-green",
+                     "gen.paintmix.cadmium-yellow-ultramarine-blue", "gen.overprint.fluorescent-pink-medium-blue-loose", "gen.overprint.yellow-teal-tight",
+                     "gen.emboss.emboss-blind-subtle", "gen.watercolor.indigo-burnt-sienna"]
+        for (i, id) in picks.enumerated() {
+            guard let p = StyleLibrary.shared.preset(id) ?? StyleLibrary.shared.all.first(where: { $0.id.hasPrefix(String(id.prefix(16))) }) else { continue }
+            var doc = CoverDocument()
+            doc.canvas = CanvasSpec(width: 600, height: 360)
+            let ground: Layer = i % 2 == 0 ? Layer.fill(.grain, colors: [RGBA(hex: "EFE6D4"), RGBA(hex: "E2D6BE")], seed: 3) : Layer.fill(.wetInWet, colors: [RGBA(hex: "3C8DC5"), RGBA(hex: "C99A3B"), RGBA(hex: "FBF7EE")], seed: 21 + i)
+            var title = Layer.text("SALT", role: .title, frame: NRect(0.08, 0.14, 0.84, 0.72), font: p.fonts.first(where: FontCatalog.isAvailable) ?? "Anton-Regular", color: RGBA(hex: "1B2A4A"))
+            if var t = title.textContent { p.apply(to: &t, palette: PaletteRoles([RGBA(hex: "1B2A4A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")])); title.textContent = t }
+            doc.layers = [ground, title]
+            if let img = CoverRenderer.shared.render(doc, size: CGSize(width: 600, height: 360), quality: .full) { newImgs.append(img); newNames.append(p.name) }
+        }
+        gridSheet(newImgs, cols: 3, cell: CGSize(width: 600, height: 360), bg: RGBA(hex: "1C1C1E"), String(format: "%02d-emboss-watercolor-overprint.png", n),
+                  "Styles: " + newNames.joined(separator: "; "), "Emboss, watercolor, overprint")
+        n += 1
+
         // Real photos (public domain, fetched by CI into COLOPHON_PHOTOS): ink effects and the
         // into-the-photo title styles where they belong, on an actual photograph.
         if let pdir = ProcessInfo.processInfo.environment["COLOPHON_PHOTOS"],

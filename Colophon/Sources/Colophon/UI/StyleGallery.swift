@@ -250,6 +250,18 @@ struct StyleControls: View {
                         ValueSlider(label: "Tint", value: s.surfaceTint, range: 0...1)
                     }
                 }
+                group("Emboss") {
+                    ValueSlider(label: "Emboss", value: s.emboss, range: 0...1)
+                    if s.wrappedValue.emboss > 0 {
+                        Toggle("Pressed in (deboss)", isOn: s.embossPressed).controlSize(.small)
+                        ValueSlider(label: "Ink", value: s.embossTint, range: 0...1) { $0 == 0 ? "Blind" : String(format: "%.0f%%", $0 * 100) }
+                        ValueSlider(label: "Light", value: s.lightAngle, range: 0...360) { String(format: "%.0f°", $0) }
+                    }
+                }
+                group("Overprint") {
+                    ValueSlider(label: "Second Ink", value: s.overprint, range: 0...1)
+                    if s.wrappedValue.overprint > 0 { optionalColor("Ink Color", s.overprintColor, fallback: ColorAdvisor.opposite(t.color)) }
+                }
                 group("Relief") {
                     ValueSlider(label: "Bevel", value: s.bevel, range: 0...1)
                     if s.wrappedValue.bevel > 0 {

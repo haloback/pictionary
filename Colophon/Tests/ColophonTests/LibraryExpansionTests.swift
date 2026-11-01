@@ -123,4 +123,41 @@ final class LibraryExpansionTests: XCTestCase {
         let fam = try XCTUnwrap(lib.families.first { $0.styles.contains { $0.file.contains("[") } })
         XCTAssertNotNil(FontLibrary.remoteURL(commit: "abc", path: fam.path, file: fam.styles[0].file))
     }
+
+    func testPaintMixesLikePigment() {
+        let blue = RGBA(hex: "2A3B9E"), yellow = RGBA(hex: "F7D917")
+        let green = PigmentMixer.mix(blue, yellow, 0.5)
+        XCTAssertGreaterThan(green.g, green.r, "blue + yellow should be green")
+        XCTAssertGreaterThan(green.g, green.b, "blue + yellow should be green")
+        // Light mixing (RGB average) gives a gray instead.
+        let orange = PigmentMixer.mix(RGBA(hex: "D7263D"), RGBA(hex: "F7D917"), 0.5)
+        XCTAssertGreaterThan(orange.r, orange.g)
+        XCTAssertGreaterThan(orange.g, orange.b)
+        let same = PigmentMixer.mix(RGBA(hex: "E4572E"), RGBA(hex: "E4572E"), 0.5)
+        XCTAssertEqual(same.r, RGBA(hex: "E4572E").r, accuracy: 0.01)
+        XCTAssertEqual(same.g, RGBA(hex: "E4572E").g, accuracy: 0.01)
+        let tint = PigmentMixer.mix(blue, .white, 0.5)
+        XCTAssertGreaterThan(tint.luminance, blue.luminance)
+        XCTAssertEqual(PigmentMixer.ramp(blue, yellow, steps: 9).count, 9)
+    }
+
+    func testNewStyleFamiliesRender() throws {
+        let lib = StyleLibrary.shared
+        for prefix in ["gen.emboss", "gen.watercolor", "gen.paintmix", "gen.overprint"] {
+            let fam = lib.all.filter { $0.id.hasPrefix(prefix) }
+            XCTAssertGreaterThanOrEqual(fam.count, 100, prefix)
+        }
+        XCTAssertGreaterThanOrEqual(lib.all.count, 2900)
+        // Emboss reads the ground, so render it on a real cover with a photo-like fill below.
+        for id in [lib.all.first { $0.id.hasPrefix("gen.emboss") }!.id, lib.all.first { $0.id.hasPrefix("gen.watercolor") }!.id,
+                   lib.all.first { $0.id.hasPrefix("gen.overprint") }!.id, lib.all.first { $0.id.hasPrefix("gen.paintmix") }!.id] {
+            let p = try XCTUnwrap(lib.preset(id))
+            var doc = CoverDocument()
+            doc.canvas = CanvasSpec(width: 600, height: 400)
+            var title = Layer.text("SALT", role: .title, frame: NRect(0.1, 0.2, 0.8, 0.6), font: "Anton-Regular", color: .nearWhite)
+            if var t = title.textContent { p.apply(to: &t, palette: PaletteRoles([.ink, .paper])); title.textContent = t }
+            doc.layers = [Layer.fill(.wetInWet, colors: [RGBA(hex: "2A3B9E"), RGBA(hex: "F7D917"), .paper]), title]
+            XCTAssertNotNil(CoverRenderer.shared.render(doc, size: CGSize(width: 600, height: 400), quality: .full), id)
+        }
+    }
 }

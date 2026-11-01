@@ -356,7 +356,7 @@ enum TextRenderer {
         } else if neon {
             stops = [t.color.mixed(with: .white, 0.75), t.color.mixed(with: .white, 0.55)]
         } else if let g = t.gradientTo {
-            stops = [t.color, g]
+            stops = t.paintMix ? PigmentMixer.ramp(t.color, g, steps: 9) : [t.color, g]
         }
         fillCtx.saveGState()
         fillCtx.clip(to: rect, mask: mask)

@@ -443,6 +443,93 @@ final class StyleLibrary {
                 }
             }
         }
+        family("emboss", "Emboss & Deboss", tags: ["emboss", "deboss", "embossed", "pressed", "raised", "blind", "foil", "paper", "letterpress"],
+               genres: [.literary, .memoir, .historical, .romance, .mystery, .nonfiction]) { add in
+            let depths: [(String, Double)] = [("Subtle", 0.35), ("Medium", 0.6), ("Deep", 0.9)]
+            var finishes: [(String, Double, SurfaceTexture, RGBA?)] = [("Blind", 0, .none, nil), ("Gold Foil", 0.85, .gold, nil), ("Silver Foil", 0.85, .silver, nil)]
+            finishes += vivid.prefix(8).map { ($0.name + " Ink", 0.55, SurfaceTexture.none, $0.color) }
+            var n = 0
+            for pressed in [false, true] {
+                for (dName, depth) in depths {
+                    for (fName, tint, surface, ink) in finishes {
+                        for (lName, angle) in [("", 135.0), ("Top Light", 90.0)] {
+                            let mode = pressed ? "Deboss" : "Emboss"
+                            let name = ["\(fName) \(mode)", dName, lName].filter { !$0.isEmpty }.joined(separator: ", ")
+                            add("\(slug(mode))-\(slug(fName))-\(slug(dName))\(lName.isEmpty ? "" : "-top")", name,
+                                rotate(["PlayfairDisplay-Bold", "Cinzel-Bold", "CormorantGaramond-Bold", "BodoniModa-Bold", "LibreCaslonDisplay-Regular", "Fraunces-Black"], n),
+                                [mode.lowercased(), fName.lowercased()]) { _, _ in
+                                var s = TextStyle(); s.emboss = depth; s.embossPressed = pressed; s.embossTint = tint; s.lightAngle = angle
+                                s.surface = surface
+                                if !pressed { s.dropShadow = 0.15 * depth }
+                                return (s, ink)
+                            }
+                            n += 1
+                        }
+                    }
+                }
+            }
+        }
+        family("watercolor", "Watercolor Letters", tags: ["watercolor", "paint", "wash", "pigment", "wet", "bleed", "artistic", "soft"],
+               genres: [.literary, .memoir, .romance, .cozy, .youngAdult, .fantasy]) { add in
+            let paints = Pigments.watercolor
+            var n = 0
+            for i in 0..<paints.count {
+                for j in i..<paints.count {
+                    let a = paints[i], b = paints[j]
+                    let name = i == j ? "\(a.name) Wash" : "\(a.name) into \(b.name)"
+                    add("\(slug(a.name))-\(slug(b.name))", name,
+                        rotate(["PlayfairDisplay-Black", "AbrilFatface-Regular", "Fraunces-Black", "DMSerifDisplay-Regular", "Anton-Regular", "KaushanScript-Regular"], n),
+                        [a.name.lowercased(), b.name.lowercased(), a.index.lowercased(), "watercolor"]) { _, _ in
+                        var s = TextStyle(); s.surface = .watercolor; s.patternColor = a.color
+                        s.patternColor2 = i == j ? PigmentMixer.mix(a.color, RGBA.white, 0.45) : b.color
+                        s.wear = .inkBleed; s.wearAmount = 0.25
+                        return (s, a.color)
+                    }
+                    n += 1
+                }
+            }
+        }
+        family("paintmix", "Paint-Mixed Gradients", tags: ["gradient", "paint", "mixed", "pigment", "blend", "ombre", "color"],
+               genres: [.youngAdult, .romance, .fantasy, .scienceFiction, .cozy, .nonfiction]) { add in
+            let paints = Pigments.watercolor
+            var n = 0
+            for i in 0..<paints.count {
+                for j in (i + 1)..<paints.count where (i + j) % 2 == 0 || j == i + 1 {
+                    let a = paints[i], b = paints[j], k = n
+                    add("\(slug(a.name))-\(slug(b.name))", "\(a.name) to \(b.name)",
+                        rotate(["Anton-Regular", "BebasNeue-Regular", "Montserrat-Black", "PlayfairDisplay-Black", "Righteous-Regular", "ArchivoBlack-Regular"], n),
+                        [a.name.lowercased(), b.name.lowercased(), "gradient"]) { _, _ in
+                        var s = TextStyle(); s.surface = .paintGradient; s.patternColor = a.color; s.patternColor2 = b.color
+                        if k % 3 == 0 { s.bevel = 0.25; s.gloss = 0.3 }
+                        if k % 4 == 1 { s.dropShadow = 0.4 }
+                        return (s, a.color)
+                    }
+                    n += 1
+                }
+            }
+        }
+        family("overprint", "Overprint (Riso)", tags: ["overprint", "riso", "risograph", "misregistered", "screen print", "two color", "zine"],
+               genres: [.youngAdult, .nonfiction, .literary, .cozy, .scienceFiction]) { add in
+            let inks: [(String, RGBA)] = [("Fluorescent Pink", RGBA(hex: "FF48B0")), ("Medium Blue", RGBA(hex: "3255A4")), ("Yellow", RGBA(hex: "FFE800")),
+                                          ("Teal", RGBA(hex: "00838A")), ("Orange", RGBA(hex: "FF6C2F")), ("Green", RGBA(hex: "00A95C")),
+                                          ("Purple", RGBA(hex: "765BA7")), ("Bright Red", RGBA(hex: "F15060")), ("Black", RGBA(hex: "1F1F1F")),
+                                          ("Burgundy", RGBA(hex: "914E72")), ("Mint", RGBA(hex: "82D8D5")), ("Sunflower", RGBA(hex: "FFB511"))]
+            var n = 0
+            for i in 0..<inks.count {
+                for j in 0..<inks.count where i != j && (j > i || (i + j) % 3 == 0) {
+                    for (oName, off) in [("Tight", 0.25), ("Loose", 0.7)] {
+                        let a = inks[i], b = inks[j], k = n
+                        add("\(slug(a.0))-\(slug(b.0))-\(slug(oName))", "\(a.0) over \(b.0), \(oName)",
+                            rotate(["Anton-Regular", "ArchivoBlack-Regular", "BebasNeue-Regular", "Bungee-Regular", "Syne-ExtraBold"], n),
+                            [a.0.lowercased(), b.0.lowercased(), "riso"]) { _, _ in
+                            var s = TextStyle(); s.overprint = off; s.overprintColor = b.1; s.halftone = k % 2 == 0 ? 0.25 : 0
+                            return (s, a.1)
+                        }
+                        n += 1
+                    }
+                }
+            }
+        }
         family("outline", "Outlines", tags: ["outline", "stroke", "hollow", "line", "contour", "clean"],
                genres: [.thriller, .youngAdult, .nonfiction, .scienceFiction, .literary, .mystery]) { add in
             let kinds: [(String, String)] = [("hollow-fine", "Hollow, Fine"), ("hollow-bold", "Hollow, Bold"), ("double", "Double Outline"),

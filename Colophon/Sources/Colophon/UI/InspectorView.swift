@@ -184,6 +184,8 @@ private struct TextSection: View {
             })).controlSize(.small)
             if let g = t.wrappedValue.gradientTo {
                 RGBAPicker(label: "Fades to", color: Binding(get: { g }, set: { t.wrappedValue.gradientTo = $0 }))
+                Toggle("Mix like paint", isOn: t.paintMix).controlSize(.small)
+                    .help("Blend the two colors the way pigments mix: blue and yellow make green, not gray.")
             }
             Toggle("Outline", isOn: Binding(get: { t.wrappedValue.strokeColor != nil }, set: { on in
                 t.wrappedValue.strokeColor = on ? (t.wrappedValue.color.isDark ? RGBA.nearWhite : RGBA.nearBlack) : nil
@@ -422,7 +424,16 @@ private struct FillSection: View {
                         }
                     }
                 }
+                Toggle("Mix like paint", isOn: Binding(get: { f.wrappedValue.paintMix == true }, set: { f.wrappedValue.paintMix = $0 }))
+                    .controlSize(.small)
+                    .help("Gradients blend the way pigments mix: blue and yellow make green, not gray.")
                 HStack {
+                    Button {
+                        let cols = f.wrappedValue.colors
+                        if cols.count >= 2 { f.wrappedValue.colors.insert(PigmentMixer.mix(cols[cols.count - 2], cols[cols.count - 1], 0.5), at: cols.count - 1) }
+                    } label: { Label("Mix Paint", systemImage: "drop.halffull") }
+                    .disabled(f.wrappedValue.colors.count < 2)
+                    .help("Adds the paint mix of the last two colors between them")
                     Button { f.wrappedValue.colors.append(ColorAdvisor.opposite(f.wrappedValue.colors.last ?? .ink)) } label: { Label("Add Opposite", systemImage: "plus") }
                     Button { f.wrappedValue.colors.append((f.wrappedValue.colors.last ?? .ink).adjusting(hue: 30)) } label: { Label("Add Neighbor", systemImage: "plus") }
                 }

@@ -6,7 +6,7 @@ import Foundation
 
 enum SurfaceTexture: String, Codable, CaseIterable, Identifiable {
     case none, gold, goldLeaf, silver, chrome, copper, bronze, rust, stone, marble, wood, leather, ice, fire, concrete, paper, galaxy, smoke
-    case glitter, thread, charred, chalk, stripes, polkaDots, checker, plaid, gradient
+    case glitter, thread, charred, chalk, stripes, polkaDots, checker, plaid, gradient, watercolor, paintGradient
 
     var id: String { rawValue }
 
@@ -39,6 +39,8 @@ enum SurfaceTexture: String, Codable, CaseIterable, Identifiable {
         case .checker: return "Checkerboard"
         case .plaid: return "Plaid"
         case .gradient: return "Two-Tone Gradient"
+        case .watercolor: return "Watercolor (two paints)"
+        case .paintGradient: return "Paint-Mixed Gradient"
         }
     }
 }
@@ -149,6 +151,14 @@ struct TextStyle: Codable, Hashable {
     var colorMatch = 0.0
     var photoErode = 0.0
     var photoFill = 0.0
+    /// Emboss: the photo or paper behind the letters rises (or presses in) as the letter shapes; 0 = off.
+    var emboss = 0.0
+    var embossPressed = false
+    /// 0 keeps the ground's own color (blind emboss); 1 takes the text color.
+    var embossTint = 0.0
+    /// A second ink printed slightly off-register and multiplied over the first (risograph overprint).
+    var overprint = 0.0
+    var overprintColor: RGBA?
 
     var isActive: Bool {
         var plain = self
@@ -157,13 +167,13 @@ struct TextStyle: Codable, Hashable {
     }
 
     var needsScene: Bool {
-        photoTexture > 0 || photoDisplace > 0 || lightWrap > 0 || colorMatch > 0 || photoErode > 0 || photoFill > 0
+        photoTexture > 0 || photoDisplace > 0 || lightWrap > 0 || colorMatch > 0 || photoErode > 0 || photoFill > 0 || emboss > 0
     }
 
     /// Extra room the effects need around the type, in multiples of the font size.
     var paddingFactor: Double {
         outline + outline2 + outline3 + hollow * 0.5 + outerGlow * 0.7 + extrude * 1.1 + longShadow * 2.6 + (wear == .inkBleed ? 0.04 : 0) + glitch * 0.05
-            + drips * 0.9 + dropShadow * 0.12 + echo * 0.36 + smokeTrail * 1.2
+            + drips * 0.9 + dropShadow * 0.12 + echo * 0.36 + smokeTrail * 1.2 + overprint * 1.2
     }
 }
 
@@ -212,6 +222,11 @@ extension TextStyle {
         colorMatch = try d(.colorMatch, 0)
         photoErode = try d(.photoErode, 0)
         photoFill = try d(.photoFill, 0)
+        emboss = try d(.emboss, 0)
+        embossPressed = try c.decodeIfPresent(Bool.self, forKey: .embossPressed) ?? false
+        embossTint = try d(.embossTint, 0)
+        overprint = try d(.overprint, 0)
+        overprintColor = try c.decodeIfPresent(RGBA.self, forKey: .overprintColor)
         patternColor = try c.decodeIfPresent(RGBA.self, forKey: .patternColor)
         patternColor2 = try c.decodeIfPresent(RGBA.self, forKey: .patternColor2)
         roundness = try d(.roundness, 0)
@@ -275,6 +290,15 @@ enum TextStyler {
             // Shape passes (drips, rounding, ink bleed) grow the letters past the original fill,
             // so back it with the text color.
             face = CIImage(cgImage: fill).composited(over: FX.solid(color, ext))
+        }
+        if s.surface == .watercolor && s.materialID == nil {
+            // Pigment pools where a wash dries: the letters' edges come out darker.
+            let ring = alpha.applyingFilter("CISourceOutCompositing", parameters: [
+                kCIInputBackgroundImageKey: erode(alpha, max(1, size * 0.035), extent: ext)
+            ])
+            let pooled = FX.blend(FX.solid(RGBA(0.72, 0.72, 0.72), ext), over: face, mode: "CIMultiplyBlendMode")
+            face = FX.blur(pooled.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: ring]), max(0.5, size * 0.01))
+                .composited(over: face).cropped(to: ext)
         }
         if s.halftone > 0 {
             let dots = face.applyingFilter("CIDotScreen", parameters: [
@@ -410,6 +434,13 @@ enum TextStyler {
             }
         }
         var out = face.composited(over: behind)
+        if s.overprint > 0 {
+            // Second ink, off register, multiplied: where the inks overlap they darken like real overprinting.
+            let d = size * CGFloat(0.02 + 0.06 * s.overprint)
+            let ink2 = colored(s.overprintColor ?? ColorAdvisor.opposite(color), alpha: alpha, extent: ext)
+                .transformed(by: CGAffineTransform(translationX: d, y: -d * 0.7)).cropped(to: ext)
+            out = FX.blend(ink2, over: out, mode: "CIMultiplyBlendMode").cropped(to: ext)
+        }
 
         // 6. Misregistered color plates.
         if s.glitch > 0 {
@@ -462,6 +493,27 @@ enum TextStyler {
             let wrapped = FX.blend(light, over: r, mode: "CIScreenBlendMode")
                 .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: r])
             r = FX.mix(r, wrapped, s.lightWrap)
+        }
+        if s.emboss > 0 {
+            // The ground itself rises (or presses in) in the letter shapes, lit from the style's light angle.
+            // Gray height mask from the letters' alpha.
+            let shape = r.applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 1), "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 1), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                    "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1)
+                ]).cropped(to: ext)
+            let height = shape.applyingFilter("CIHeightFieldFromMask", parameters: [kCIInputRadiusKey: size * CGFloat(0.03 + 0.07 * s.emboss)]).cropped(to: ext)
+            let angle = s.embossPressed ? s.lightAngle + 180 : s.lightAngle
+            let sphere = CIImage(cgImage: lightSphere(angle: angle, gloss: 0.15, chisel: false))
+            let shading = FX.mono(height.applyingFilter("CIShadedMaterial", parameters: [kCIInputShadingImageKey: sphere, kCIInputScaleKey: 4 + 10 * s.emboss]))
+                .cropped(to: ext)
+            let ground = FX.mix(bg, r.composited(over: bg), s.embossTint)
+            let lit = FX.blend(shading, over: ground, mode: "CIOverlayBlendMode")
+                .applyingFilter("CIColorClamp", parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0), "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+                ])
+            let embossed = lit.applyingFilter("CIBlendWithAlphaMask", parameters: [kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: r])
+            r = embossed.cropped(to: ext)
         }
         return Gfx.render(r.cropped(to: ext), extent: ext)
     }
@@ -806,6 +858,12 @@ enum SurfaceGen {
             let wide = band(0, b, w1).composited(over: band(.pi / 2, b, w1))
             let fine = band(0, b.withLightness(0.9), w2).composited(over: band(.pi / 2, b.withLightness(0.9), w2))
             return wide.composited(over: fine.composited(over: base))
+        case .watercolor:
+            return Watercolor.paint(extent: e, pigments: [a, b], seed: seed, scale: size * 0.55, wetness: 0.65, strength: 0.85, granulation: 0.5)
+        case .paintGradient:
+            guard let ctx = Gfx.context(w, h) else { return FX.solid(a, e) }
+            Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: w, height: h), PigmentMixer.ramp(a, b, steps: 9), angle: 90)
+            return ctx.makeImage().map { CIImage(cgImage: $0) } ?? FX.solid(a, e)
         case .gradient:
             guard let ctx = Gfx.context(w, h) else { return FX.solid(a, e) }
             Gfx.linearGradient(ctx, CGRect(x: 0, y: 0, width: w, height: h), [a, a.mixed(with: b, 0.5), b], angle: 90)

@@ -45,6 +45,7 @@ struct CanvasSpec: Codable, Hashable {
 enum BlendMode: String, Codable, CaseIterable, Identifiable {
     case normal, multiply, screen, overlay, softLight, hardLight, colorDodge, colorBurn
     case darken, lighten, difference, exclusion, hue, saturation, color, luminosity
+    case linearBurn, linearDodge
 
     var id: String { rawValue }
 
@@ -66,6 +67,8 @@ enum BlendMode: String, Codable, CaseIterable, Identifiable {
         case .saturation: return .saturation
         case .color: return .color
         case .luminosity: return .luminosity
+        case .linearBurn: return .plusDarker
+        case .linearDodge: return .plusLighter
         }
     }
 
@@ -75,6 +78,8 @@ enum BlendMode: String, Codable, CaseIterable, Identifiable {
         case .hardLight: return "Hard Light"
         case .colorDodge: return "Color Dodge"
         case .colorBurn: return "Color Burn"
+        case .linearBurn: return "Linear Burn (Glaze)"
+        case .linearDodge: return "Linear Dodge (Add)"
         default: return rawValue.prefix(1).uppercased() + rawValue.dropFirst()
         }
     }
@@ -244,7 +249,7 @@ struct PrintSettings: Codable, Hashable {
 
 enum FillStyle: String, Codable, CaseIterable, Identifiable {
     case solid, linear, radial, meshBlend, paintSmear, watercolor, smoke, marble, grain
-    case sunburst, stripes, bokeh, starfield, bauhaus, goldenBlocks, halftone, scrim, material
+    case sunburst, stripes, bokeh, starfield, bauhaus, goldenBlocks, halftone, scrim, material, wetInWet
 
     var id: String { rawValue }
 
@@ -268,6 +273,7 @@ enum FillStyle: String, Codable, CaseIterable, Identifiable {
         case .halftone: return "Halftone"
         case .scrim: return "Legibility Scrim"
         case .material: return "Material"
+        case .wetInWet: return "Watercolor, Wet-in-Wet"
         }
     }
 }
@@ -282,6 +288,8 @@ struct FillContent: Codable, Hashable {
     var intensity: Double = 0.5
     /// For `.material`: an id from `MaterialLibrary`, printed in `colors` when its colorway is Cover Palette.
     var materialID: String?
+    /// Blend the colors the way paint mixes (blue + yellow = green) instead of the way light does.
+    var paintMix: Bool?
 }
 
 struct ShapeContent: Codable, Hashable {
@@ -358,6 +366,8 @@ struct TextContent: Codable, Hashable {
     /// Rules, dots, a box or a band drawn with the line (subtitles, taglines, series names).
     var flourish: TextFlourish = .none
     var flourishColor: RGBA?
+    /// The gradient mixes like paint between its two colors.
+    var paintMix: Bool = false
 }
 
 extension TextContent {
@@ -385,6 +395,7 @@ extension TextContent {
         style = try c.decodeIfPresent(TextStyle.self, forKey: .style) ?? TextStyle()
         flourish = try c.decodeIfPresent(TextFlourish.self, forKey: .flourish) ?? .none
         flourishColor = try c.decodeIfPresent(RGBA.self, forKey: .flourishColor)
+        paintMix = try c.decodeIfPresent(Bool.self, forKey: .paintMix) ?? false
     }
 }
 
