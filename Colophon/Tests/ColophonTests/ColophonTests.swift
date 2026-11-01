@@ -727,18 +727,38 @@ final class SampleRenderTests: XCTestCase {
             PaintStroke(tool: tool, color: RGBA(hex: hex), size: size, strength: strength, wetness: wet, points: pts.map { NPoint(x: $0.0, y: $0.1) })
         }
         func wave(_ y: Double, _ amp: Double, _ phase: Double) -> [(Double, Double)] {
-            stride(from: 0.05, through: 0.95, by: 0.01).map { x in (x, y + amp * sin(x * 9 + phase)) }
+            var pts: [(Double, Double)] = []
+            for x in stride(from: 0.05, through: 0.95, by: 0.01) {
+                let yy: Double = y + amp * sin(x * 9 + phase)
+                pts.append((x, yy))
+            }
+            return pts
         }
-        let paintScenes: [[PaintStroke]] = [
-            [line(.paint, "F7D917", wave(0.35, 0.05, 0), size: 0.22, strength: 1), line(.paint, "2A3B9E", wave(0.5, 0.05, 1), size: 0.22, strength: 0.55),
-             line(.paint, "D7263D", wave(0.65, 0.05, 2), size: 0.22, strength: 0.55)],
-            [line(.paint, "D8457A", wave(0.3, 0.08, 0), size: 0.25, strength: 1), line(.paint, "F2661C", wave(0.45, 0.08, 2), size: 0.25, strength: 1),
-             line(.paint, "3C8DC5", wave(0.6, 0.08, 4), size: 0.25, strength: 1),
-             line(.smudge, "FFFFFF", (0..<40).map { k in (0.1 + 0.02 * Double(k), 0.25 + 0.012 * Double(k)) }, size: 0.1, strength: 0.85),
-             line(.smudge, "FFFFFF", (0..<40).map { k in (0.9 - 0.02 * Double(k), 0.3 + 0.011 * Double(k)) }, size: 0.1, strength: 0.85)],
-            [line(.paint, "0B6E5A", wave(0.4, 0.06, 1), size: 0.3, strength: 1, wet: 0.8), line(.paint, "F7D917", wave(0.5, 0.06, 3), size: 0.3, strength: 0.8, wet: 0.8),
-             line(.blend, "FFFFFF", wave(0.45, 0.02, 0), size: 0.3, strength: 0.8)]
-        ]
+        var paintScenes: [[PaintStroke]] = []
+        var scene1: [PaintStroke] = []
+        scene1.append(line(.paint, "F7D917", wave(0.35, 0.05, 0), size: 0.22, strength: 1))
+        scene1.append(line(.paint, "2A3B9E", wave(0.5, 0.05, 1), size: 0.22, strength: 0.55))
+        scene1.append(line(.paint, "D7263D", wave(0.65, 0.05, 2), size: 0.22, strength: 0.55))
+        paintScenes.append(scene1)
+        var scene2: [PaintStroke] = []
+        scene2.append(line(.paint, "D8457A", wave(0.3, 0.08, 0), size: 0.25, strength: 1))
+        scene2.append(line(.paint, "F2661C", wave(0.45, 0.08, 2), size: 0.25, strength: 1))
+        scene2.append(line(.paint, "3C8DC5", wave(0.6, 0.08, 4), size: 0.25, strength: 1))
+        var diag1: [(Double, Double)] = []
+        var diag2: [(Double, Double)] = []
+        for k in 0..<40 {
+            let t = Double(k)
+            diag1.append((0.1 + 0.02 * t, 0.25 + 0.012 * t))
+            diag2.append((0.9 - 0.02 * t, 0.3 + 0.011 * t))
+        }
+        scene2.append(line(.smudge, "FFFFFF", diag1, size: 0.1, strength: 0.85))
+        scene2.append(line(.smudge, "FFFFFF", diag2, size: 0.1, strength: 0.85))
+        paintScenes.append(scene2)
+        var scene3: [PaintStroke] = []
+        scene3.append(line(.paint, "0B6E5A", wave(0.4, 0.06, 1), size: 0.3, strength: 1, wet: 0.8))
+        scene3.append(line(.paint, "F7D917", wave(0.5, 0.06, 3), size: 0.3, strength: 0.8, wet: 0.8))
+        scene3.append(line(.blend, "FFFFFF", wave(0.45, 0.02, 0), size: 0.3, strength: 0.8))
+        paintScenes.append(scene3)
         for strokes in paintScenes {
             var p = PaintContent()
             p.strokes = strokes
