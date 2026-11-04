@@ -24,7 +24,7 @@ struct ContentView: View {
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 24).strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
-                    .overlay(Text("Drop a .mid file to use its chord progression").font(.title3.weight(.semibold))
+                    .overlay(Text("Drop a .mid (chords or a drum groove) or a .cadence session").font(.title3.weight(.semibold))
                         .padding(16).background(.regularMaterial, in: Capsule()))
                     .padding(12)
                     .allowsHitTesting(false)
@@ -75,7 +75,19 @@ struct HeaderBar: View {
     var body: some View {
         @Bindable var model = model
         HStack(spacing: 12) {
-            Text("Cadence").font(.system(size: 18, weight: .heavy)).tracking(-0.4).padding(.trailing, 6)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Cadence").font(.system(size: 18, weight: .heavy)).tracking(-0.4)
+                Text(model.sessionTitle).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .padding(.trailing, 2)
+            HStack(spacing: 2) {
+                Button { model.undo() } label: { Image(systemName: "arrow.uturn.backward") }
+                    .disabled(!model.canUndo).help("Undo (⌘Z)").accessibilityLabel("Undo")
+                Button { model.redo() } label: { Image(systemName: "arrow.uturn.forward") }
+                    .disabled(!model.canRedo).help("Redo (⇧⌘Z)").accessibilityLabel("Redo")
+            }
+            .buttonStyle(.borderless)
+            .padding(.trailing, 4)
 
             Button { model.showStyleBrowser = true } label: {
                 HStack(spacing: 12) {

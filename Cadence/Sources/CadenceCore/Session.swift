@@ -60,6 +60,11 @@ public struct Track: Identifiable, Hashable, Codable, Sendable {
     /// 0 = robotic, 1 = style default, 2 = very loose.
     public var humanize: Double = 1
     public var colorIndex: Int
+    /// Recorded takes keep exactly what you played; this pulls them toward
+    /// the grid on playback (0 = as played, 1 = fully on the grid).
+    public var quantize: Double = 0
+    /// Grid steps per beat for `quantize`: 2 = 8ths, 3 = triplets, 4 = 16ths.
+    public var quantizeGrid: Int = 4
 
     public init(id: UUID = UUID(), name: String, source: TrackSource, instrument: InstrumentID, volume: Double, colorIndex: Int) {
         self.id = id
@@ -101,6 +106,21 @@ public struct Session: Codable, Hashable, Sendable {
     public var minimumBars: Int = 4
     /// Name of the progression's source ("Generated", or the imported file).
     public var progressionSource: String = "Generated"
+    /// Verse/chorus/… in order. Empty = loop the main progression.
+    public var sections: [SongSection] = []
+    /// Chords for sections that have their own (keyed by `SongSection.chordsKey`).
+    public var sectionProgressions: [String: Progression] = [:]
+    /// The band reacts to how loud and how busy you play.
+    public var bandFollowsMe: Bool = true
+    /// Bars of click before recording starts from a stop.
+    public var countInBars: Int = 1
+    /// Metronome while playing.
+    public var clickEnabled: Bool = false
+    /// How tightly new takes are pulled to the grid.
+    public var takeQuantize: Double = 0.3
+    public var quantizeGrid: Int = 4
+    /// A feel learned from MIDI you dropped in, or from one of your takes.
+    public var groove: GrooveTemplate?
 
     public var style: Style { StyleLibrary.style(id: styleID) }
 
@@ -130,7 +150,7 @@ public struct Session: Codable, Hashable, Sendable {
 
     /// Song length: long enough for the progression, every take and every dragged region.
     public var songBars: Int {
-        var bars = max(progressionBars, minimumBars)
+        var bars = sections.isEmpty ? max(progressionBars, minimumBars) : max(sectionBars, minimumBars)
         for t in tracks {
             if let len = t.lengthBars { bars = max(bars, t.startBar + len) }
             if t.isRecorded { bars = max(bars, t.startBar + max(t.takeBars, 1)) }
@@ -197,5 +217,62 @@ public struct Session: Codable, Hashable, Sendable {
         let inst = InstrumentProfile.of(part.instrument)
         tracks.append(Track(name: inst.name, source: .generated(part), instrument: part.instrument, volume: part.volume,
                             colorIndex: (tracks.map(\.colorIndex).max() ?? 0) + 1))
+    }
+}
+
+// Sessions saved by older versions lack the newer fields; fill in defaults.
+extension Track {
+    enum CodingKeys: String, CodingKey {
+        case id, name, source, instrument, muted, solo, volume, startBar, lengthBars, take, takeBars, humanize, colorIndex, quantize, quantizeGrid
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        source = try c.decode(TrackSource.self, forKey: .source)
+        instrument = try c.decode(InstrumentID.self, forKey: .instrument)
+        muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
+        solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
+        volume = try c.decode(Double.self, forKey: .volume)
+        startBar = try c.decodeIfPresent(Int.self, forKey: .startBar) ?? 0
+        lengthBars = try c.decodeIfPresent(Int.self, forKey: .lengthBars)
+        take = try c.decodeIfPresent([NoteEvent].self, forKey: .take) ?? []
+        takeBars = try c.decodeIfPresent(Int.self, forKey: .takeBars) ?? 0
+        humanize = try c.decodeIfPresent(Double.self, forKey: .humanize) ?? 1
+        colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex) ?? 0
+        quantize = try c.decodeIfPresent(Double.self, forKey: .quantize) ?? 0
+        quantizeGrid = try c.decodeIfPresent(Int.self, forKey: .quantizeGrid) ?? 4
+    }
+}
+
+extension Session {
+    enum CodingKeys: String, CodingKey {
+        case styleID, key, progression, tempo, autoTempo, snap, keyMap, liveInstrument, tracks, variationSeed, minimumBars
+        case progressionSource, sections, sectionProgressions, bandFollowsMe, countInBars, clickEnabled, takeQuantize, quantizeGrid, groove
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        styleID = try c.decode(String.self, forKey: .styleID)
+        key = try c.decode(Key.self, forKey: .key)
+        progression = try c.decode(Progression.self, forKey: .progression)
+        tempo = try c.decode(Double.self, forKey: .tempo)
+        autoTempo = try c.decodeIfPresent(Bool.self, forKey: .autoTempo) ?? true
+        snap = try c.decodeIfPresent(SnapStrength.self, forKey: .snap) ?? .guided
+        keyMap = try c.decodeIfPresent(KeyMap.self, forKey: .keyMap) ?? .anyKey
+        liveInstrument = try c.decode(InstrumentID.self, forKey: .liveInstrument)
+        tracks = try c.decode([Track].self, forKey: .tracks)
+        variationSeed = try c.decodeIfPresent(Int.self, forKey: .variationSeed) ?? 1
+        minimumBars = try c.decodeIfPresent(Int.self, forKey: .minimumBars) ?? 4
+        progressionSource = try c.decodeIfPresent(String.self, forKey: .progressionSource) ?? "Generated"
+        sections = try c.decodeIfPresent([SongSection].self, forKey: .sections) ?? []
+        sectionProgressions = try c.decodeIfPresent([String: Progression].self, forKey: .sectionProgressions) ?? [:]
+        bandFollowsMe = try c.decodeIfPresent(Bool.self, forKey: .bandFollowsMe) ?? true
+        countInBars = try c.decodeIfPresent(Int.self, forKey: .countInBars) ?? 1
+        clickEnabled = try c.decodeIfPresent(Bool.self, forKey: .clickEnabled) ?? false
+        takeQuantize = try c.decodeIfPresent(Double.self, forKey: .takeQuantize) ?? 0.3
+        quantizeGrid = try c.decodeIfPresent(Int.self, forKey: .quantizeGrid) ?? 4
+        groove = try c.decodeIfPresent(GrooveTemplate.self, forKey: .groove)
     }
 }

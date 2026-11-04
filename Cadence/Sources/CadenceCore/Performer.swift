@@ -291,16 +291,25 @@ public struct TakeRecorder: Sendable {
 
     /// Finishes the take. `timingCorrection` pulls notes toward the 16th grid
     /// (0 = as played, 1 = fully quantized).
-    public mutating func finish(atBeat beat: Double, beatsPerBar: Int, timingCorrection: Double = 0.3) -> (notes: [NoteEvent], bars: Int) {
+    public mutating func finish(atBeat beat: Double, beatsPerBar: Int, timingCorrection: Double = 0.3, grid: Int = 4) -> (notes: [NoteEvent], bars: Int) {
         for p in Array(open.keys) { noteOff(p, beat: beat) }
         let length = max(beat - startBeat, 0.1)
         let bars = max(1, Int((length / Double(beatsPerBar) - 0.1).rounded(.up)))
         let corrected = notes.map { n -> NoteEvent in
             var c = n
-            let grid = (n.start * 4).rounded() / 4
-            c.start = max(0, n.start + (grid - n.start) * timingCorrection)
+            c.start = max(0, Quantizer.pull(n.start, grid: grid, amount: timingCorrection))
             return c
         }.sorted { $0.start < $1.start }
         return (corrected, bars)
+    }
+}
+
+public enum Quantizer {
+    /// Moves a beat position `amount` of the way to the nearest grid line.
+    public static func pull(_ beat: Double, grid: Int, amount: Double) -> Double {
+        guard amount > 0, grid > 0 else { return beat }
+        let step = 1 / Double(grid)
+        let target = (beat / step).rounded() * step
+        return beat + (target - beat) * min(amount, 1)
     }
 }

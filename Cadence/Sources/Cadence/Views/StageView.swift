@@ -7,6 +7,7 @@ import SwiftUI
 struct StageView: View {
     var body: some View {
         VStack(spacing: 20) {
+            SectionsBar()
             HStack(alignment: .top, spacing: 20) {
                 ProgressionCard()
                     .frame(minWidth: 480)
@@ -34,8 +35,11 @@ struct ProgressionCard: View {
             VStack(spacing: 18) {
                 HStack {
                     TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-                        let slot = currentSlot
-                        SectionLabel("\(model.isPlaying ? "Now playing" : "Progression") · chord \(slot + 1) of \(model.session.progression.slots.count) · \(model.session.progressionSource)")
+                        let head = model.playhead()
+                        let name = head.section.flatMap { model.session.sections[safe: $0]?.name } ?? model.session.progressionSource
+                        SectionLabel(model.isPlaying
+                                     ? "Now playing · \(name) · chord \(head.progression.slotIndex(atBeat: head.beat) + 1) of \(head.progression.slots.count)"
+                                     : "Chords · \(model.editingSection?.name ?? model.session.progressionSource)")
                     }
                     Spacer()
                     FamousProgressionsMenu()
@@ -51,10 +55,6 @@ struct ProgressionCard: View {
             }
         }
     }
-
-    var currentSlot: Int {
-        model.session.progression.slotIndex(atBeat: model.conductor.currentSongBeat())
-    }
 }
 
 @MainActor
@@ -63,8 +63,9 @@ struct ProgressionRing: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !model.isPlaying)) { _ in
-            let prog = model.session.progression
-            let beat = model.conductor.currentSongBeat()
+            let head = model.playhead()
+            let prog = model.isPlaying ? head.progression : model.editingProgression
+            let beat = model.isPlaying ? head.beat : 0
             let loopPos = beat.truncatingRemainder(dividingBy: prog.totalBeats) / prog.totalBeats
             let current = prog.slotIndex(atBeat: beat)
             let chord = prog.slots[safe: current]?.chord ?? Chord(root: 0, quality: .major)
@@ -113,9 +114,10 @@ struct ChordStrip: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { _ in
-            let current = model.session.progression.slotIndex(atBeat: model.conductor.currentSongBeat())
+            let head = model.playhead()
+            let current = head.key == model.editingKey ? head.progression.slotIndex(atBeat: head.beat) : -1
             HStack(spacing: 10) {
-                ForEach(Array(model.session.progression.slots.enumerated()), id: \.element.id) { i, slot in
+                ForEach(Array(model.editingProgression.slots.enumerated()), id: \.element.id) { i, slot in
                     ChordCardView(index: i, slot: slot, isCurrent: model.isPlaying && i == current)
                 }
             }
@@ -196,7 +198,7 @@ struct ChordTextEditor: View {
         .padding(24)
         .frame(width: 520)
         .onAppear {
-            text = model.session.progression.slots.map { model.chordName($0.chord) }.joined(separator: " ")
+            text = model.editingProgression.slots.map { model.chordName($0.chord) }.joined(separator: " ")
         }
     }
 
@@ -359,13 +361,16 @@ struct LayerBar: View {
         Card(padding: 16) {
             HStack(spacing: 16) {
                 RecordButton()
+                RecordOptionsButton()
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.isRecording ? "Recording take \(model.takeCount + 1)" : (model.isPlaying ? "Band is playing" : "Ready. Just start playing"))
                         .font(.system(size: 16, weight: .heavy))
-                    TimelineView(.periodic(from: .now, by: 0.2)) { _ in
+                    TimelineView(.periodic(from: .now, by: 0.1)) { _ in
                         let bar = Int(model.conductor.currentSongBeat() / Double(model.session.beatsPerBar)) + 1
-                        Text(model.isPlaying ? "Bar \(bar) of \(model.isRecording ? bar : model.session.songBars) · \(model.style.meterLabel)"
-                             : "\(model.session.songBars)-bar loop · ⌘R record · space play")
+                        let countIn = model.conductor.countInRemaining()
+                        Text(countIn.map { "Count-in… \(Int($0.rounded(.up)))" }
+                             ?? (model.isPlaying ? "Bar \(bar) of \(model.isRecording ? bar : model.session.songBars) · \(model.style.meterLabel)"
+                                 : "\(model.session.songBars)-bar \(model.session.sections.isEmpty ? "loop" : "song") · ⌘R record · space play"))
                             .font(.system(size: 12)).foregroundStyle(.secondary).monospacedDigit()
                     }
                 }

@@ -34,6 +34,18 @@ final class AppModel {
     let conductor: Conductor
     private let midi = MIDIInput()
     @ObservationIgnored private var saveWork: DispatchWorkItem?
+    /// The section whose chords the chord strip edits (nil = main progression).
+    var editingSectionID: UUID?
+    /// The .cadence file this session was opened from or saved to.
+    var fileURL: URL?
+
+    // Undo / redo: whole-session snapshots.
+    @ObservationIgnored private var undoStack: [Session] = []
+    @ObservationIgnored private var redoStack: [Session] = []
+    @ObservationIgnored private var lastLabel: String?
+    @ObservationIgnored private var lastChange = Date.distantPast
+    private(set) var canUndo = false
+    private(set) var canRedo = false
 
     init() {
         let initial = AppModel.loadSaved() ?? Session(style: StyleLibrary.defaultStyle)
@@ -84,11 +96,48 @@ final class AppModel {
 
     var style: Style { session.style }
 
-    func mutate(_ change: (inout Session) -> Void) {
+    /// Every edit goes through here so it can be undone. Edits with the same
+    /// `label` in quick succession (dragging a slider) undo as one step.
+    func mutate(_ label: String? = nil, _ change: (inout Session) -> Void) {
+        let before = session
         change(&session)
+        guard session != before else { return }
+        let now = Date()
+        let coalesce = label != nil && label == lastLabel && now.timeIntervalSince(lastChange) < 0.8
+        if !coalesce {
+            undoStack.append(before)
+            if undoStack.count > 100 { undoStack.removeFirst() }
+        }
+        lastLabel = label
+        lastChange = now
+        redoStack = []
+        sessionChanged()
+    }
+
+    private func sessionChanged() {
+        canUndo = !undoStack.isEmpty
+        canRedo = !redoStack.isEmpty
+        if let id = editingSectionID, !session.sections.contains(where: { $0.id == id }) { editingSectionID = nil }
+        if let id = selectedTrackID, !session.tracks.contains(where: { $0.id == id }) { selectedTrackID = session.tracks.first?.id }
         conductor.update(session: session)
         rebuildPreviews()
         scheduleSave()
+    }
+
+    func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(session)
+        session = previous
+        lastLabel = nil
+        sessionChanged()
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(session)
+        session = next
+        lastLabel = nil
+        sessionChanged()
     }
 
     private func rebuildPreviews() {
@@ -107,7 +156,98 @@ final class AppModel {
         correctedCount = 0
     }
 
-    func regenerateProgression() { mutate { $0.regenerateProgression() } }
+    func regenerateProgression() {
+        if let section = editingSection, section.chordsKey != nil {
+            let s = session
+            let p = Session.contrastingProgression(for: section.kind, style: s.style, key: s.key,
+                                                        seed: Int.random(in: 1...100_000), avoiding: s.progression)
+            editChords { $0 = p }
+        } else {
+            mutate { $0.regenerateProgression() }
+        }
+    }
+
+    // MARK: Song sections
+
+    func addSection(_ kind: SectionKind) {
+        mutate { $0.addSection(kind) }
+        editingSectionID = session.sections.last?.id
+    }
+
+    func buildSong() {
+        mutate { $0.buildSong() }
+        editingSectionID = nil
+        message = "Built a \(session.sections.count)-section song, \(session.songBars) bars."
+    }
+
+    func removeSection(_ id: UUID) { mutate { $0.removeSection(id: id) } }
+
+    func clearSections() {
+        mutate { s in
+            s.sections = []
+            s.sectionProgressions = [:]
+        }
+        editingSectionID = nil
+    }
+
+    func updateSection(_ id: UUID, label: String? = nil, _ change: (inout SongSection) -> Void) {
+        mutate(label.map { "\($0)-\(id)" }) { s in
+            if let i = s.sections.firstIndex(where: { $0.id == id }) { change(&s.sections[i]) }
+        }
+    }
+
+    func moveSection(_ id: UUID, by offset: Int) {
+        mutate { s in
+            guard let i = s.sections.firstIndex(where: { $0.id == id }) else { return }
+            let j = min(max(i + offset, 0), s.sections.count - 1)
+            let sec = s.sections.remove(at: i)
+            s.sections.insert(sec, at: j)
+        }
+    }
+
+    func duplicateSection(_ id: UUID) {
+        mutate { s in
+            guard let i = s.sections.firstIndex(where: { $0.id == id }) else { return }
+            var copy = s.sections[i]
+            copy.id = UUID()
+            s.sections.insert(copy, at: i + 1)
+        }
+    }
+
+    func giveOwnChords(_ id: UUID) {
+        mutate { $0.giveOwnChords(sectionID: id) }
+        editingSectionID = id
+    }
+
+    /// Use the main progression for this section again.
+    func useMainChords(_ id: UUID) { updateSection(id) { $0.chordsKey = nil } }
+
+    // MARK: Groove, recording and band settings
+
+    func setBandFollowsMe(_ on: Bool) { mutate { $0.bandFollowsMe = on } }
+    func setCountIn(_ bars: Int) { mutate { $0.countInBars = bars } }
+    func setClick(_ on: Bool) { mutate { $0.clickEnabled = on } }
+    func setTakeQuantize(_ amount: Double) { mutate("takeQuantize") { $0.takeQuantize = amount } }
+    func setQuantizeGrid(_ grid: Int) { mutate { $0.quantizeGrid = grid } }
+
+    func learnGroove(from track: Track) {
+        guard let g = GrooveTemplate.learn(from: track.take, beatsPerBar: session.beatsPerBar, name: track.name) else {
+            message = "Play a bit more (two bars or so) to learn a groove from this take."
+            return
+        }
+        mutate { $0.groove = g }
+        message = "The band now plays with the feel of “\(track.name)”."
+    }
+
+    func clearGroove() { mutate { $0.groove = nil } }
+    func setGrooveAmount(_ v: Double) { mutate("grooveAmount") { $0.groove?.amount = v } }
+
+    func openGroovePanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType.midi]
+        panel.message = "Choose a MIDI file with the feel you want (a drum loop works best)."
+        if panel.runModal() == .OK, let url = panel.url { _ = importFiles([url], asGroove: true) }
+    }
 
     func varyBand() { mutate { $0.variationSeed &+= 7 } }
 
@@ -126,31 +266,35 @@ final class AppModel {
     }
 
     func apply(named: NamedProgression) {
-        mutate { $0.apply(named: named) }
-        message = "\(named.name): \(session.progression.slots.map { chordName($0.chord) }.joined(separator: " – "))"
+        if editingSection?.chordsKey != nil {
+            let p = named.progression(tonic: session.key.tonic, beatsPerBar: session.beatsPerBar)
+            editChords { $0 = p }
+        } else {
+            mutate { $0.apply(named: named) }
+        }
+        message = "\(named.name): \(editingProgression.slots.map { chordName($0.chord) }.joined(separator: " – "))"
     }
 
     func reharmonizations(for index: Int) -> [Reharmonizer.Suggestion] {
-        let slots = session.progression.slots
+        let slots = editingProgression.slots
         guard let slot = slots[safe: index] else { return [] }
         return Reharmonizer.suggestions(for: slot.chord, next: slots[safe: (index + 1) % slots.count]?.chord, key: session.key)
     }
 
     /// Splits a chord's time in half and puts a chord that leads into the next one in the second half.
     func insertLeadIn(at index: Int, chord: Chord) {
-        mutate { s in
-            guard s.progression.slots.indices.contains(index) else { return }
-            let half = s.progression.slots[index].beats / 2
-            guard half >= 1 else { s.progression.slots[index].chord = chord; return }
-            s.progression.slots[index].beats = half
-            s.progression.slots.insert(ChordSlot(chord: chord, beats: half), at: index + 1)
-            s.progressionSource = "Edited"
+        editChords { p in
+            guard p.slots.indices.contains(index) else { return }
+            let half = p.slots[index].beats / 2
+            guard half >= 1 else { p.slots[index].chord = chord; return }
+            p.slots[index].beats = half
+            p.slots.insert(ChordSlot(chord: chord, beats: half), at: index + 1)
         }
     }
     func setLiveInstrument(_ id: InstrumentID) { mutate { $0.liveInstrument = id } }
 
-    func updateTrack(_ id: UUID, _ change: (inout Track) -> Void) {
-        mutate { s in
+    func updateTrack(_ id: UUID, label: String? = nil, _ change: (inout Track) -> Void) {
+        mutate(label.map { "\($0)-\(id)" }) { s in
             if let i = s.tracks.firstIndex(where: { $0.id == id }) { change(&s.tracks[i]) }
         }
     }
@@ -172,8 +316,8 @@ final class AppModel {
         selectedTrackID = session.tracks.last?.id
     }
 
-    func setPart(_ id: UUID, _ change: (inout PartSpec) -> Void) {
-        updateTrack(id) { t in
+    func setPart(_ id: UUID, label: String? = nil, _ change: (inout PartSpec) -> Void) {
+        updateTrack(id, label: label) { t in
             guard case .generated(var p) = t.source else { return }
             change(&p)
             t.source = .generated(p)
@@ -183,34 +327,52 @@ final class AppModel {
 
     // MARK: Chords
 
+    var editingSection: SongSection? { session.sections.first { $0.id == editingSectionID } }
+
+    /// The chords the chord strip shows and edits.
+    var editingProgression: Progression { session.progression(forKey: editingSection?.chordsKey) }
+
+    /// Applies a change to the chords being edited. Editing a section that plays
+    /// the main progression edits the main progression (and every such section).
+    func editChords(_ label: String? = nil, _ change: @escaping (inout Progression) -> Void) {
+        let key = editingSection?.chordsKey
+        mutate(label) { s in
+            if let key, var p = s.sectionProgressions[key] {
+                change(&p)
+                s.sectionProgressions[key] = p
+            } else {
+                change(&s.progression)
+                s.progressionSource = "Edited"
+            }
+        }
+    }
+
     func replaceChord(at index: Int, with chord: Chord) {
-        mutate { s in
-            guard s.progression.slots.indices.contains(index) else { return }
-            s.progression.slots[index].chord = chord
-            s.progressionSource = "Edited"
+        editChords { p in
+            guard p.slots.indices.contains(index) else { return }
+            p.slots[index].chord = chord
         }
     }
 
     func deleteChord(at index: Int) {
-        mutate { s in
-            guard s.progression.slots.count > 1, s.progression.slots.indices.contains(index) else { return }
-            s.progression.slots.remove(at: index)
-            s.progressionSource = "Edited"
+        editChords { p in
+            guard p.slots.count > 1, p.slots.indices.contains(index) else { return }
+            p.slots.remove(at: index)
         }
     }
 
     func insertChord(after index: Int) {
-        mutate { s in
-            let src = s.progression.slots[min(index, s.progression.slots.count - 1)]
-            s.progression.slots.insert(ChordSlot(chord: src.chord, beats: Double(s.beatsPerBar)), at: index + 1)
-            s.progressionSource = "Edited"
+        let bpb = Double(session.beatsPerBar)
+        editChords { p in
+            let src = p.slots[min(index, p.slots.count - 1)]
+            p.slots.insert(ChordSlot(chord: src.chord, beats: bpb), at: index + 1)
         }
     }
 
     func setChordLength(at index: Int, beats: Double) {
-        mutate { s in
-            guard s.progression.slots.indices.contains(index) else { return }
-            s.progression.slots[index].beats = max(1, beats)
+        editChords { p in
+            guard p.slots.indices.contains(index) else { return }
+            p.slots[index].beats = max(1, beats)
         }
     }
 
@@ -218,7 +380,7 @@ final class AppModel {
     func chordSuggestions(for index: Int) -> [Chord] {
         let key = session.key
         var list: [Chord] = (0..<7).map { key.diatonicChord(degree: $0, seventh: style.harmony.colorLevel >= 1) }
-        if let current = session.progression.slots[safe: index]?.chord {
+        if let current = editingProgression.slots[safe: index]?.chord {
             for q in [ChordQuality.major7, .minor7, .dominant7, .major9, .minor9, .dominant13, .sus4, .add9, .minor11] {
                 list.append(Chord(root: current.root, quality: q))
             }
@@ -231,6 +393,10 @@ final class AppModel {
         guard let prog = ChordDetector.progression(fromText: text, beatsPerBar: session.beatsPerBar) else {
             message = "Couldn't read those chords. Try something like “Dm9 G13 Cmaj9 A7”."
             return false
+        }
+        if editingSection?.chordsKey != nil {
+            editChords { $0 = prog }
+            return true
         }
         let key = ChordDetector.key(for: prog)
         mutate { s in
@@ -271,6 +437,8 @@ final class AppModel {
         let inst = InstrumentProfile.of(session.liveInstrument)
         var track = Track(name: "Take \(takeCount) · \(inst.name)", source: .recorded, instrument: inst.id, volume: 0.9,
                           colorIndex: 0)
+        track.quantize = session.takeQuantize
+        track.quantizeGrid = session.quantizeGrid
         track.take = take.notes
         track.takeBars = take.bars
         track.startBar = take.startBar
@@ -308,7 +476,8 @@ final class AppModel {
 
     // MARK: Import / export
 
-    func importFiles(_ urls: [URL]) -> Bool {
+    func importFiles(_ urls: [URL], asGroove: Bool = false) -> Bool {
+        if let url = urls.first(where: { $0.pathExtension.lowercased() == "cadence" }) { return openSession(at: url) }
         guard let url = urls.first(where: { ["mid", "midi", "smf"].contains($0.pathExtension.lowercased()) }) else {
             if let url = urls.first, let text = try? String(contentsOf: url, encoding: .utf8) { return importText(text) }
             message = "Drop a .mid file to import its chords."
@@ -318,6 +487,18 @@ final class AppModel {
             let data = try Data(contentsOf: url)
             let contents = try MIDIFile.read(data)
             let bpb = contents.beatsPerBar ?? session.beatsPerBar
+            // Drum-only files (or an explicit request) teach the band a groove instead of chords.
+            let pitched = contents.notes.filter { $0.channel != 9 }
+            if asGroove || pitched.isEmpty {
+                let events = contents.notes.map { NoteEvent(pitch: $0.pitch, velocity: $0.velocity, start: $0.start, duration: $0.duration) }
+                guard let g = GrooveTemplate.learn(from: events, beatsPerBar: bpb, name: url.deletingPathExtension().lastPathComponent) else {
+                    message = "Not enough notes in \(url.lastPathComponent) to learn a groove."
+                    return false
+                }
+                mutate { $0.groove = g }
+                message = "Learned the groove of \(url.lastPathComponent). The whole band now plays with that feel."
+                return true
+            }
             guard let (prog, key) = ChordDetector.progression(from: contents.notes, beatsPerBar: bpb) else {
                 message = "No chords found in \(url.lastPathComponent)."
                 return false
@@ -408,9 +589,75 @@ final class AppModel {
         takeCount = 0
         mutate { $0 = Session(style: $0.style, seed: Int.random(in: 1...10_000)) }
         selectedTrackID = session.tracks.first?.id
+        editingSectionID = nil
+        fileURL = nil
+    }
+
+    // MARK: Session files
+
+    static let sessionType = UTType(filenameExtension: "cadence") ?? .json
+
+    var sessionTitle: String { fileURL?.deletingPathExtension().lastPathComponent ?? "Untitled session" }
+
+    func saveSession() {
+        guard let url = fileURL else { saveSessionAs(); return }
+        write(to: url)
+    }
+
+    func saveSessionAs() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [Self.sessionType]
+        panel.nameFieldStringValue = fileURL?.lastPathComponent ?? "\(style.name).cadence"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        write(to: url)
+    }
+
+    private func write(to url: URL) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(session).write(to: url, options: .atomic)
+            fileURL = url
+            message = "Saved \(url.lastPathComponent)."
+        } catch {
+            message = "Couldn't save: \(error.localizedDescription)"
+        }
+    }
+
+    func openSessionPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [Self.sessionType]
+        if panel.runModal() == .OK, let url = panel.url { _ = openSession(at: url) }
+    }
+
+    @discardableResult
+    func openSession(at url: URL) -> Bool {
+        guard let data = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Session.self, from: data),
+              StyleLibrary.byID[s.styleID] != nil else {
+            message = "Couldn't open \(url.lastPathComponent)."
+            return false
+        }
+        conductor.stop()
+        mutate { $0 = s }
+        fileURL = url
+        editingSectionID = nil
+        takeCount = s.tracks.filter(\.isRecorded).count
+        selectedTrackID = s.tracks.first?.id
+        return true
     }
 
     // MARK: Display helpers
+
+    /// Where the playhead is: which chords are playing and where in them.
+    func playhead() -> (key: String, progression: Progression, beat: Double, section: Int?) {
+        let b = conductor.currentSongBeat()
+        let bpb = Double(session.beatsPerBar)
+        let bar = Int((b / bpb).rounded(.down))
+        let h = session.harmony(atBar: bar)
+        return (h.progressionKey, h.progression, Double(h.localBar) * bpb + (b - Double(bar) * bpb), h.sectionIndex)
+    }
+
+    var editingKey: String { editingSection?.chordsKey ?? "main" }
 
     func chordName(_ chord: Chord) -> String { chord.symbol(in: session.key) }
     func noteName(_ pitch: Int) -> String { session.key.name(of: pitch) }

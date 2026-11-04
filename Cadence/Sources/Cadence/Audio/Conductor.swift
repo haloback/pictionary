@@ -14,6 +14,7 @@ struct SnapHit: Identifiable, Hashable {
 /// delivered on the main queue.
 final class Conductor: @unchecked Sendable {
     static let liveTrackID = UUID(uuidString: "00000000-0000-0000-0000-00000000CAFE")!
+    static let clickTrackID = UUID(uuidString: "00000000-0000-0000-0000-00000000C11C")!
 
     private struct Scheduled {
         var beat: Double          // absolute beat
@@ -46,6 +47,8 @@ final class Conductor: @unchecked Sendable {
     private var lastTempoUpdate = 0.0
     private var sustainDown = false
     private var sustained: Set<Int> = []
+    private var responder = ResponseTracker()
+    private var lastResponse = BandResponse.neutral
     var startOnFirstNote = true
 
     // Delivered on the main thread.
@@ -82,7 +85,8 @@ final class Conductor: @unchecked Sendable {
 
     private func songBeat(fromAbs b: Double) -> Double {
         let s = b - offsetBeats
-        guard looping else { return s }
+        // Negative = counting in.
+        guard looping, s >= 0 else { return s }
         let length = songLengthBeats
         var r = s.truncatingRemainder(dividingBy: length)
         if r < 0 { r += length }
@@ -99,6 +103,14 @@ final class Conductor: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         guard playing else { return 0 }
         return max(songBeat(fromAbs: absBeat(at: Self.now())), 0)
+    }
+
+    /// Beats of count-in left, or nil when not counting in.
+    func countInRemaining() -> Double? {
+        lock.lock(); defer { lock.unlock() }
+        guard playing else { return nil }
+        let s = songBeat(fromAbs: absBeat(at: Self.now()))
+        return s < 0 ? -s : nil
     }
 
     // MARK: Session updates
@@ -140,10 +152,11 @@ final class Conductor: @unchecked Sendable {
     }
 
     private func configureAudio(for session: Session) {
-        let wanted = Set(session.tracks.map(\.id) + [Self.liveTrackID])
+        let wanted = Set(session.tracks.map(\.id) + [Self.liveTrackID, Self.clickTrackID])
         for id in audio.configuredIDs.subtracting(wanted) { audio.remove(id: id) }
         for t in session.tracks { audio.configure(id: t.id, instrument: t.profile, volume: t.volume) }
         audio.configure(id: Self.liveTrackID, instrument: .of(session.liveInstrument), volume: 0.95)
+        audio.configure(id: Self.clickTrackID, instrument: .of(.percussion), volume: 0.7)
     }
 
     // MARK: Transport
@@ -154,15 +167,17 @@ final class Conductor: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func startLocked(at t: Double) {
+    private func startLocked(at t: Double, fromBeat startBeat: Double = 0) {
         guard !playing else { return }
         playing = true
         anchorTime = t
-        anchorBeat = 0
+        anchorBeat = startBeat
         offsetBeats = 0
         looping = true
-        nextBar = 0
+        nextBar = Int((startBeat / beatsPerBar).rounded(.down))
         queue = []
+        responder.reset()
+        lastResponse = .neutral
         generation += 1
         let gen = generation
         let thread = Thread { [weak self] in self?.run(generation: gen) }
@@ -217,12 +232,32 @@ final class Conductor: @unchecked Sendable {
     private func scheduleBar(_ bar: Int, after: Double) {
         let barStart = Double(bar) * beatsPerBar
         let songStart = songBeat(fromAbs: barStart)
+        var added: [Scheduled] = []
+        // Click: always during a count-in, otherwise when turned on.
+        if songStart < 0 || session.clickEnabled {
+            for b in 0..<Int(beatsPerBar) {
+                let on = barStart + Double(b)
+                guard on > after else { continue }
+                let pitch = b == 0 ? Drum.woodBlock.rawValue : Drum.woodBlock.rawValue + 1
+                added.append(Scheduled(beat: on, track: Self.clickTrackID, pitch: pitch, velocity: b == 0 ? 115 : 80))
+                added.append(Scheduled(beat: on + 0.1, track: Self.clickTrackID, pitch: pitch, velocity: 0))
+            }
+        }
+        guard songStart >= 0 else {
+            queue.append(contentsOf: added)
+            queue.sort { $0.beat != $1.beat ? $0.beat < $1.beat : $0.velocity < $1.velocity }
+            return
+        }
         let songBar = Int((songStart / beatsPerBar).rounded(.down))
         let shift = barStart - Double(songBar) * beatsPerBar
-        var added: [Scheduled] = []
+        // The band listens to you once per bar.
+        if after == -Double.infinity {
+            lastResponse = session.bandFollowsMe ? responder.response(at: time(ofAbsBeat: barStart), beatSeconds: 60 / tempo) : .neutral
+        }
+        let response = lastResponse
         let s = arranger.session
         for track in s.tracks where s.isAudible(track) {
-            for e in arranger.render(track: track, bar: songBar) {
+            for e in arranger.render(track: track, bar: songBar, response: response) {
                 let on = e.start + shift
                 guard on > after else { continue }
                 added.append(Scheduled(beat: on, track: track.id, pitch: e.pitch, velocity: e.velocity))
@@ -239,7 +274,7 @@ final class Conductor: @unchecked Sendable {
         let beat = absBeat(at: Self.now())
         queue.removeAll { $0.velocity > 0 && $0.beat > beat }
         let currentBar = Int((beat / beatsPerBar).rounded(.down))
-        nextBar = max(currentBar, 0)
+        nextBar = currentBar
         scheduleBar(nextBar, after: beat)
         nextBar += 1
     }
@@ -248,7 +283,16 @@ final class Conductor: @unchecked Sendable {
 
     func startRecording() {
         lock.lock()
-        if !playing { startLocked(at: Self.now() + 0.03) }
+        if !playing {
+            // Starting from a stop: count in, then record from bar 1.
+            let countIn = Double(max(session.countInBars, 0)) * beatsPerBar
+            startLocked(at: Self.now() + 0.03, fromBeat: -countIn)
+            looping = false
+            recorder = TakeRecorder(startBeat: 0)
+            arranger = Arranger(session: openEnded(session))
+            lock.unlock()
+            return
+        }
         let t = Self.now()
         let abs = absBeat(at: t)
         let song = max(songBeat(fromAbs: abs), 0)
@@ -268,7 +312,8 @@ final class Conductor: @unchecked Sendable {
         guard var rec = recorder else { return nil }
         recorder = nil
         let song = songBeat(fromAbs: absBeat(at: Self.now()))
-        let take = rec.finish(atBeat: song, beatsPerBar: session.beatsPerBar)
+        // Keep exactly what was played; the track's quantize setting tidies it on playback.
+        let take = rec.finish(atBeat: song, beatsPerBar: session.beatsPerBar, timingCorrection: 0)
         looping = true
         arranger = Arranger(session: session)
         if playing { requeueFromNow() }
@@ -284,7 +329,8 @@ final class Conductor: @unchecked Sendable {
         if !playing && startOnFirstNote { startLocked(at: t) }
         let abs = playing ? absBeat(at: t) : 0
         let song = max(songBeat(fromAbs: abs), 0)
-        let chord = session.progression.chord(atBeat: song)
+        let chord = session.chord(atSongBeat: song)
+        responder.noteOn(velocity: velocity, at: t)
         let outs = performer.noteOn(input, velocity: velocity, time: t, beatPhase: song - song.rounded(.down), chord: chord)
         sustained.remove(input)
         let beatsPerSecond = tempo / 60

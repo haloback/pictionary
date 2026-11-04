@@ -37,13 +37,14 @@ struct ChordLane: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 SectionLabel("Progression")
-                Text(model.session.progression.slots.map { $0.chord.roman(in: model.session.key) }.joined(separator: " – "))
+                Text(model.editingProgression.slots.map { $0.chord.roman(in: model.session.key) }.joined(separator: " – "))
                     .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 Button("Regenerate") { model.regenerateProgression() }.buttonStyle(PillButtonStyle())
                 Button("Vary band") { model.varyBand() }.buttonStyle(PillButtonStyle())
                 Button("Drop or import .mid") { model.openImportPanel() }.buttonStyle(PillButtonStyle())
             }
+            SectionsBar()
             ChordStrip()
         }
         .padding(.horizontal, 20).padding(.vertical, 14)
@@ -61,6 +62,7 @@ struct Timeline: View {
         let bars = max(model.session.songBars + 4, 8)
         ScrollView([.horizontal, .vertical]) {
             VStack(alignment: .leading, spacing: 0) {
+                if !model.session.sections.isEmpty { SectionRuler(barWidth: barWidth) }
                 Ruler(bars: bars, barWidth: barWidth)
                 ForEach(model.session.tracks) { t in
                     TrackLane(track: t, bars: bars, barWidth: barWidth)
@@ -324,10 +326,18 @@ struct TrackInspector: View {
                 Text(track.profile.name).font(.system(size: 14, weight: .semibold))
                 Text(track.profile.character).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            LabeledSlider(label: "Volume", value: track.volume, range: 0...1) { v in model.updateTrack(track.id) { $0.volume = v } }
+            LabeledSlider(label: "Volume", value: track.volume, range: 0...1) { v in model.updateTrack(track.id, label: "volume") { $0.volume = v } }
+            if track.isRecorded {
+                LabeledSlider(label: "Timing: as played → on the grid", value: track.quantize, range: 0...1) { v in
+                    model.updateTrack(track.id, label: "quantize") { $0.quantize = v }
+                }
+                GridPicker(grid: track.quantizeGrid) { g in model.updateTrack(track.id) { $0.quantizeGrid = g } }
+                Button("Teach the band this take's feel") { model.learnGroove(from: track) }
+                    .help("The whole band will push and pull the beat the way you played it")
+            }
             if let part = track.part {
-                LabeledSlider(label: "Humanize", value: track.humanize, range: 0...2) { v in model.updateTrack(track.id) { $0.humanize = v } }
-                LabeledSlider(label: "Busyness", value: part.density, range: 0.1...1) { v in model.setPart(track.id) { $0.density = v } }
+                LabeledSlider(label: "Humanize", value: track.humanize, range: 0...2) { v in model.updateTrack(track.id, label: "humanize") { $0.humanize = v } }
+                LabeledSlider(label: "Busyness", value: part.density, range: 0.1...1) { v in model.setPart(track.id, label: "density") { $0.density = v } }
                 PatternPicker(track: track, part: part)
                 if case .comp = part.kind { VoicingPicker(track: track, part: part) }
             }
@@ -441,7 +451,7 @@ struct KeyboardView: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.1)) { _ in
-            let chord = model.session.progression.chord(atBeat: model.conductor.currentSongBeat())
+            let chord = model.session.chord(atSongBeat: model.conductor.currentSongBeat())
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 16) {
                     legend(Text("You pressed"), RoundedRectangle(cornerRadius: 3).strokeBorder(Theme.record, style: StrokeStyle(lineWidth: 2, dash: [3, 2])))

@@ -9,13 +9,20 @@ public struct Humanizer: Sendable {
     public var amount: Double
     public var beatsPerBar: Double
     public var stepsPerBeat: Int
+    /// A learned groove replaces the style's swing when present.
+    public var groove: GrooveTemplate?
+    /// Section energy × how loud you're playing.
+    public var velocityScale: Double = 1
 
-    public init(feel: Feel, tempo: Double, amount: Double, beatsPerBar: Double, stepsPerBeat: Int) {
+    public init(feel: Feel, tempo: Double, amount: Double, beatsPerBar: Double, stepsPerBeat: Int,
+                groove: GrooveTemplate? = nil, velocityScale: Double = 1) {
         self.feel = feel
         self.tempo = tempo
         self.amount = amount
         self.beatsPerBar = beatsPerBar
         self.stepsPerBeat = stepsPerBeat
+        self.groove = groove
+        self.velocityScale = velocityScale
     }
 
     func msToBeats(_ ms: Double) -> Double { ms / 1000 * tempo / 60 }
@@ -59,12 +66,14 @@ public struct Humanizer: Sendable {
             let onBeat = abs(pos - pos.rounded()) < 0.01
             let jitter = rng.gaussian() * feel.jitterMs * amount * (onBeat ? 0.6 : 1)
             let behind = feel.behindMs * min(amount, 1.5) * (instrument.isDrums && pos < 0.01 ? 0.5 : 1)
-            n.start = barStart + swung(pos) + msToBeats(behind + jitter)
+            let placed = groove.map { pos + $0.offset(atPos: pos) } ?? swung(pos)
+            n.start = barStart + placed + msToBeats(behind + jitter)
             n.start = max(n.start, barStart - msToBeats(15))
 
             // Velocity.
             var v = Double(e.velocity) / 127
             v *= accent(pos) * phraseCurve * (0.55 + feel.dynamics * 0.6) * instrument.velocityScale
+            v *= velocityScale * (groove?.velocityScale(atPos: pos) ?? 1)
             v += rng.gaussian() * feel.velocityVariance * amount * 0.5
             n.velocity = Int(min(max(v * 127, 8), Double(instrument.velocityCeiling)))
 

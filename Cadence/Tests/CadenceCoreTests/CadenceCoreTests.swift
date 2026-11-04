@@ -340,3 +340,133 @@ final class ReharmonizerTests: XCTestCase {
         XCTAssertEqual(epic.romanSummary, "i – VI – III – VII")
     }
 }
+
+final class SongSectionTests: XCTestCase {
+    func testSectionsDriveChordsLengthAndEnergy() {
+        var s = Session(style: StyleLibrary.style(id: "modern-pop"), seed: 4)
+        s.buildSong()
+        XCTAssertEqual(s.sections.map(\.kind), [.intro, .verse, .preChorus, .chorus, .verse, .preChorus, .chorus, .bridge, .chorus, .outro])
+        XCTAssertEqual(s.songBars, s.sections.reduce(0) { $0 + $1.bars })
+        // Every chorus shares one set of chords, different from the verse.
+        let choruses = s.sections.filter { $0.kind == .chorus }
+        XCTAssertEqual(Set(choruses.compactMap(\.chordsKey)).count, 1)
+        let chorusChords = s.progression(forKey: choruses[0].chordsKey).slots.map(\.chord)
+        XCTAssertNotEqual(chorusChords, s.progression.slots.map(\.chord))
+
+        let chorusStart = s.startBar(ofSection: 3)
+        let h = s.harmony(atBar: chorusStart)
+        XCTAssertEqual(h.sectionIndex, 3)
+        XCTAssertTrue(h.isSectionStart)
+        XCTAssertEqual(s.chord(atSongBeat: Double(chorusStart * s.beatsPerBar)), chorusChords[0])
+        XCTAssertTrue(s.harmony(atBar: chorusStart - 1).isSectionEnd)
+
+        // A breakdown plays far less than a chorus.
+        s.addSection(.breakdown)
+        let a = Arranger(session: s)
+        let breakdownBar = s.startBar(ofSection: s.sections.count - 1)
+        func notes(_ bar: Int) -> Int { s.tracks.filter { $0.part != nil }.map { a.render(track: $0, bar: bar).count }.reduce(0, +) }
+        let chorusNotes = (0..<4).map { notes(chorusStart + $0) }.reduce(0, +)
+        let quietNotes = (0..<4).map { notes(breakdownBar + $0) }.reduce(0, +)
+        XCTAssertLessThan(quietNotes, chorusNotes)
+    }
+
+    func testEditingOneSectionOnlyChangesItsChords() {
+        var s = Session(style: StyleLibrary.defaultStyle)
+        s.addSection(.verse)
+        s.addSection(.verse)
+        s.giveOwnChords(sectionID: s.sections[1].id)
+        let key = s.sections[1].chordsKey!
+        s.sectionProgressions[key]!.slots[0].chord = Chord(root: 1, quality: .dominant7)
+        XCTAssertNotEqual(s.chord(atSongBeat: 0), Chord(root: 1, quality: .dominant7))
+        XCTAssertEqual(s.chord(atSongBeat: Double(s.sections[0].bars * s.beatsPerBar)), Chord(root: 1, quality: .dominant7))
+    }
+
+    func testOldSavedSessionsStillLoad() throws {
+        var old = try JSONSerialization.jsonObject(with: JSONEncoder().encode(Session(style: StyleLibrary.defaultStyle))) as! [String: Any]
+        for k in ["sections", "sectionProgressions", "bandFollowsMe", "countInBars", "clickEnabled", "takeQuantize", "quantizeGrid", "keyMap"] {
+            old.removeValue(forKey: k)
+        }
+        var tracks = old["tracks"] as! [[String: Any]]
+        for i in tracks.indices { tracks[i].removeValue(forKey: "quantize"); tracks[i].removeValue(forKey: "quantizeGrid") }
+        old["tracks"] = tracks
+        let s = try JSONDecoder().decode(Session.self, from: JSONSerialization.data(withJSONObject: old))
+        XCTAssertTrue(s.sections.isEmpty)
+        XCTAssertEqual(s.countInBars, 1)
+        XCTAssertEqual(s.tracks.first?.quantizeGrid, 4)
+    }
+}
+
+final class GrooveTests: XCTestCase {
+    func testGrooveIsLearnedAndApplied() throws {
+        // A drummer who plays every off-beat 16th late and soft.
+        var notes: [NoteEvent] = []
+        for bar in 0..<2 {
+            for step in 0..<16 {
+                let late = step % 2 == 1 ? 0.06 : 0
+                notes.append(NoteEvent(pitch: 42, velocity: step % 2 == 1 ? 60 : 100, start: Double(bar * 4) + Double(step) * 0.25 + late, duration: 0.1))
+            }
+        }
+        let g = try XCTUnwrap(GrooveTemplate.learn(from: notes, beatsPerBar: 4, name: "Late 16ths"))
+        XCTAssertEqual(g.offset(atPos: 0.25), 0.06, accuracy: 0.005)
+        XCTAssertEqual(g.offset(atPos: 0.5), 0, accuracy: 0.005)
+        XCTAssertLessThan(g.velocityScale(atPos: 0.25), g.velocityScale(atPos: 0.5))
+
+        // Applied by the humanizer: an off-beat 16th moves late and gets softer.
+        let h = Humanizer(feel: .straight, tempo: 100, amount: 0, beatsPerBar: 4, stepsPerBeat: 4, groove: g)
+        var rng = SeededRandom(seed: 1)
+        let out = h.apply([NoteEvent(pitch: 60, velocity: 100, start: 0.25, duration: 0.2),
+                           NoteEvent(pitch: 60, velocity: 100, start: 0.5, duration: 0.2)], bar: 0, instrument: .of(.grandPiano), rng: &rng)
+        XCTAssertEqual(out[0].start, 0.31, accuracy: 0.005)
+        XCTAssertEqual(out[1].start, 0.5, accuracy: 0.005)
+        XCTAssertLessThan(out[0].velocity, out[1].velocity)
+    }
+
+    func testBandReactsToYou() {
+        var r = ResponseTracker()
+        var t = 10.0
+        for _ in 0..<20 { r.noteOn(velocity: 120, at: t); t += 0.1 }      // loud and busy
+        var resp = r.response(at: t, beatSeconds: 0.5)
+        resp = r.response(at: t, beatSeconds: 0.5)
+        XCTAssertGreaterThan(resp.loudness, 1.1)
+        XCTAssertLessThan(resp.busyness, 1)
+        // Then you stop: the band answers with a fill, once.
+        XCTAssertTrue(r.response(at: t + 1.5, beatSeconds: 0.5).fill)
+        XCTAssertFalse(r.response(at: t + 3, beatSeconds: 0.5).fill)
+        // Soft playing brings the band down.
+        var soft = ResponseTracker()
+        for i in 0..<6 { soft.noteOn(velocity: 40, at: Double(i)) }
+        _ = soft.response(at: 6, beatSeconds: 0.5)
+        XCTAssertLessThan(soft.response(at: 6.1, beatSeconds: 0.5).loudness, 0.9)
+
+        let s = Session(style: StyleLibrary.style(id: "modern-pop"))
+        let a = Arranger(session: s)
+        let comp = s.tracks[0]
+        let quiet = a.render(track: comp, bar: 1, response: BandResponse(loudness: 0.75, busyness: 0.6))
+        let loud = a.render(track: comp, bar: 1, response: BandResponse(loudness: 1.2))
+        XCTAssertLessThan(quiet.map(\.velocity).max() ?? 0, loud.map(\.velocity).max() ?? 0)
+    }
+
+    func testPhrasesVaryAndTurnAround() {
+        let s = Session(style: StyleLibrary.style(id: "modern-pop"), seed: 2)
+        var noFills = s
+        noFills.tracks = noFills.tracks.map { var t = $0; t.humanize = 0; return t }
+        let a = Arranger(session: noFills)
+        let bass = noFills.tracks.first { if case .bass = $0.part?.kind { return true } else { return false } }!
+        let bar0 = a.render(track: bass, bar: 0).map { $0.start - 0 }
+        let bar3 = a.render(track: bass, bar: 3).map { $0.start - 12 }
+        XCTAssertNotEqual(bar0.map { ($0 * 4).rounded() }, bar3.map { ($0 * 4).rounded() })
+    }
+
+    func testQuantizePullsTakesTowardTheGrid() {
+        XCTAssertEqual(Quantizer.pull(1.1, grid: 4, amount: 1), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(Quantizer.pull(1.1, grid: 4, amount: 0.5), 1.05, accuracy: 1e-9)
+        XCTAssertEqual(Quantizer.pull(0.36, grid: 3, amount: 1), 1.0 / 3, accuracy: 1e-9)
+        var t = Track(name: "take", source: .recorded, instrument: .grandPiano, volume: 1, colorIndex: 0)
+        t.take = [NoteEvent(pitch: 60, velocity: 90, start: 0.11, duration: 1)]
+        t.takeBars = 1
+        t.quantize = 1
+        var s = Session(style: StyleLibrary.defaultStyle)
+        s.tracks = [t]
+        XCTAssertEqual(Arranger(session: s).render(track: t, bar: 0).first?.start ?? -1, 0, accuracy: 1e-9)
+    }
+}
