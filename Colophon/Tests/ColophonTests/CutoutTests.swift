@@ -49,15 +49,17 @@ final class CutoutTests: XCTestCase {
         XCTAssertLessThan(elapsed, 5, "inpainting a 400 px picture took \(elapsed) s")
         XCTAssertEqual(out.width, 400)
         XCTAssertEqual(out.height, 400)
+        // The ground as it actually landed in the picture (CGColor(red:green:blue:) is generic RGB, not sRGB).
+        let ground = rgb(img, 20, 20)
         let c = rgb(out, 200, 200)
-        XCTAssertLessThanOrEqual(abs(c.r - background.r), 12, "center red \(c.r) vs \(background.r)")
-        XCTAssertLessThanOrEqual(abs(c.g - background.g), 12, "center green \(c.g) vs \(background.g)")
-        XCTAssertLessThanOrEqual(abs(c.b - background.b), 12, "center blue \(c.b) vs \(background.b)")
+        XCTAssertLessThanOrEqual(abs(c.r - ground.r), 12, "center red \(c.r) vs \(ground.r)")
+        XCTAssertLessThanOrEqual(abs(c.g - ground.g), 12, "center green \(c.g) vs \(ground.g)")
+        XCTAssertLessThanOrEqual(abs(c.b - ground.b), 12, "center blue \(c.b) vs \(ground.b)")
         // Far from the hole nothing changes.
         let corner = rgb(out, 20, 20)
-        XCTAssertEqual(corner.r, background.r)
-        XCTAssertEqual(corner.g, background.g)
-        XCTAssertEqual(corner.b, background.b)
+        XCTAssertEqual(corner.r, ground.r)
+        XCTAssertEqual(corner.g, ground.g)
+        XCTAssertEqual(corner.b, ground.b)
     }
 
     func testInpaintWithEmptyMaskReturnsPicture() throws {

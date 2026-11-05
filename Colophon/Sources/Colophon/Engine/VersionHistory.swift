@@ -111,6 +111,9 @@ final class VersionHistory {
         if a.archetypeName != b.archetypeName || a.templateID != b.templateID { return false }
         if a.assetOrder != b.assetOrder || Set(a.fonts.keys) != Set(b.fonts.keys) { return false }
         if a.paperback != b.paperback || a.recipe != b.recipe { return false }
-        return a.layers == b.layers
+        // Same design, whatever the layer ids: a rebuilt document is still the same picture.
+        let zero = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+        func stripped(_ layers: [Layer]) -> [Layer] { layers.map { var l = $0; l.id = zero; return l } }
+        return stripped(a.layers) == stripped(b.layers)
     }
 }

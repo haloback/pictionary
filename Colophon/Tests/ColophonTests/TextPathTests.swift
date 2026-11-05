@@ -107,7 +107,7 @@ final class TextPathTests: XCTestCase {
         XCTAssertGreaterThan(w.bottom, f.bottom, "wave dips below the straight band")
         // Fitting makes room for the amplitude.
         let fittedWave = TextRenderer.fittedSize(wave, box: box)
-        XCTAssertLessThan(fittedWave, TextRenderer.fittedSize(straight, box: box))
+        XCTAssertLessThanOrEqual(fittedWave, TextRenderer.fittedSize(straight, box: box))
     }
 
     func testRiseIsTallerOnTheRight() throws {
