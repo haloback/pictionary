@@ -271,6 +271,71 @@ extension SampleRenderTests {
             manifest.append(["file": "08-describe.png", "name": "Search by description: “\(query)” across the Signature designs", "family": "Taste"])
         }
 
+        // 9. Type on a path and warped type.
+        imgs = []; labels = []
+        for path in TextPath.allCases where path != .none {
+            var d = CoverDocument()
+            d.book = BookInfo(title: "Undertow", author: "Maren Solberg", genre: .thriller)
+            d.background = RGBA(hex: "0B1D3A")
+            var t = TextContent(text: path == .circle ? "THE SALT ORCHARD • A NOVEL •" : "UNDERTOW", role: .title, fontName: "Anton-Regular", color: RGBA(hex: "F2ECDF"))
+            t.path = path
+            t.pathAmount = path == .circle ? 1 : 0.7
+            t.letterCase = .upper
+            d.layers = [Layer.fill(.solid, colors: [RGBA(hex: "0B1D3A")], frame: .full),
+                        Layer(name: "Title", content: .text(t), frame: path == .circle ? NRect(0.1, 0.2, 0.8, 0.5) : NRect(0.06, 0.3, 0.88, 0.3))]
+            if let i = shot(d) { imgs.append(i); labels.append(path.label) }
+        }
+        sheet(imgs, cols: 8, cell: CGSize(width: 225, height: 360), labels: labels, to: out.appendingPathComponent("09-type-paths.png"))
+        manifest.append(["file": "09-type-paths.png", "name": "Type on a path and warped type: circle, wave, flag, bulge, pinch, rise, fall, perspective", "family": "Typography"])
+
+        // 10. Subjects, cutouts and object removal on a real picture.
+        if let landscape, let src = AssetStore.decode(landscape, maxPixel: 1200) {
+            imgs = []; labels = []
+            let cell2 = CGSize(width: 300, height: 300 * CGFloat(src.height) / CGFloat(src.width))
+            imgs.append(src); labels.append("Original")
+            let found = SubjectSegmentation.subjects(in: src)
+            if let first = found.subjects.first, let m = SubjectSegmentation.mask(for: IndexSet(integer: first.id), in: src) {
+                imgs.append(m); labels.append("Subject \(first.id) (\(first.kind == .person ? "person" : "object")), \(found.subjects.count) found")
+                if let cut = VisionServices.applyMask(m, to: src, invert: false) {
+                    // On a flat ground so the cutout edge reads.
+                    if let ctx = Gfx.context(src.width, src.height) {
+                        ctx.setFillColor(RGBA(hex: "E4572E").cgColor); ctx.fill(CGRect(x: 0, y: 0, width: src.width, height: src.height))
+                        ctx.draw(cut, in: CGRect(x: 0, y: 0, width: src.width, height: src.height))
+                        if let i = ctx.makeImage() { imgs.append(i); labels.append("Cutout of that subject only") }
+                    }
+                }
+                if let refined = SubjectSegmentation.refine(mask: m, guide: src, amount: 0.8) { imgs.append(refined); labels.append("Edge refined") }
+                let t0 = Date()
+                if let removed = Inpainter.remove(from: src, mask: m) {
+                    imgs.append(removed); labels.append(String(format: "Removed from the photo (%.1f s)", Date().timeIntervalSince(t0)))
+                }
+            }
+            sheet(imgs, cols: 5, cell: cell2, labels: labels, to: out.appendingPathComponent("10-cutouts.png"))
+            manifest.append(["file": "10-cutouts.png", "name": "Subjects, precise cutouts, edge refinement and object removal", "family": "Image"])
+        }
+
+        // 11. Where readers look first.
+        imgs = []; labels = []
+        for id in ["literary-the-grid", "thriller-brand-name", "memoir-close", "fantasy-the-gate"] {
+            guard let d = SignatureLibrary.design(id) else { continue }
+            var base = SignatureLibrary.sampleDocument(d)
+            if d.usesPhoto, let data = photos[d.sample.photo] ?? portrait { _ = base.addAsset(data) }
+            let doc = SignatureLibrary.build(d, palette: 0, base: base)
+            guard let full = shot(doc), let att = VisionServices.attention(for: full) else { continue }
+            imgs.append(full); labels.append(d.name)
+            if let ctx = Gfx.context(full.width, full.height) {
+                ctx.draw(full, in: CGRect(x: 0, y: 0, width: full.width, height: full.height))
+                ctx.setAlpha(0.85)
+                ctx.interpolationQuality = .high
+                ctx.draw(att.heat, in: CGRect(x: 0, y: 0, width: full.width, height: full.height))
+                let r = Critic.review(doc)
+                let note = r.issues.first { $0.kind == .attention }?.message ?? "eyes land on the title"
+                if let i = ctx.makeImage() { imgs.append(i); labels.append(note) }
+            }
+        }
+        sheet(imgs, cols: 8, cell: CGSize(width: 225, height: 360), labels: labels, to: out.appendingPathComponent("11-attention.png"))
+        manifest.append(["file": "11-attention.png", "name": "Where readers look first: Apple's attention model over the finished cover, and the critic's note", "family": "Critic"])
+
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("engine.json"))
     }
