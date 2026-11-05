@@ -305,8 +305,10 @@ final class CoverRenderer {
             }
             ci = FX.fromPerceptual(t)
         }
-        if a.contrast != 0 || a.saturation != 0 {
-            ci = FX.controls(ci, saturation: 1 + a.saturation, contrast: 1 + a.contrast * 0.5)
+        if a.saturation != 0 { ci = FX.controls(ci, saturation: 1 + a.saturation) }
+        if a.contrast != 0 {
+            // Contrast pivots at mid-gray only on gamma-encoded values; in linear light it crushes the shadows.
+            ci = FX.fromPerceptual(FX.controls(FX.toPerceptual(ci), contrast: 1 + a.contrast * 0.6))
         }
         if a.vibrance != 0 {
             ci = ci.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance.clamped(-1, 1)])
@@ -352,14 +354,16 @@ final class CoverRenderer {
         // Perceptual luminance so mid-gray lands mid-mask.
         let lum = FX.toPerceptual(FX.mono(ci)).settingAlphaOne(in: extent)
         var out = ci
+        // The tints lend their hue and saturation (Color blend keeps the photo's own luminance), so
+        // shadows turn teal or plum without filling in and highlights warm up without blowing out.
         if let s = shadows {
             let shadowMask = FX.matrix(lum, r: (-amount, 0, 0), g: (0, -amount, 0), b: (0, 0, -amount), bias: (amount, amount, amount))
-            let tinted = FX.blend(FX.solid(s, extent), over: ci, mode: "CIMultiplyBlendMode")
+            let tinted = FX.blend(FX.solid(s, extent), over: ci, mode: "CIColorBlendMode")
             out = FX.blendWithMask(tinted, over: out, mask: shadowMask)
         }
         if let h = highlights {
             let highlightMask = FX.matrix(lum, r: (amount, 0, 0), g: (0, amount, 0), b: (0, 0, amount))
-            let tinted = FX.blend(FX.solid(h, extent), over: out, mode: "CIScreenBlendMode")
+            let tinted = FX.blend(FX.solid(h, extent), over: out, mode: "CIColorBlendMode")
             out = FX.blendWithMask(tinted, over: out, mask: highlightMask)
         }
         return out.cropped(to: extent)

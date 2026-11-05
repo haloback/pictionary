@@ -61,7 +61,7 @@ enum Critic {
             if let bg {
                 let stats = PixelSampler.stats(bg, region: l.frame)
                 let need = role.minimumContrast
-                let achieved = t.color.contrast(with: stats.mean) + (lifted ? 1.5 : 0)
+                let achieved = faceColor(t).contrast(with: stats.mean) + (lifted ? 1.5 : 0)
                 if achieved < need {
                     let short = (need - achieved) / need
                     let weight = role == .title ? 32.0 : 16.0
@@ -130,6 +130,13 @@ enum Critic {
 
         let score = max(0, min(100, 100 - issues.reduce(0) { $0 + $1.penalty }))
         return CriticReport(score: score, issues: issues.sorted { $0.penalty > $1.penalty })
+    }
+
+    /// The color the type actually shows: a styled face (stone, bronze, wood) is dark whatever the nominal color.
+    static func faceColor(_ t: TextContent) -> RGBA {
+        if t.style.isActive && TemplateLibrary.darkFaces.contains(t.style.surface) { return RGBA(0.24, 0.21, 0.18) }
+        if t.texture.metalStops != nil || (t.style.isActive && t.style.surface != .none) { return t.color.mixed(with: RGBA(0.5, 0.5, 0.5), 0.3) }
+        return t.color
     }
 
     private static func hasBacking(_ doc: CoverDocument, under text: Layer) -> Bool {
@@ -235,7 +242,9 @@ enum Critic {
                 if !behind { for face in faces where r.intersectionArea(face) / max(1e-6, face.w * face.h) > 0.3 { return false } }
                 return true
             }
-            if role != .title && !clear(f) {
+            // The title moves only to get off a face; everything else also clears the other lines.
+            let coversFace = !behind && faces.contains { f.intersectionArea($0) / max(1e-6, $0.w * $0.h) > 0.3 }
+            if (role != .title && !clear(f)) || (role == .title && coversFace) {
                 // Try nudging down, then up, in small steps.
                 var found = false
                 for step in 1...30 {

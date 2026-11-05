@@ -346,7 +346,7 @@ enum SignatureLibrary {
             l.adjust.contrast = 0.15
         case .stark:
             l.adjust.saturation = -1
-            l.adjust.contrast = 0.6
+            l.adjust.contrast = 0.9
             l.adjust.exposure = -0.1
         case .sepia:
             l.adjust.saturation = -0.85
