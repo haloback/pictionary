@@ -125,6 +125,117 @@ extension SampleRenderTests {
         sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("03-recommended.png"))
         manifest.append(["file": "03-recommended.png", "name": "Recommended for your book: templates judged with the author's own title and photo", "family": "Critic"])
 
+        // 4. Typesetting: count-based vs measured breaks, uniform vs block fit, small caps, hanging quotes.
+        imgs = []; labels = []
+        func typeCover(_ title: String, font: String, fit: TextFit, letterCase: LetterCase, breaksMeasured: Bool, label: String) {
+            var d = CoverDocument()
+            d.book = BookInfo(title: title, author: "Ines Valcourt", genre: .literary)
+            d.palette = [RGBA(hex: "121212"), RGBA(hex: "E8562A"), RGBA(hex: "F1EBDD")]
+            d.background = RGBA(hex: "F1EBDD")
+            var t = TextContent(text: title, role: .title, fontName: font, color: RGBA(hex: "121212"))
+            t.letterCase = letterCase
+            t.fit = fit
+            t.lineHeight = 0.9
+            t.alignment = fit == .block ? .left : .center
+            t.opticalTracking = true
+            let box = NRect(0.08, 0.1, 0.84, 0.5)
+            let px = box.pixels(in: CGSize(width: cell.width, height: cell.height))
+            if fit == .block {
+                t.text = title.split(separator: " ").joined(separator: "\n")
+            } else if breaksMeasured {
+                t.text = TextRenderer.bestBreaks(t, box: px.size)
+            } else {
+                t.text = TitleBreaker.auto(title, stacked: false)
+            }
+            var tl = Layer(name: "Title", content: .text(t), frame: box)
+            tl.name = "Title"
+            var au = TextContent(text: "Ines Valcourt", role: .author, fontName: "CormorantGaramond-SemiBold", color: RGBA(hex: "121212"))
+            au.letterCase = letterCase == .smallCaps ? .smallCaps : .upper
+            au.tracking = 0.18
+            d.layers = [Layer.fill(.solid, colors: [RGBA(hex: "F1EBDD")], frame: .full), tl,
+                        Layer(name: "Author", content: .text(au), frame: NRect(0.15, 0.86, 0.7, 0.045))]
+            if let i = shot(d) { imgs.append(i); labels.append(label) }
+        }
+        typeCover("The Edge of Everything", font: "PlayfairDisplay-Black", fit: .uniform, letterCase: .asTyped, breaksMeasured: false, label: "Count-based breaks")
+        typeCover("The Edge of Everything", font: "PlayfairDisplay-Black", fit: .uniform, letterCase: .asTyped, breaksMeasured: true, label: "Measured breaks, no connective at line end")
+        typeCover("The Salt Orchard", font: "Anton-Regular", fit: .uniform, letterCase: .upper, breaksMeasured: true, label: "Uniform fit")
+        typeCover("The Salt Orchard", font: "Anton-Regular", fit: .block, letterCase: .upper, breaksMeasured: true, label: "Block fit: every line fills the width")
+        typeCover("“Quiet” Hours", font: "DMSerifDisplay-Regular", fit: .uniform, letterCase: .asTyped, breaksMeasured: true, label: "Hanging quotes, small-caps author")
+        typeCover("Grace Under Glass", font: "LibreCaslonDisplay-Regular", fit: .uniform, letterCase: .smallCaps, breaksMeasured: true, label: "Small caps title and author")
+        sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("04-typesetting.png"))
+        manifest.append(["file": "04-typesetting.png", "name": "Typesetting: measured breaks, block fit, hanging punctuation, small caps, optical tracking", "family": "Typography"])
+
+        // 5. Color grades on one photo.
+        imgs = []; labels = []
+        if let landscape {
+            var gd = CoverDocument()
+            gd.book = BookInfo(title: "Grades", author: "", genre: .literary)
+            let id = gd.addAsset(landscape)
+            let grades = Array(ColorGrade.all.prefix(12))
+            for g in grades {
+                var d = gd
+                var l = Layer.image(id, frame: .full)
+                l.adjust = g.adjust
+                d.layers = [l]
+                if let i = CoverRenderer.shared.render(d, size: CGSize(width: 240, height: 384), quality: .full) { imgs.append(i); labels.append(g.name) }
+            }
+            sheet(imgs, cols: 6, cell: CGSize(width: 240, height: 384), labels: labels, to: out.appendingPathComponent("05-grades.png"))
+            manifest.append(["file": "05-grades.png", "name": "Color grades: lift, gamma, gain, split toning, vibrance, fade, grain and vignette as one-click looks", "family": "Image"])
+        }
+
+        // 6. Compositing: knockout, gradient map, inner shadow, feather, linear-light blend, harmony.
+        imgs = []; labels = []
+        func blendCover(_ label: String, _ make: (inout CoverDocument, UUID?) -> Void) {
+            var d = CoverDocument()
+            d.book = BookInfo(title: "Undertow", author: "Maren Solberg", genre: .thriller)
+            d.palette = [RGBA(hex: "0B1D3A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]
+            d.background = RGBA(hex: "F2ECDF")
+            var id: UUID?
+            if let portrait { id = d.addAsset(portrait) }
+            make(&d, id)
+            if let i = shot(d) { imgs.append(i); labels.append(label) }
+        }
+        blendCover("Knockout: the title cuts through to the ground") { d, id in
+            if let id { d.layers.append(Layer.image(id, frame: .full)) } else { d.layers.append(Layer.fill(.smoke, colors: [RGBA(hex: "0B1D3A"), RGBA(hex: "23308C"), RGBA(hex: "7B83EB")], frame: .full)) }
+            var t = Layer.text("UNDER\nTOW", role: .title, frame: NRect(0.06, 0.3, 0.88, 0.4), font: "Anton-Regular", color: .white)
+            t.knockout = true
+            d.layers.append(t)
+        }
+        blendCover("Gradient map: duotone on any layer") { d, id in
+            if let id { var l = Layer.image(id, frame: .full); l.gradientMap = [RGBA(hex: "0B1D3A"), RGBA(hex: "E4572E"), RGBA(hex: "F2ECDF")]; d.layers.append(l) }
+            d.layers.append(Layer.text("UNDERTOW", role: .title, frame: NRect(0.06, 0.78, 0.88, 0.12), font: "Anton-Regular", color: RGBA(hex: "F2ECDF")))
+        }
+        blendCover("Inner shadow: pressed type") { d, _ in
+            d.layers.append(Layer.fill(.solid, colors: [RGBA(hex: "E4572E")], frame: .full))
+            var t = Layer.text("UNDER\nTOW", role: .title, frame: NRect(0.06, 0.3, 0.88, 0.4), font: "Anton-Regular", color: RGBA(hex: "D14A24"))
+            t.innerShadow = ShadowStyle(color: RGBA(0, 0, 0, 0.7), radius: 0.012, dx: 0, dy: 0.006)
+            d.layers.append(t)
+        }
+        blendCover("Feathered edge on a clipped photo") { d, id in
+            d.layers.append(Layer.fill(.solid, colors: [RGBA(hex: "0B1D3A")], frame: .full))
+            if let id { var l = Layer.image(id, frame: NRect(0.12, 0.1, 0.76, 0.55)); l.clipShape = .ellipse; l.feather = 0.5; d.layers.append(l) }
+            d.layers.append(Layer.text("UNDERTOW", role: .title, frame: NRect(0.06, 0.74, 0.88, 0.12), font: "Anton-Regular", color: RGBA(hex: "F2ECDF")))
+        }
+        blendCover("Linear-light multiply wash") { d, id in
+            if let id { d.layers.append(Layer.image(id, frame: .full)) }
+            var w = Layer.fill(.linear, colors: [RGBA(hex: "E4572E"), RGBA(hex: "0B1D3A")], frame: .full, angle: 90)
+            w.blend = .multiply
+            w.linearBlend = true
+            w.opacity = 0.85
+            d.layers.append(w)
+            d.layers.append(Layer.text("UNDERTOW", role: .title, frame: NRect(0.06, 0.78, 0.88, 0.12), font: "Anton-Regular", color: RGBA(hex: "F2ECDF")))
+        }
+        blendCover("Harmonized to the palette") { d, id in
+            if let id {
+                let l = Layer.image(id, frame: .full)
+                d.layers.append(l)
+                d.layers.append(Harmonizer.layer(for: l, palette: PaletteRoles(d.palette), strength: 0.8, mean: nil))
+            }
+            d.layers.append(Layer.text("UNDERTOW", role: .title, frame: NRect(0.06, 0.78, 0.88, 0.12), font: "Anton-Regular", color: RGBA(hex: "F2ECDF")))
+        }
+        sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("06-compositing.png"))
+        manifest.append(["file": "06-compositing.png", "name": "Compositing: knockout, gradient map, inner shadow, feather, linear-light blend, palette harmony", "family": "Blending"])
+
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("engine.json"))
     }

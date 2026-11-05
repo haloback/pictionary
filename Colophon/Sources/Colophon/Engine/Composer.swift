@@ -53,6 +53,23 @@ struct DesignContext {
     var seed: Int
     /// Whether the ground behind the title is dark (decides light or dark type).
     var darkGround = true
+    /// What the engine knows about each photo: faces, quiet areas, mean color, pixel size.
+    var insights: [UUID: ImageInsight] = [:]
+    var imageSizes: [UUID: CGSize] = [:]
+
+    var canvasSize: CGSize { CGSize(width: 1000, height: 1000 * aspect) }
+
+    /// Reads every photo once; the composer places crops and type around what it finds.
+    static func learn(_ base: CoverDocument, images: [UUID]) -> ([UUID: ImageInsight], [UUID: CGSize]) {
+        var ins: [UUID: ImageInsight] = [:]
+        var sizes: [UUID: CGSize] = [:]
+        for id in images {
+            let data = base.assetData(id)
+            ins[id] = AssetStore.shared.insight(id, data: data)
+            if let s = AssetStore.shared.imageSize(id, data: data) { sizes[id] = s }
+        }
+        return (ins, sizes)
+    }
 }
 
 enum CoverComposer {
@@ -66,6 +83,7 @@ enum CoverComposer {
         let imagePalette = first.map { AssetStore.shared.palette($0, data: base.assetData($0)) } ?? []
         let focus = first.map { AssetStore.shared.focus($0, data: base.assetData($0)) } ?? NRect(0.25, 0.25, 0.5, 0.5)
         if let first { _ = AssetStore.shared.mask(first, data: base.assetData(first)) }
+        let learned = DesignContext.learn(base, images: images)
 
         var order: [Archetype] = []
         let preferred = style.archetypes + Archetype.allCases
@@ -104,8 +122,11 @@ enum CoverComposer {
                 effect: style.effects.isEmpty ? nil : style.effects[(i * 3 + round + seed) % style.effects.count],
                 fill: style.fills[(i + round * 2 + seed) % style.fills.count],
                 aspect: base.canvas.aspect, seed: rng.int(1_000_000))
+            ctx.insights = learned.0
+            ctx.imageSizes = learned.1
             var doc = base
             doc.layers = build(arch, &ctx)
+            harmonizePhotos(&doc, palette: palette, insights: learned.0)
             // Layouts without a slot for the subtitle, tagline or series still get them, in free space.
             SupportingText.ensureAll(&doc)
             doc.palette = palette.colors
@@ -144,8 +165,12 @@ enum CoverComposer {
         if let first { _ = AssetStore.shared.mask(first, data: base.assetData(first)) }
         var ctx = DesignContext(book: base.book, style: style, treatment: treatment, palette: palette, images: images, focus: focus,
                                 effect: effect, fill: fill, aspect: base.canvas.aspect, seed: seed)
+        let learned = DesignContext.learn(base, images: images)
+        ctx.insights = learned.0
+        ctx.imageSizes = learned.1
         var doc = base
         doc.layers = build(arch, &ctx)
+        harmonizePhotos(&doc, palette: palette, insights: learned.0)
         SupportingText.ensureAll(&doc)
         doc.palette = palette.colors
         doc.archetypeName = arch.label
@@ -191,6 +216,24 @@ enum CoverComposer {
 
     // MARK: - Building blocks
 
+    /// Photos whose colors fight the cover palette get a quiet wash toward it, like a colorist grading to the brief.
+    static func harmonizePhotos(_ doc: inout CoverDocument, palette: PaletteRoles, insights: [UUID: ImageInsight]) {
+        var i = 0
+        while i < doc.layers.count {
+            let l = doc.layers[i]
+            if let ic = l.imageContent, ic.cutout == .none, l.frame.area > 0.3, let ins = insights[ic.assetID] {
+                let distance = min(Harmonizer.hueDistance(ins.meanColor, palette.dominant), Harmonizer.hueDistance(ins.meanColor, palette.accent))
+                let colorful = ins.meanColor.hsl.s > 0.12
+                if colorful && distance > 45 && !(i + 1 < doc.layers.count && doc.layers[i + 1].name == "Harmony") {
+                    let strength = min(1, (distance - 45) / 90) * 0.7
+                    doc.layers.insert(Harmonizer.layer(for: l, palette: palette, strength: strength, mean: ins.meanColor), at: i + 1)
+                    i += 1
+                }
+            }
+            i += 1
+        }
+    }
+
     private static func titleText(_ c: DesignContext) -> String {
         let t = c.book.title.isEmpty ? "Untitled" : c.book.title
         return TitleBreaker.auto(t, stacked: c.treatment.stacked, maxChars: c.treatment.stacked ? 10 : 14)
@@ -204,6 +247,16 @@ enum CoverComposer {
         l.textContent?.lineHeight = c.treatment.titleLineHeight
         l.textContent?.alignment = align ?? c.treatment.align
         l.textContent?.behindSubject = behind
+        if c.treatment.stacked {
+            // Big stacked titles are set as a block: every line fills the width.
+            l.textContent?.fit = .block
+        } else if var tc = l.textContent {
+            // Lines broken by measuring the real font in the real box, never on a connective.
+            tc.text = c.book.title.isEmpty ? "Untitled" : c.book.title
+            let box = f.pixels(in: c.canvasSize)
+            tc.text = TextRenderer.bestBreaks(tc, box: CGSize(width: box.width * tc.flourish.textWidthShare, height: box.height * tc.flourish.textHeightShare))
+            l.textContent = tc
+        }
         l.name = "Title"
         return l
     }
@@ -247,8 +300,15 @@ enum CoverComposer {
             l.name = "Artwork"
             return l
         }
-        var l = Layer.image(c.images[index % c.images.count], frame: f)
+        let id = c.images[index % c.images.count]
+        var l = Layer.image(id, frame: f)
         if let e = c.effect, effect { l.effects = [EffectInstance(presetID: e, amount: 0.85)] }
+        // Crop around faces and the subject, with a face in the upper third where the frame allows.
+        if let ins = c.insights[id], let size = c.imageSizes[id] {
+            let focus = ins.smartFocus(frame: f, canvas: c.canvasSize, imageSize: size, zoom: 1)
+            l.imageContent?.focusX = focus.focusX
+            l.imageContent?.focusY = focus.focusY
+        }
         return l
     }
 

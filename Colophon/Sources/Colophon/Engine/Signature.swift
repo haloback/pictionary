@@ -212,10 +212,19 @@ enum SignatureLibrary {
                     l.name = "Artwork"
                     doc.layers.append(l)
                 } else {
-                    var l = Layer.image(photos[index % photos.count], frame: r)
+                    let id = photos[index % photos.count]
+                    var l = Layer.image(id, frame: r)
                     l.clipShape = clip
                     l.imageContent?.focusY = focusY
                     l.imageContent?.zoom = max(1, zoom)
+                    // A face in the photo decides the crop: the design's focus is for photos without one.
+                    let ins = AssetStore.shared.insight(id, data: base.assetData(id))
+                    if !ins.faces.isEmpty, let size = AssetStore.shared.imageSize(id, data: base.assetData(id)) {
+                        let canvas = CGSize(width: Double(base.canvas.width), height: Double(base.canvas.height))
+                        let focus = ins.smartFocus(frame: r, canvas: canvas, imageSize: size, zoom: max(1, zoom))
+                        l.imageContent?.focusX = focus.focusX
+                        l.imageContent?.focusY = focus.focusY
+                    }
                     doc.layers.append(contentsOf: treated(l, look, p))
                 }
             case .shape(let kind, let r, let c, let stroke, let rot):
