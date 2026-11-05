@@ -4,7 +4,7 @@ import Foundation
 /// What the critic found wrong (or right) with one part of a cover.
 struct CriticIssue: Identifiable {
     enum Kind: String {
-        case legibility, busyGround, collision, margin, prominence, thumbnail, face, hierarchy
+        case legibility, busyGround, collision, margin, prominence, thumbnail, face, hierarchy, photoText, photo
     }
     let id = UUID()
     let kind: Kind
@@ -92,6 +92,17 @@ enum Critic {
         let canvasH = Double(doc.canvas.height)
         let texts = doc.layers.filter { $0.textContent != nil && $0.isVisible && $0.opacity >= 0.5 }
         let faces = faceRects(doc)
+        let words = photoTextRects(doc)
+        // The photo itself: a screenshot, a weak picture, words in it.
+        for l in doc.layers where l.isVisible {
+            guard let ic = l.imageContent, l.frame.area > 0.2 else { continue }
+            let ins = AssetStore.shared.insight(ic.assetID, data: doc.assetData(ic.assetID))
+            if ins.isUtility {
+                issues.append(CriticIssue(kind: .photo, severity: .warning, layerID: l.id, message: ins.photoNote ?? "The picture looks like a document.", penalty: 10))
+            } else if let a = ins.aesthetic, a < -0.35 {
+                issues.append(CriticIssue(kind: .photo, severity: .info, layerID: l.id, message: ins.photoNote ?? "The photo is weak on its own.", penalty: 4))
+            }
+        }
 
         for l in texts {
             guard let t = l.textContent else { continue }
@@ -145,6 +156,13 @@ enum Critic {
                     break
                 }
             }
+            for w in words {
+                if l.frame.intersectionArea(w) / max(1e-6, w.w * w.h) > 0.4 {
+                    issues.append(CriticIssue(kind: .photoText, severity: .warning, layerID: l.id,
+                                              message: "The \(role.label.lowercased()) sits on words that are in the photo.", penalty: 8))
+                    break
+                }
+            }
         }
 
         // Collisions between lines of type.
@@ -194,12 +212,21 @@ enum Critic {
 
     /// Faces in the cover's photos, in cover coordinates.
     static func faceRects(_ doc: CoverDocument) -> [NRect] {
+        photoRects(doc) { id, data in AssetStore.shared.faces(id, data: data) }
+    }
+
+    /// Words printed inside the cover's photos (signs, pages, labels), in cover coordinates.
+    static func photoTextRects(_ doc: CoverDocument) -> [NRect] {
+        photoRects(doc) { id, data in AssetStore.shared.textRegions(id, data: data) }
+    }
+
+    private static func photoRects(_ doc: CoverDocument, _ pick: (UUID, Data?) -> [NRect]) -> [NRect] {
         var out: [NRect] = []
         let canvas = CGSize(width: Double(doc.canvas.width), height: Double(doc.canvas.height))
         for l in doc.layers {
             guard l.isVisible, let ic = l.imageContent, ic.cutout != .background else { continue }
             let data = doc.assetData(ic.assetID)
-            let faces = AssetStore.shared.faces(ic.assetID, data: data)
+            let faces = pick(ic.assetID, data)
             guard !faces.isEmpty, let img = AssetStore.shared.image(ic.assetID, data: data, resolution: .thumbnail) else { continue }
             let frame = l.frame.pixels(in: canvas)
             let iw = Double(img.width), ih = Double(img.height)
@@ -226,7 +253,7 @@ enum Critic {
         guard let bg = Polisher.backgroundSample(doc) else { return review(doc) }
         let p = palette ?? PaletteRoles(doc.palette)
         if geometry {
-            fixGeometry(&doc, faces: faceRects(doc))
+            fixGeometry(&doc, faces: faceRects(doc) + photoTextRects(doc))
         }
         Polisher.polish(&doc, palette: p, background: bg)
         // A second look: anything still failing gets a soft backing behind the words.
