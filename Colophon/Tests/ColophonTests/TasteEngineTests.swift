@@ -124,9 +124,12 @@ final class TasteEngineTests: XCTestCase {
 
         let img = try XCTUnwrap(engine.imageEmbedding(image, key: "test-horror"))
         XCTAssertEqual(img.count, 512)
-        let cover = try XCTUnwrap(engine.textEmbedding("a book cover"))
-        let dog = try XCTUnwrap(engine.textEmbedding("a photo of a dog"))
-        XCTAssertGreaterThan(TasteEngine.cosine(img, cover), TasteEngine.cosine(img, dog))
+        // Relative judgments are what CLIP is good at: the horror design is more "scary horror cover" than a cozy one.
+        let cozy = try XCTUnwrap(SignatureLibrary.design("cozy-awning") ?? SignatureLibrary.all.first { $0.genre == .cozy })
+        let cozyDoc = SignatureLibrary.build(cozy, palette: 0, base: SignatureLibrary.sampleDocument(cozy))
+        let cozyImg = try XCTUnwrap(engine.imageEmbedding(try XCTUnwrap(TasteEngine.thumbnail(cozyDoc)), key: "test-cozy"))
+        let scary = try XCTUnwrap(engine.textEmbedding("a scary horror book cover"))
+        XCTAssertGreaterThan(TasteEngine.cosine(img, scary), TasteEngine.cosine(cozyImg, scary))
 
         let pro = try XCTUnwrap(engine.professionalism(image, key: "test-horror"))
         XCTAssertTrue((0...1).contains(pro))
