@@ -642,6 +642,38 @@ final class EditorModel {
         toast = "Subject lifted onto its own layer"
     }
 
+    /// Sets the picture's focus so the largest face (or the salient region) sits on the rule of thirds.
+    func smartCrop(_ id: UUID) {
+        guard let l = document.layer(id), let ic = l.imageContent else { return }
+        let data = document.assetData(ic.assetID)
+        let insight = AssetStore.shared.insight(ic.assetID, data: data)
+        guard let size = AssetStore.shared.imageSize(ic.assetID, data: data) else { return }
+        let canvas = CGSize(width: document.canvas.width, height: document.canvas.height)
+        let f = insight.smartFocus(frame: l.frame, canvas: canvas, imageSize: size, zoom: ic.zoom)
+        mutate { d in
+            if let i = d.index(of: id) {
+                d.layers[i].imageContent?.focusX = f.focusX
+                d.layers[i].imageContent?.focusY = f.focusY
+            }
+        }
+        toast = insight.faces.isEmpty ? "Framed on the subject" : "Framed to keep the face in view"
+    }
+
+    /// Inserts a palette-colored harmony layer directly above the photo (once).
+    func harmonizePhoto(_ id: UUID) {
+        guard let l = document.layer(id), let ic = l.imageContent, let i = document.index(of: id) else { return }
+        if let above = document.layers[safe: i + 1], above.name == "Harmony" {
+            toast = "This picture is already harmonized"
+            return
+        }
+        let insight = AssetStore.shared.insight(ic.assetID, data: document.assetData(ic.assetID))
+        let harmony = Harmonizer.layer(for: l, palette: PaletteRoles(document.palette), strength: 0.6, mean: insight.meanColor)
+        mutate { d in
+            if let j = d.index(of: id) { d.layers.insert(harmony, at: j + 1) }
+        }
+        toast = "Harmonized the picture to the cover palette"
+    }
+
     func cutInto(_ shape: ShapeKind?, layer id: UUID) {
         mutate { d in if let i = d.index(of: id) { d.layers[i].clipShape = shape } }
     }

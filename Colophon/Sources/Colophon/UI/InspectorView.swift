@@ -174,6 +174,22 @@ private struct TextSection: View {
                 abs(v) < 0.01 ? "Flat" : String(format: "%+.0f%%", v * 100)
             }
         }
+        PanelSection("Fitting") {
+            Picker("", selection: t.fit) {
+                Text("Uniform").tag(TextFit.uniform)
+                Text("Block").tag(TextFit.block)
+            }
+            .pickerStyle(.segmented).labelsHidden()
+            Text("Block sizes every line to fill the width, the classic stacked-title look")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Toggle(isOn: t.opticalTracking) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Optical tracking")
+                    Text("Tightens big type, opens small caps").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            .controlSize(.small)
+        }
         PanelSection("Color & Finish") {
             FieldRow("Finish") {
                 Picker("", selection: t.texture) { ForEach(TextTexture.allCases) { Text($0.label).tag($0) } }.labelsHidden()
@@ -355,6 +371,18 @@ private struct ImageSection: View {
             .controlSize(.small)
             Button { focusOnSubject() } label: { Label("Center on Subject", systemImage: "viewfinder") }
                 .controlSize(.small)
+            HStack {
+                Button { model.smartCrop(layer.id) } label: { Label("Smart Crop", systemImage: "crop") }
+                    .help("Frame the largest face on the upper third, or center the subject when there is none")
+                Button { model.harmonizePhoto(layer.id) } label: { Label("Harmonize to palette", systemImage: "paintpalette") }
+                    .help("Add a color layer clipped to the picture that pulls its hues toward the cover palette")
+            }
+            .controlSize(.small)
+            let faceCount = insight.faces.count
+            if faceCount > 0 {
+                Text("\(faceCount) \(faceCount == 1 ? "face" : "faces") found · title keeps clear of \(faceCount == 1 ? "it" : "them")")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
         PanelSection("Refine Cutout") {
             Text(ic.wrappedValue.cutout == .none
@@ -386,6 +414,11 @@ private struct ImageSection: View {
         .buttonStyle(.bordered)
         .tint(on ? Theme.accent : nil)
         .help(on ? "Stop painting (Esc)" : "Paint on the cover to \(title.lowercased())")
+    }
+
+    private var insight: ImageInsight {
+        let id = ic.wrappedValue.assetID
+        return AssetStore.shared.insight(id, data: model.document.assetData(id))
     }
 
     private func focusOnSubject() {
@@ -536,6 +569,7 @@ private struct MaskSection: View {
 }
 
 private struct AppearanceSection: View {
+    @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
 
     var body: some View {
@@ -543,6 +577,51 @@ private struct AppearanceSection: View {
             ValueSlider(label: "Opacity", value: $layer.opacity, range: 0...1)
             FieldRow("Mode") {
                 Picker("", selection: $layer.blend) { ForEach(BlendMode.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            Toggle("Blend in linear light", isOn: $layer.linearBlend).controlSize(.small)
+                .disabled(layer.blend == .normal)
+                .help("Mix colors the way light adds up instead of in gamma-encoded sRGB; only matters for a blend mode")
+            Toggle("Knockout (cut through to the background)", isOn: $layer.knockout).controlSize(.small)
+                .help("Punch this layer's shape out of everything below it, showing the document background")
+            ValueSlider(label: "Feather edge", value: $layer.feather, range: 0...1)
+            Toggle("Inner shadow", isOn: Binding(get: { layer.innerShadow != nil }, set: { on in
+                layer.innerShadow = on ? ShadowStyle(color: RGBA(0, 0, 0, 0.6), radius: 0.01, dx: 0, dy: 0.004) : nil
+            })).controlSize(.small)
+            if let ish = layer.innerShadow {
+                let ib = Binding(get: { ish }, set: { layer.innerShadow = $0 })
+                ValueSlider(label: "Depth", value: ib.radius, range: 0.002...0.04) { String(format: "%.1f", $0 * 1000) }
+                ValueSlider(label: "Opacity", value: Binding(get: { ish.color.a }, set: { ib.wrappedValue.color = ish.color.withAlpha($0) }), range: 0...1)
+            }
+            Toggle("Gradient map", isOn: Binding(get: { layer.gradientMap != nil }, set: { on in
+                let p = PaletteRoles(model.document.palette)
+                layer.gradientMap = on ? [p.dark, p.accent, p.light] : nil
+            })).controlSize(.small)
+                .help("Map the layer's tones onto these colors, dark to light: a duotone or tritone")
+            if let stops = layer.gradientMap {
+                ForEach(Array(stops.enumerated()), id: \.offset) { i, c in
+                    RGBAPicker(label: i == 0 ? "Darks" : (i == stops.count - 1 ? "Lights" : "Mids"),
+                               color: Binding(get: { c }, set: { new in
+                                   var m = layer.gradientMap ?? []
+                                   if m.indices.contains(i) { m[i] = new; layer.gradientMap = m }
+                               }))
+                }
+                HStack {
+                    if stops.count < 4 {
+                        Button("Add stop") {
+                            var m = stops
+                            m.insert(m[m.count / 2], at: m.count / 2)
+                            layer.gradientMap = m
+                        }
+                    }
+                    if stops.count > 2 {
+                        Button("Remove stop") {
+                            var m = stops
+                            m.remove(at: m.count / 2)
+                            layer.gradientMap = m
+                        }
+                    }
+                }
+                .controlSize(.small)
             }
             FieldRow("Edges") {
                 Picker("", selection: $layer.fade) { ForEach(FadeEdge.allCases) { Text($0.label).tag($0) } }.labelsHidden()
@@ -622,9 +701,22 @@ private struct GeometrySection: View {
 }
 
 private struct AdjustSection: View {
+    @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
 
     var body: some View {
+        PanelSection("Color Grade") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    gradeChip("None", selected: layer.adjust.isIdentity) { layer.adjust = Adjustments() }
+                    ForEach(ColorGrade.suggested(for: model.document.book.genre)) { p in
+                        gradeChip(p.name, selected: layer.adjust == p.adjust) { layer.adjust = p.adjust }
+                    }
+                }
+            }
+            Text("Film stocks and grades tuned for \(model.document.book.genre.label) come first. Every grade stays editable below.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
         PanelSection("Adjust", trailing: layer.adjust.isIdentity ? nil : AnyView(
             Button("Reset") { layer.adjust = Adjustments() }.buttonStyle(.link).font(.system(size: 11)))) {
             ValueSlider(label: "Exposure", value: $layer.adjust.exposure, range: -1...1, format: signed)
@@ -633,7 +725,41 @@ private struct AdjustSection: View {
             ValueSlider(label: "Warmth", value: $layer.adjust.warmth, range: -1...1, format: signed)
             ValueSlider(label: "Sharpness", value: $layer.adjust.sharpness, range: -1...1, format: signed)
             ValueSlider(label: "Blur", value: $layer.adjust.blur, range: 0...1)
+            Divider()
+            ValueSlider(label: "Lift", value: $layer.adjust.lift, range: -1...1, format: signed)
+            ValueSlider(label: "Gamma", value: $layer.adjust.gamma, range: -1...1, format: signed)
+            ValueSlider(label: "Gain", value: $layer.adjust.gain, range: -1...1, format: signed)
+            ValueSlider(label: "Vibrance", value: $layer.adjust.vibrance, range: -1...1, format: signed)
+            ValueSlider(label: "Fade", value: $layer.adjust.fade, range: 0...1)
+            ValueSlider(label: "Grain", value: $layer.adjust.grain, range: 0...1)
+            ValueSlider(label: "Vignette", value: $layer.adjust.vignette, range: 0...1)
+            Divider()
+            Toggle("Shadow tint", isOn: Binding(get: { layer.adjust.shadowTint != nil }, set: { on in
+                layer.adjust.shadowTint = on ? PaletteRoles(model.document.palette).dark.withLightness(0.3) : nil
+            })).controlSize(.small)
+            if let c = layer.adjust.shadowTint {
+                RGBAPicker(label: "Shadows", color: Binding(get: { c }, set: { layer.adjust.shadowTint = $0 }), supportsOpacity: false)
+            }
+            Toggle("Highlight tint", isOn: Binding(get: { layer.adjust.highlightTint != nil }, set: { on in
+                layer.adjust.highlightTint = on ? PaletteRoles(model.document.palette).accent.withLightness(0.7) : nil
+            })).controlSize(.small)
+            if let c = layer.adjust.highlightTint {
+                RGBAPicker(label: "Highlights", color: Binding(get: { c }, set: { layer.adjust.highlightTint = $0 }), supportsOpacity: false)
+            }
+            if layer.adjust.shadowTint != nil || layer.adjust.highlightTint != nil {
+                ValueSlider(label: "Tint amount", value: $layer.adjust.tintAmount, range: 0...1)
+            }
         }
+    }
+
+    private func gradeChip(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label).font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(selected ? Theme.accent.opacity(0.18) : Color.primary.opacity(0.06), in: Capsule())
+                .overlay(Capsule().strokeBorder(selected ? Theme.accent : Color.clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func signed(_ v: Double) -> String { String(format: "%+.0f", v * 100) }
