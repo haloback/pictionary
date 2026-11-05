@@ -445,6 +445,9 @@ struct CheckInspector: View {
                     if let a = t.aesthetic { tasteStat("Aesthetic", a) }
                     tasteStat("Fits \(model.document.book.genre.label)", t.fitForBook)
                 }
+                if (t.genreFit.first?.score ?? 0) < 0.2 {
+                    Text("No strong genre signal: the cover could sit on several shelves.").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(Array(t.genreFit.prefix(4).enumerated()), id: \.offset) { _, g in
                         HStack(spacing: 8) {
