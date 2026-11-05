@@ -99,8 +99,9 @@ enum PrintWrap {
             }
             cursor += box.height + g.px(0.3)
         }
-        if !doc.paperback.blurb.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            var b = TextContent(text: doc.paperback.blurb, role: .custom, fontName: blurbFont, color: palette.light)
+        let blurbText = backBlurb(doc)
+        if !blurbText.isEmpty {
+            var b = TextContent(text: blurbText, role: .custom, fontName: blurbFont, color: palette.light)
             b.autoFit = false
             b.fontSize = blurbSize(for: doc.paperback)
             b.lineHeight = 1.42
@@ -127,13 +128,19 @@ enum PrintWrap {
 
     static let blurbFont = FontCatalog.resolve(["Baskerville", "HoeflerText-Regular", "Palatino-Roman", "Georgia"])
 
+    /// The back-cover copy: the paperback's own text, or the blurb drafted in the Book panel when that's empty.
+    static func backBlurb(_ doc: CoverDocument) -> String {
+        let own = doc.paperback.blurb.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? doc.book.blurb.trimmingCharacters(in: .whitespacesAndNewlines) : own
+    }
+
     /// About 11 pt body type at the trim height.
     static func blurbSize(for s: PrintSettings) -> Double { (11.0 / 72.0) / s.fullHeight }
 
     /// Whether the blurb fits above the barcode area, for a warning in the editor.
     static func blurbFits(_ doc: CoverDocument) -> Bool {
         let g = Geometry(settings: doc.paperback, dpi: 72)
-        var b = TextContent(text: doc.paperback.blurb, role: .custom, fontName: blurbFont)
+        var b = TextContent(text: backBlurb(doc), role: .custom, fontName: blurbFont)
         b.autoFit = false
         b.fontSize = blurbSize(for: doc.paperback)
         b.lineHeight = 1.42

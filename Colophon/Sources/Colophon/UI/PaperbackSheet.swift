@@ -65,7 +65,10 @@ struct PaperbackSheet: View {
                             .scrollContentBackground(.hidden)
                             .padding(6)
                             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
-                        if !s.blurb.isEmpty && !PrintWrap.blurbFits(model.document) {
+                        if s.blurb.isEmpty && !model.document.book.blurb.isEmpty {
+                            Text("Empty: the blurb from the Book panel is used.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        if !PrintWrap.backBlurb(model.document).isEmpty && !PrintWrap.blurbFits(model.document) {
                             Label("The blurb runs past the barcode area. Trim it a little.", systemImage: "exclamationmark.triangle.fill")
                                 .font(.system(size: 11)).foregroundStyle(.orange)
                         }
