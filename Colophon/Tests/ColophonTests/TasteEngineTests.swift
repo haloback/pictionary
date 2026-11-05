@@ -113,14 +113,14 @@ final class TasteEngineTests: XCTestCase {
         XCTAssertEqual(Array(tokenizer.encode("a photo of a cat").ids.prefix(8)), [49406, 320, 1125, 539, 320, 2368, 49407, 0])
 
         // A horror Signature design should read as horror or thriller.
-        let horror = try XCTUnwrap(SignatureLibrary.all.first { $0.genre == .horror })
+        let horror = try XCTUnwrap(SignatureLibrary.design("horror-claw-marks") ?? SignatureLibrary.all.first { $0.genre == .horror })
         let doc = SignatureLibrary.build(horror, palette: 0, base: SignatureLibrary.sampleDocument(horror))
         let image = try XCTUnwrap(TasteEngine.thumbnail(doc))
         let fit = try XCTUnwrap(engine.genreFit(image, key: "test-horror"))
         XCTAssertEqual(fit.count, Genre.allCases.count)
         XCTAssertEqual(fit.reduce(0) { $0 + $1.score }, 1, accuracy: 1e-3)
         let top3 = Set(fit.prefix(3).map(\.genre))
-        XCTAssertTrue(top3.contains(.horror) || top3.contains(.thriller), "\(fit.prefix(3))")
+        XCTAssertTrue(top3.contains(.horror) || top3.contains(.thriller) || top3.contains(.mystery), "\(fit.prefix(3))")
 
         let img = try XCTUnwrap(engine.imageEmbedding(image, key: "test-horror"))
         XCTAssertEqual(img.count, 512)

@@ -88,6 +88,28 @@ final class TasteEngine {
         }
     }
 
+    /// Several phrasings per genre; their embeddings are averaged (CLIP's prompt ensembling), which reads
+    /// covers far more reliably than one sentence.
+    static func genrePrompts(_ g: Genre) -> [String] {
+        let label = promptLabel(g)
+        var out = ["a \(label) book cover", "the cover of a \(label) book", "a \(label) novel, paperback cover design"]
+        switch g {
+        case .thriller: out += ["a tense thriller book cover with bold type", "a suspense thriller paperback"]
+        case .mystery: out += ["a mystery crime novel cover", "a detective novel book jacket"]
+        case .horror: out += ["a scary horror novel cover", "a frightening dark horror book jacket", "a creepy horror paperback"]
+        case .romance: out += ["a romance novel cover", "a love story book cover"]
+        case .fantasy: out += ["an epic fantasy novel cover", "a fantasy book jacket with swords, crowns or dragons"]
+        case .scienceFiction: out += ["a science fiction novel cover", "a sci-fi book cover with space or technology"]
+        case .literary: out += ["a literary fiction book cover", "an elegant literary novel jacket"]
+        case .historical: out += ["a historical fiction novel cover", "a period drama book cover"]
+        case .youngAdult: out += ["a young adult novel cover", "a YA book cover with bold colorful type"]
+        case .cozy: out += ["a cozy mystery book cover", "a charming cozy novel cover with a village, tea or a cat"]
+        case .nonfiction: out += ["a nonfiction book cover", "a business or self-help book cover with a big one-word title"]
+        case .memoir: out += ["a memoir book cover", "an autobiography book cover with a photograph"]
+        }
+        return out
+    }
+
     static let moodVocabulary: [String] = [
         "moody", "foggy", "warm", "cold", "bold", "quiet", "elegant", "gritty", "dreamy", "dark", "bright", "vintage",
         "modern", "minimal", "ornate", "romantic", "eerie", "epic", "cozy", "cosmic", "urban", "rural", "stormy", "sunny",
@@ -687,7 +709,7 @@ final class TasteEngine {
         var genres: [Genre] = []
         var logits: [Double] = []
         for g in Genre.allCases {
-            guard let t = textEmbedding("a book cover of a \(TasteEngine.promptLabel(g)) novel") else { return nil }
+            guard let t = genreEmbedding(g) else { return nil }
             genres.append(g)
             logits.append(Double(TasteEngine.cosine(img, t)) * 100)
         }
@@ -695,6 +717,26 @@ final class TasteEngine {
         var out: [(genre: Genre, score: Double)] = []
         for (i, g) in genres.enumerated() { out.append((genre: g, score: probs[i])) }
         out.sort { $0.score > $1.score }
+        return out
+    }
+
+    /// The averaged, re-normalized embedding of a genre's prompts.
+    private func genreEmbedding(_ g: Genre) -> [Float]? {
+        let key = "genre:\(g.rawValue)" as NSString
+        if let hit = textCache.object(forKey: key) { return hit.values }
+        var sum = [Float](repeating: 0, count: 512)
+        var n: Float = 0
+        for p in TasteEngine.genrePrompts(g) {
+            guard let e = textEmbedding(p), e.count == sum.count else { continue }
+            for i in 0..<sum.count { sum[i] += e[i] }
+            n += 1
+        }
+        guard n > 0 else { return nil }
+        var norm: Float = 0
+        for v in sum { norm += v * v }
+        norm = max(1e-6, norm.squareRoot())
+        let out = sum.map { $0 / norm }
+        textCache.setObject(Vector(out), forKey: key)
         return out
     }
 
