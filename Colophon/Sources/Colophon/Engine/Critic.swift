@@ -43,36 +43,51 @@ enum Critic {
 
     // MARK: Review
 
+    /// The cover without any type, at the size the ink measurement uses.
+    static func inkBase(_ doc: CoverDocument) -> CGImage? {
+        let textIDs = Set(doc.layers.filter { $0.textContent != nil }.map(\.id))
+        let h: CGFloat = 512
+        return CoverRenderer.shared.render(doc, size: CGSize(width: (h / CGFloat(doc.canvas.aspect)).rounded(), height: h), quality: .preview, excluding: textIDs)
+    }
+
     /// Ink against ground as actually rendered: the layer is drawn alone over the cover without type, and the
-    /// pixels it changes are compared with what was under them. Styles, plates, shadows and glows all count.
-    static func renderedContrast(_ doc: CoverDocument, layer: Layer, background: CGImage) -> Double? {
+    /// glyph cores (the pixels it changes most) are compared with what was under them. Styles, plates,
+    /// shadows and glows all count, because they are all in the picture.
+    static func renderedContrast(_ doc: CoverDocument, layer: Layer, base: CGImage) -> Double? {
         let others = Set(doc.layers.filter { $0.textContent != nil && $0.id != layer.id }.map(\.id))
-        let h = CGFloat(background.height)
-        guard let withInk = CoverRenderer.shared.render(doc, size: CGSize(width: CGFloat(background.width), height: h), quality: .preview, excluding: others) else { return nil }
-        let a = PixelSampler.pixels(background, maxSide: 200), b = PixelSampler.pixels(withInk, maxSide: 200)
+        guard let withInk = CoverRenderer.shared.render(doc, size: CGSize(width: CGFloat(base.width), height: CGFloat(base.height)), quality: .preview, excluding: others) else { return nil }
+        let a = PixelSampler.pixels(base, maxSide: 512), b = PixelSampler.pixels(withInk, maxSide: 512)
         guard a.w == b.w, a.h == b.h else { return nil }
         let f = layer.frame
         let x0 = max(0, Int(f.x * Double(a.w))), x1 = min(a.w, Int(f.maxX * Double(a.w)) + 1)
         let y0 = max(0, Int(f.y * Double(a.h))), y1 = min(a.h, Int(f.maxY * Double(a.h)) + 1)
         guard x1 > x0, y1 > y0 else { return nil }
-        var inkSum = 0.0, groundSum = 0.0, n = 0.0, total = 0.0
+        var deltas: [(Double, Double, Double)] = []
+        var maxDelta = 0.0
         for y in y0..<y1 {
             for x in x0..<x1 {
                 let i = (y * a.w + x) * 4
                 let la = RGBA(Double(a.data[i]) / 255, Double(a.data[i + 1]) / 255, Double(a.data[i + 2]) / 255).luminance
                 let lb = RGBA(Double(b.data[i]) / 255, Double(b.data[i + 1]) / 255, Double(b.data[i + 2]) / 255).luminance
-                total += 1
-                if abs(la - lb) > 0.015 { inkSum += lb; groundSum += la; n += 1 }
+                let d = abs(la - lb)
+                if d > 0.01 { deltas.append((d, la, lb)); maxDelta = max(maxDelta, d) }
             }
         }
+        let total = Double((x1 - x0) * (y1 - y0))
         // The glyphs cover a few percent of their box at least; less than that and the type has vanished.
-        guard total > 0, n / total >= 0.015 else { return 1 }
+        guard total > 0, Double(deltas.count) / total >= 0.01, maxDelta > 0.02 else { return 1 }
+        // Anti-aliased edges blend ink and ground; the cores are the pixels changed most.
+        let cut = maxDelta * 0.55
+        var inkSum = 0.0, groundSum = 0.0, n = 0.0
+        for (d, la, lb) in deltas where d >= cut { inkSum += lb; groundSum += la; n += 1 }
+        guard n > 0 else { return 1 }
         let ink = inkSum / n, ground = groundSum / n
         return (max(ink, ground) + 0.05) / (min(ink, ground) + 0.05)
     }
 
     static func review(_ doc: CoverDocument, background: CGImage? = nil) -> CriticReport {
         let bg = background ?? Polisher.backgroundSample(doc)
+        let base = inkBase(doc)
         var issues: [CriticIssue] = []
         let canvasH = Double(doc.canvas.height)
         let texts = doc.layers.filter { $0.textContent != nil && $0.isVisible && $0.opacity >= 0.5 }
@@ -90,7 +105,7 @@ enum Critic {
                 let stats = PixelSampler.stats(bg, region: l.frame)
                 let need = role.minimumContrast
                 let nominal = faceColor(t).contrast(with: stats.mean) + (lifted ? 1.5 : 0)
-                let achieved = renderedContrast(doc, layer: l, background: bg) ?? nominal
+                let achieved = base.flatMap { renderedContrast(doc, layer: l, base: $0) } ?? nominal
                 if achieved < need {
                     let short = (need - achieved) / need
                     let weight = role == .title ? 32.0 : 16.0
