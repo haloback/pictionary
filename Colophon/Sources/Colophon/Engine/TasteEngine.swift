@@ -282,6 +282,9 @@ final class TasteEngine {
             imageCache.removeAllObjects()
             textCache.removeAllObjects()
             designCache.removeAllObjects()
+            calibrationLock.lock()
+            referenceVectors = nil; genreBaselines = [:]; tagBaselines = [:]; proBaseline = nil; designBiases = [:]; promptSetVectors = nil
+            calibrationLock.unlock()
             if ok {
                 status = .ready
             } else if case .failed = status {
@@ -705,13 +708,64 @@ final class TasteEngine {
         return genreFit(embedding: img)
     }
 
+    // MARK: Calibration
+    //
+    // Raw CLIP similarities are sticky: some prompts ("nonfiction", "minimal") score high for every picture.
+    // Every judgment here is read against a reference set of covers (two Signature designs per genre), so
+    // what's reported is how much more than usual a cover reads as horror, foggy, or professional.
+
+    private var calibrationLock = NSLock()
+    private var referenceVectors: [[Float]]?
+    private var genreBaselines: [Genre: Double] = [:]
+    private var tagBaselines: [String: Float] = [:]
+    private var proBaseline: Double?
+
+    /// Image embeddings of the reference covers, computed once (about two seconds the first time).
+    private func references() -> [[Float]] {
+        calibrationLock.lock()
+        if let r = referenceVectors { calibrationLock.unlock(); return r }
+        calibrationLock.unlock()
+        var picked: [SignatureDesign] = []
+        for g in Genre.allCases {
+            picked.append(contentsOf: SignatureLibrary.all.filter { $0.genre == g && !$0.usesPhoto }.prefix(2))
+        }
+        var vectors: [[Float]] = []
+        for d in picked { if let v = designEmbedding(d) { vectors.append(v) } }
+        calibrationLock.lock()
+        referenceVectors = vectors
+        calibrationLock.unlock()
+        return vectors
+    }
+
+    private func genreBaseline(_ g: Genre, _ t: [Float]) -> Double {
+        calibrationLock.lock()
+        if let b = genreBaselines[g] { calibrationLock.unlock(); return b }
+        calibrationLock.unlock()
+        let refs = references()
+        guard !refs.isEmpty else { return 0 }
+        let mean = refs.reduce(0.0) { $0 + Double(TasteEngine.cosine($1, t)) * 100 } / Double(refs.count)
+        calibrationLock.lock(); genreBaselines[g] = mean; calibrationLock.unlock()
+        return mean
+    }
+
+    private func tagBaseline(_ tag: String, _ t: [Float]) -> Float {
+        calibrationLock.lock()
+        if let b = tagBaselines[tag] { calibrationLock.unlock(); return b }
+        calibrationLock.unlock()
+        let refs = references()
+        guard !refs.isEmpty else { return 0 }
+        let mean = refs.reduce(Float(0)) { $0 + TasteEngine.cosine($1, t) } / Float(refs.count)
+        calibrationLock.lock(); tagBaselines[tag] = mean; calibrationLock.unlock()
+        return mean
+    }
+
     private func genreFit(embedding img: [Float]) -> [(genre: Genre, score: Double)]? {
         var genres: [Genre] = []
         var logits: [Double] = []
         for g in Genre.allCases {
             guard let t = genreEmbedding(g) else { return nil }
             genres.append(g)
-            logits.append(Double(TasteEngine.cosine(img, t)) * 100)
+            logits.append(Double(TasteEngine.cosine(img, t)) * 100 - genreBaseline(g, t))
         }
         let probs: [Double] = TasteEngine.softmax(logits)
         var out: [(genre: Genre, score: Double)] = []
@@ -750,12 +804,13 @@ final class TasteEngine {
         var scored: [(tag: String, score: Float)] = []
         for tag in TasteEngine.moodVocabulary {
             guard let t = textEmbedding("a \(tag) book cover") else { return nil }
-            scored.append((tag: tag, score: TasteEngine.cosine(img, t)))
+            scored.append((tag: tag, score: TasteEngine.cosine(img, t) - tagBaseline(tag, t)))
         }
         scored.sort { $0.score > $1.score }
         guard let best = scored.first?.score else { return [] }
         var out: [String] = []
-        for s in scored.prefix(max(0, limit)) where best - s.score <= 0.03 {
+        // Only tags that stand out from the reference set, and within reach of the strongest one.
+        for s in scored.prefix(max(0, limit)) where s.score > 0.004 && best - s.score <= 0.02 {
             out.append(s.tag)
         }
         return out
@@ -770,9 +825,20 @@ final class TasteEngine {
     private func professionalism(embedding img: [Float]) -> Double? {
         guard let pro = textEmbedding(TasteEngine.professionalPrompt),
               let amateur = textEmbedding(TasteEngine.amateurPrompt) else { return nil }
-        let logits: [Double] = [Double(TasteEngine.cosine(img, pro)) * 100, Double(TasteEngine.cosine(img, amateur)) * 100]
-        let probs: [Double] = TasteEngine.softmax(logits)
-        return probs.first
+        let diff = Double(TasteEngine.cosine(img, pro) - TasteEngine.cosine(img, amateur)) * 100
+        calibrationLock.lock()
+        let cached = proBaseline
+        calibrationLock.unlock()
+        let base: Double
+        if let cached {
+            base = cached
+        } else {
+            let refs = references()
+            base = refs.isEmpty ? 0 : refs.reduce(0.0) { $0 + Double(TasteEngine.cosine($1, pro) - TasteEngine.cosine($1, amateur)) * 100 } / Double(refs.count)
+            calibrationLock.lock(); proBaseline = base; calibrationLock.unlock()
+        }
+        // Half the reference set lands above 50; a cover that reads clearly better than the set approaches 90.
+        return 1 / (1 + exp(-(diff - base) * 0.8))
     }
 
     /// Renders a document 224 px tall (preview quality) for embedding.
@@ -806,14 +872,37 @@ final class TasteEngine {
         return v
     }
 
+    private var designBiases: [String: Float] = [:]
+    private var promptSetVectors: [[Float]]?
+
+    /// Mean similarity of a design to a broad set of prompts (genres and moods): its stickiness.
+    private func designBias(_ d: SignatureDesign, _ v: [Float]) -> Float {
+        calibrationLock.lock()
+        if let b = designBiases[d.id] { calibrationLock.unlock(); return b }
+        var prompts = promptSetVectors
+        calibrationLock.unlock()
+        if prompts == nil {
+            var set: [[Float]] = []
+            for g in Genre.allCases { if let e = genreEmbedding(g) { set.append(e) } }
+            for tag in TasteEngine.moodVocabulary { if let e = textEmbedding("a \(tag) book cover") { set.append(e) } }
+            calibrationLock.lock(); promptSetVectors = set; calibrationLock.unlock()
+            prompts = set
+        }
+        guard let ps = prompts, !ps.isEmpty else { return 0 }
+        let mean = ps.reduce(Float(0)) { $0 + TasteEngine.cosine(v, $1) } / Float(ps.count)
+        calibrationLock.lock(); designBiases[d.id] = mean; calibrationLock.unlock()
+        return mean
+    }
+
     /// Designs ranked by how well their sample render matches a text query (empty when not ready).
     func search(_ query: String, in designs: [SignatureDesign], limit: Int = 12) -> [(design: SignatureDesign, score: Double)] {
         let q: String = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, let t = textEmbedding(q) else { return [] }
+        // A design's usual similarity to any prompt is subtracted, so "sticky" designs don't top every search.
         var out: [(design: SignatureDesign, score: Double)] = []
         for d in designs {
             guard let v = designEmbedding(d) else { continue }
-            out.append((design: d, score: Double(TasteEngine.cosine(v, t))))
+            out.append((design: d, score: Double(TasteEngine.cosine(v, t) - designBias(d, v))))
         }
         out.sort { $0.score > $1.score }
         if out.count > limit { out = Array(out.prefix(max(0, limit))) }
