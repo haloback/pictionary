@@ -133,7 +133,7 @@ enum BlurbWriter {
         var middle: [String] = []
         while middle.count < 3, !rest.isEmpty { middle.append(rest.removeFirst().text) }
         // Pad a thin draft with what's left, so the blurb has some body.
-        var body = wordCount(first) + middle.reduce(0) { $0 + $1.words }
+        var body = wordCount(first) + middle.reduce(0) { $0 + wordCount($1) }
         while body < 60, !rest.isEmpty {
             let s = rest.removeFirst()
             middle.append(s.text)
