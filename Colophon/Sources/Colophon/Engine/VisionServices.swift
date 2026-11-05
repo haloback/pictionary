@@ -60,4 +60,21 @@ enum VisionServices {
             return nil
         }
     }
+
+    /// Face rectangles, normalized with a top-left origin, largest first.
+    static func faces(for image: CGImage) -> [NRect] {
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        do {
+            try handler.perform([request])
+            guard let results = request.results else { return [] }
+            let rects = results.map { obs -> NRect in
+                let b = obs.boundingBox
+                return NRect(Double(b.minX), Double(1 - b.maxY), Double(b.width), Double(b.height))
+            }
+            return rects.sorted { $0.area > $1.area }
+        } catch {
+            return []
+        }
+    }
 }

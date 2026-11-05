@@ -17,6 +17,8 @@ final class AssetStore {
     private var masks: [UUID: CGImage] = [:]
     private var saliency: [UUID: NRect] = [:]
     private var palettes: [UUID: [RGBA]] = [:]
+    private var faceRects: [UUID: [NRect]] = [:]
+    private var insights: [UUID: ImageInsight] = [:]
     private let lock = NSLock()
 
     // MARK: Import / encode
@@ -109,11 +111,39 @@ final class AssetStore {
         return p
     }
 
+    /// Faces from Vision, normalized top-left, largest first. Computed once per asset.
+    func faces(_ id: UUID, data: Data?) -> [NRect] {
+        lock.lock()
+        if let f = faceRects[id] { lock.unlock(); return f }
+        lock.unlock()
+        let f = image(id, data: data, resolution: .thumbnail).map { VisionServices.faces(for: $0) } ?? []
+        lock.lock(); faceRects[id] = f; lock.unlock()
+        return f
+    }
+
+    /// Everything layout needs to know about a photo, computed once per asset.
+    func insight(_ id: UUID, data: Data?) -> ImageInsight {
+        lock.lock()
+        if let i = insights[id] { lock.unlock(); return i }
+        lock.unlock()
+        guard let img = image(id, data: data, resolution: .thumbnail) else { return .empty }
+        let i = ImageInsight.analyze(img, faces: faces(id, data: data), focus: focus(id, data: data), palette: palette(id, data: data))
+        lock.lock(); insights[id] = i; lock.unlock()
+        return i
+    }
+
+    /// Pixel size of the working thumbnail (same aspect as the source; no full decode).
+    func imageSize(_ id: UUID, data: Data?) -> CGSize? {
+        guard let img = image(id, data: data, resolution: .thumbnail) else { return nil }
+        return CGSize(width: img.width, height: img.height)
+    }
+
     /// Pre-computes the expensive bits off the main thread right after import.
     func warm(_ id: UUID, data: Data?) {
         _ = image(id, data: data, resolution: .preview)
         _ = focus(id, data: data)
         _ = palette(id, data: data)
         _ = mask(id, data: data)
+        _ = insight(id, data: data)
     }
 }
