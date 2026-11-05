@@ -71,6 +71,7 @@ struct LayerInspector: View {
                     case .fill: FillSection(layer: b)
                     case .shape: ShapeSection(layer: b)
                     case .decor: DecorSection(layer: b)
+                    case .illustration: IllustrationSection(layer: b)
                     case .paint: PaintSection(layer: b)
                     }
                     if b.wrappedValue.textContent == nil {
@@ -170,8 +171,18 @@ private struct TextSection: View {
             }
             ValueSlider(label: "Tracking", value: t.tracking, range: -0.05...0.6) { String(format: "%.2f", $0) }
             ValueSlider(label: "Leading", value: t.lineHeight, range: 0.75...1.6) { String(format: "%.2f", $0) }
-            ValueSlider(label: "Curve", value: t.arc, range: -1...1) { v in
-                abs(v) < 0.01 ? "Flat" : String(format: "%+.0f%%", v * 100)
+            FieldRow("Shape") {
+                Picker("", selection: t.path) { ForEach(TextPath.allCases) { Text($0.label).tag($0) } }.labelsHidden()
+            }
+            if t.wrappedValue.path == .none {
+                ValueSlider(label: "Curve", value: t.arc, range: -1...1) { v in
+                    abs(v) < 0.01 ? "Flat" : String(format: "%+.0f%%", v * 100)
+                }
+            } else {
+                ValueSlider(label: "Amount", value: t.pathAmount, range: 0...1)
+                if t.wrappedValue.path == .circle {
+                    ValueSlider(label: "Start", value: t.pathPhase, range: 0...1) { String(format: "%.0f°", $0 * 360) }
+                }
             }
         }
         PanelSection("Fitting") {
@@ -343,6 +354,8 @@ private struct FontPicker: View {
 private struct ImageSection: View {
     @Environment(EditorModel.self) private var model
     @Binding var layer: Layer
+    @State private var subjects: [SubjectSegmentation.Subject] = []
+    @State private var subjectsLoaded = false
 
     private var ic: Binding<ImageContent> {
         Binding(get: { layer.imageContent ?? ImageContent(assetID: UUID()) }, set: { layer.imageContent = $0 })
@@ -401,6 +414,100 @@ private struct ImageSection: View {
             .controlSize(.small)
             ValueSlider(label: "Brush", value: Binding(get: { model.brushSize }, set: { model.brushSize = $0 }), range: 0.01...0.2)
         }
+        PanelSection("Subjects") {
+            if subjects.isEmpty {
+                Text(subjectsLoaded ? "No separate people or objects found in this picture." : "Looking for people and objects…")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(ic.wrappedValue.cutout == .none
+                     ? "Tick the subjects a cutout should keep. Right-click one to remove it from the photo."
+                     : "Only ticked subjects stay in the cutout. Right-click one to remove it from the photo.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(subjects) { s in subjectTile(s) }
+                    }
+                }
+                HStack {
+                    Button("All") { ic.wrappedValue.keptSubjects = nil }
+                        .disabled(ic.wrappedValue.keptSubjects == nil)
+                        .help("Keep every detected subject")
+                    Spacer()
+                    if model.isRemoving { ProgressView().controlSize(.small) }
+                }
+                .controlSize(.small)
+            }
+            ValueSlider(label: "Edge refine", value: ic.edgeRefine, range: 0...1)
+            Text("Fits the cutout edge to the picture, so hair and fine edges follow the photo. Only applies to cutouts.")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .task(id: ic.wrappedValue.assetID) {
+            let id = ic.wrappedValue.assetID
+            let data = model.document.assetData(id)
+            subjectsLoaded = false
+            let found = await Task.detached(priority: .utility) { AssetStore.shared.subjects(id, data: data) }.value
+            subjects = found
+            subjectsLoaded = true
+        }
+        PanelSection("Remove Objects") {
+            Text("Paint over something on the cover and Apply: it is filled in from the surroundings. Undo brings the original back.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                brushButton(.remove, "Remove Objects", "bandage")
+                Spacer()
+                if model.isRemoving {
+                    ProgressView().controlSize(.small)
+                } else if model.tool == .remove || !model.removalStrokes.isEmpty {
+                    Button("Cancel") { model.cancelRemoval() }
+                    Button("Apply") { model.applyRemoval(layer.id) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.removalStrokes.isEmpty || model.removalLayerID != layer.id)
+                }
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private func subjectTile(_ s: SubjectSegmentation.Subject) -> some View {
+        let kept = ic.wrappedValue.keptSubjects.map { $0.contains(s.id) } ?? true
+        return VStack(spacing: 3) {
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let t = s.thumbnail {
+                        Image(decorative: t, scale: 1).resizable().interpolation(.medium).aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: s.kind == .person ? "person.fill" : "cube.fill").foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(kept ? Theme.accent : Theme.hairline, lineWidth: kept ? 2 : 1))
+                .opacity(kept ? 1 : 0.45)
+                Image(systemName: kept ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(kept ? Theme.accent : Color.secondary)
+                    .background(Circle().fill(Color.white).padding(1))
+                    .offset(x: 4, y: -4)
+            }
+            Text(s.label).font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { toggleSubject(s.id) }
+        .contextMenu {
+            Button(kept ? "Leave out of cutout" : "Keep in cutout") { toggleSubject(s.id) }
+            Button("Remove from photo") { model.removeSubject(layer.id, instance: s.id) }
+                .disabled(model.isRemoving)
+        }
+        .help("\(s.label): \(Int((s.area * 100).rounded()))% of the picture. Click to keep or drop it; right-click to remove it from the photo.")
+    }
+
+    private func toggleSubject(_ instance: Int) {
+        let all = subjects.map(\.id)
+        var kept = ic.wrappedValue.keptSubjects ?? all
+        if kept.contains(instance) { kept.removeAll { $0 == instance } } else { kept.append(instance) }
+        // Nothing ticked or everything ticked both mean the default: the whole foreground.
+        let same = Set(kept) == Set(all)
+        ic.wrappedValue.keptSubjects = (kept.isEmpty || same) ? nil : kept.sorted()
     }
 
     private func brushButton(_ tool: CanvasTool, _ title: String, _ symbol: String) -> some View {

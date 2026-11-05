@@ -194,6 +194,8 @@ final class CoverRenderer {
             image = PaintEngine.shared.render(p, size: CGSize(width: w, height: h), layerID: layer.id, doc: doc)
         case .decor(let x):
             image = DecorLibrary.shared.render(x, size: CGSize(width: w, height: h), canvasHeight: canvas.height)
+        case .illustration(let x):
+            image = IllustrationLibrary.shared.render(x, size: CGSize(width: w, height: h))
         case .text(let t):
             if case let (img, p)? = TextRenderer.render(t, box: CGSize(width: w, height: h), canvasHeight: canvas.height) {
                 image = img
@@ -242,12 +244,13 @@ final class CoverRenderer {
 
     private func renderImage(_ ic: ImageContent, doc: CoverDocument, w: Int, h: Int, quality: Quality, cutout: Cutout) -> CGImage? {
         let data = doc.assetData(ic.assetID)
-        guard var src = AssetStore.shared.cutout(ic.assetID, data: data, mode: cutout, resolution: quality.assetResolution),
+        guard var src = AssetStore.shared.cutout(ic.assetID, data: data, mode: cutout, resolution: quality.assetResolution,
+                                                 kept: ic.keptSubjects, edgeRefine: ic.edgeRefine),
               let ctx = Gfx.context(w, h) else { return nil }
         if !ic.maskEdits.isEmpty,
            let full = AssetStore.shared.image(ic.assetID, data: data, resolution: quality.assetResolution),
            let edited = MaskPainter.apply(ic.maskEdits, to: full,
-                                          base: cutout == .none ? nil : AssetStore.shared.mask(ic.assetID, data: data),
+                                          base: cutout == .none ? nil : AssetStore.shared.mask(ic.assetID, data: data, kept: ic.keptSubjects, edgeRefine: ic.edgeRefine),
                                           invertBase: cutout == .background) {
             src = edited
         }

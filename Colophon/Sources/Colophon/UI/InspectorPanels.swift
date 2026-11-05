@@ -385,6 +385,8 @@ struct CheckInspector: View {
                         }
                         Text("Measured like an art director would: contrast under every line, collisions, trim, faces, thumbnail size.")
                             .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Toggle("Show where readers look first", isOn: Binding(get: { model.showAttention }, set: { on in model.showAttention = on; model.scheduleInsights() }))
+                            .controlSize(.small).font(.system(size: 11))
                         ForEach(c.issues) { issue in
                             HStack(alignment: .top, spacing: 9) {
                                 icon(issue.severity)
@@ -499,6 +501,7 @@ struct CheckInspector: View {
 
 struct BookInspector: View {
     @Environment(EditorModel.self) private var model
+    @State private var blurbTone: BlurbWriter.Tone = .gripping
 
     /// What the title and lines give off, and the palettes and genre that suit it.
     @ViewBuilder private var moodSection: some View {
@@ -549,6 +552,7 @@ struct BookInspector: View {
                     Text("Edits flow straight into the matching text on the cover.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
+                backCoverSection(book)
                 moodSection
                 PanelSection("Canvas") {
                     Text("\(model.document.canvas.width) x \(model.document.canvas.height) px").font(.system(size: 12, design: .monospaced))
@@ -584,6 +588,56 @@ struct BookInspector: View {
 
     private func field(_ label: String, _ b: Binding<String>) -> some View {
         FieldRow(label) { TextField(label, text: b).textFieldStyle(.roundedBorder) }
+    }
+
+    /// Synopsis in, blurb out: drafted on device, then edited by hand.
+    private func backCoverSection(_ book: Binding<BookInfo>) -> some View {
+        let synopsisWords = BlurbWriter.wordCount(book.wrappedValue.synopsis)
+        let blurbWords = BlurbWriter.wordCount(book.wrappedValue.blurb)
+        return PanelSection("Back Cover") {
+            Text("Synopsis").font(.system(size: 11)).foregroundStyle(.secondary)
+            TextEditor(text: book.synopsis)
+                .font(.system(size: 12))
+                .frame(minHeight: 90)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            Picker("", selection: $blurbTone) {
+                ForEach(BlurbWriter.Tone.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            HStack(spacing: 8) {
+                Button { model.draftBlurb(tone: blurbTone) } label: { Label("Draft Blurb", systemImage: "text.quote") }
+                    .controlSize(.small)
+                    .disabled(synopsisWords < 30 || model.isDraftingBlurb)
+                if model.isDraftingBlurb {
+                    ProgressView().controlSize(.small)
+                } else if synopsisWords < 30 {
+                    Text("\(synopsisWords)/30 words").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                }
+            }
+            Text("Uses Apple's on-device model on macOS 26; otherwise drafts from your synopsis. Nothing leaves your Mac.")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Blurb").font(.system(size: 11)).foregroundStyle(.secondary)
+            TextEditor(text: book.blurb)
+                .font(.system(size: 12))
+                .frame(minHeight: 120)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            HStack {
+                Text("\(blurbWords) words").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                Spacer()
+                Button("Shorten to 150 words") {
+                    var b = book.wrappedValue
+                    b.blurb = BlurbWriter.shorten(b.blurb, to: 150)
+                    model.updateBook(b)
+                }
+                .controlSize(.small)
+                .disabled(blurbWords <= 150)
+            }
+        }
     }
 }
 

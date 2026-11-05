@@ -49,6 +49,8 @@ struct CompareRef: Identifiable {
 
 enum CanvasTool: String {
     case select, erase, restore, paint, smudge, blend, lift
+    /// Paint over something in a photo to have it filled in from the surroundings.
+    case remove
 
     var paintTool: PaintTool? {
         switch self {
@@ -102,6 +104,9 @@ final class EditorModel {
     var critique: CriticReport?
     /// What the local taste model (CLIP) makes of the cover, when it's installed.
     var taste: TasteReport?
+    /// Where readers look first, drawn over the canvas when `showAttention` is on.
+    var showAttention = false
+    var attentionMap: CGImage?
     var insightBackground: CGImage?
     var isAnalyzing = false
 
@@ -114,6 +119,11 @@ final class EditorModel {
     var tool: CanvasTool = .select
     /// Brush diameter as a fraction of the cover's width.
     var brushSize: Double = 0.05
+    /// Strokes painted with the Remove tool (image space of `removalLayerID`), not yet applied.
+    var removalStrokes: [MaskStroke] = []
+    var removalLayerID: UUID?
+    /// True while an object removal is being computed.
+    var isRemoving = false
     var isRemix = false
 
     var showCompare = false
@@ -140,9 +150,16 @@ final class EditorModel {
     var paintStrength = 0.7
     var paintWetness = 0.4
     var showDecor: DecorLibrary.Kind?
+    var showIllustrations = false
     var showTemplates = false
     var showFonts = false
     var copiedTextStyle: TextContent?
+    /// Snapshots of everything tried this session, for the Versions strip.
+    let versions = VersionHistory()
+    var showVersions = true
+    @ObservationIgnored private var lastSnapshotTime = Date.distantPast
+    /// Ordinary edits are snapshotted at most this often.
+    static let editSnapshotInterval: TimeInterval = 25
 
     @ObservationIgnored private var undoStack: [CoverDocument] = []
     @ObservationIgnored private var redoStack: [CoverDocument] = []
@@ -171,6 +188,33 @@ final class EditorModel {
         lastUndoTime = now
         change(&document)
         documentChanged()
+        if now.timeIntervalSince(lastSnapshotTime) > EditorModel.editSnapshotInterval { snapshot(reason: "Edit") }
+    }
+
+    // MARK: Versions
+
+    /// Records the cover as it stands in the Versions strip (skipped when the design hasn't changed).
+    func snapshot(reason: String) {
+        if versions.add(document, reason: reason, score: critique?.score) { lastSnapshotTime = Date() }
+    }
+
+    /// Brings a version back as the current cover (undoable).
+    func restoreVersion(_ id: UUID) {
+        guard let v = versions.version(id) else { return }
+        let keepSelection = selection
+        lastSnapshotTime = Date()
+        mutate { d in d = v.document }
+        selection = keepSelection.flatMap { id in document.layer(id) != nil ? id : nil }
+        for f in v.document.fonts.values { FontCatalog.register(f) }
+        toast = "Restored \(v.reason)"
+    }
+
+    /// Puts a version beside the current cover in the Compare sheet.
+    func compareVersion(_ id: UUID) {
+        guard let v = versions.version(id), let img = v.thumbnail else { return }
+        compareRefs.removeAll { $0.name == "Version: \(v.reason)" }
+        compareRefs.append(CompareRef(name: "Version: \(v.reason)", image: img))
+        showCompare = true
     }
 
     func undo() {
@@ -217,6 +261,29 @@ final class EditorModel {
         mutate(undoKey: "book") { d in BookSync.apply(b, old: old, to: &d) }
     }
 
+    // MARK: Back cover blurb
+
+    var isDraftingBlurb = false
+
+    /// Drafts back-cover copy from the synopsis (on device) and writes it into `book.blurb`.
+    func draftBlurb(tone: BlurbWriter.Tone) {
+        guard !isDraftingBlurb else { return }
+        let book = document.book
+        guard BlurbWriter.wordCount(book.synopsis) >= 30 else {
+            toast = "Write a synopsis of at least 30 words first"
+            return
+        }
+        isDraftingBlurb = true
+        Task { @MainActor in
+            let text = await BlurbWriter.draft(book: book, synopsis: book.synopsis, tone: tone)
+            var updated = document.book
+            updated.blurb = text
+            updateBook(updated)
+            isDraftingBlurb = false
+            toast = BlurbWriter.usesOnDeviceModel ? "Blurb drafted with the on-device model" : "Blurb drafted from your synopsis"
+        }
+    }
+
     // MARK: Rendering
 
     func scheduleRender() {
@@ -240,6 +307,7 @@ final class EditorModel {
         guard screen == .editor else { return }
         let doc = document
         let spec = targetStore
+        let wantHeat = showAttention
         insightTask = Task.detached(priority: .utility) { [weak self] in
             try? await Task.sleep(nanoseconds: 450_000_000)
             if Task.isCancelled { return }
@@ -249,17 +317,19 @@ final class EditorModel {
             let ideas = SuggestionEngine.suggestions(for: doc, background: bg)
             let verdict = Critic.review(doc, background: bg)
             let flavor = TasteEngine.shared.isReady ? TasteEngine.shared.taste(of: doc) : nil
+            let heat: CGImage? = wantHeat ? Critic.renderedForAttention(doc).flatMap { VisionServices.attention(for: $0)?.heat } : nil
             if Task.isCancelled { return }
-            await self?.setInsights(issues, ideas, bg, verdict, flavor)
+            await self?.setInsights(issues, ideas, bg, verdict, flavor, heat)
         }
     }
 
-    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?, _ verdict: CriticReport, _ flavor: TasteReport?) {
+    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?, _ verdict: CriticReport, _ flavor: TasteReport?, _ heat: CGImage?) {
         preflight = issues
         suggestions = ideas
         insightBackground = bg
         critique = verdict
         taste = flavor
+        attentionMap = heat
     }
 
     /// Downloads the taste model (about 280 MB, once) and re-reads the cover with it.
@@ -412,6 +482,7 @@ final class EditorModel {
         screen = .editor
         documentChanged()
         refreshEffectBase()
+        snapshot(reason: "Started")
     }
 
     func startBlank() {
@@ -437,6 +508,7 @@ final class EditorModel {
         }
         screen = .editor
         selection = document.textLayer(role: .title)?.id
+        snapshot(reason: "Started")
     }
 
     func newProject() {
@@ -449,6 +521,7 @@ final class EditorModel {
         redoStack = []
         isDirty = false
         preview = nil
+        versions.clear()
         screen = .start
     }
 
@@ -555,6 +628,7 @@ final class EditorModel {
         let keepSelection = selection
         mutate { d in d = fresh }
         selection = keepSelection.flatMap { id in document.layer(id) != nil ? id : nil }
+        snapshot(reason: "Randomize")
     }
 
     func lockTextLayers(_ locked: Bool) {
@@ -578,6 +652,7 @@ final class EditorModel {
         let rebuilt = UserTemplateStore.apply(t, to: document)
         mutate { d in d = rebuilt }
         selection = nil
+        snapshot(reason: "Template: \(t.name)")
         toast = "Applied \(t.name)"
     }
 
@@ -586,6 +661,7 @@ final class EditorModel {
         let rebuilt = TemplateLibrary.shared.apply(t, to: document)
         mutate { d in d = rebuilt }
         selection = nil
+        snapshot(reason: "Template: \(t.name)")
         toast = "Applied \(t.name)"
     }
 
@@ -605,6 +681,29 @@ final class EditorModel {
             }
         }
         selection = l.id
+    }
+
+    /// A silhouette or line icon from the illustration library, in the cover's ink color, above the art and below the type.
+    func addIllustration(_ itemID: String) {
+        guard let item = IllustrationLibrary.shared.item(itemID) else { return }
+        let color = inkColor
+        let w = 0.3
+        let h = w * Double(document.canvas.width) / Double(max(1, document.canvas.height))
+        let frame = NRect((1 - w) / 2, (1 - h) / 2, w, h)
+        var l = Layer.illustration(itemID, color: color, frame: frame)
+        l.name = item.name
+        mutate { d in
+            let i = d.layers.firstIndex { $0.textContent != nil } ?? d.layers.count
+            d.layers.insert(l, at: max(min(1, d.layers.count), i))
+        }
+        selection = l.id
+    }
+
+    /// The color type and ornaments read in against this cover's ground.
+    var inkColor: RGBA {
+        let p = PaletteRoles(document.palette)
+        let ground = document.layers.first?.fillContent?.colors.first ?? document.background
+        return ground.isDark ? p.light : p.dark
     }
 
     /// A full-cover ground printed from the material library.
@@ -736,6 +835,7 @@ final class EditorModel {
     func autoPolish() {
         let p = PaletteRoles(document.palette)
         mutate { d in Polisher.polish(&d, palette: p) }
+        snapshot(reason: "Polish")
         toast = "Polished type color, shadows and scrims"
     }
 
@@ -745,6 +845,7 @@ final class EditorModel {
         var report = CriticReport.perfect
         mutate { d in report = Critic.repair(&d, geometry: moveType, palette: p) }
         critique = report
+        snapshot(reason: "Repair")
         toast = "Design score \(Int(report.score)) (\(report.grade))"
     }
 
@@ -771,6 +872,9 @@ final class EditorModel {
             case .decor(var x):
                 x.color = c
                 d.layers[i].content = .decor(x)
+            case .illustration(var x):
+                x.color = c
+                d.layers[i].content = .illustration(x)
             case .paint:
                 break
             case .image:
@@ -799,10 +903,33 @@ final class EditorModel {
         return (NPoint(x: (px - ox) / dw, y: (py - oy) / dh), radius)
     }
 
+    /// The inverse of `imagePoint`: a stroke in a layer's image space back on the cover (0...1),
+    /// with its brush diameter as a fraction of the cover's width. For drawing pending strokes.
+    func canvasStroke(_ l: Layer, _ s: MaskStroke) -> (points: [(x: Double, y: Double)], diameter: Double)? {
+        guard let ic = l.imageContent,
+              let img = AssetStore.shared.image(ic.assetID, data: document.assetData(ic.assetID), resolution: .thumbnail) else { return nil }
+        let cw = Double(document.canvas.width), ch = Double(document.canvas.height)
+        let W = l.frame.w * cw, H = l.frame.h * ch
+        let iw = Double(img.width), ih = Double(img.height)
+        let sc = max(W / iw, H / ih) * max(1, ic.zoom)
+        let dw = iw * sc, dh = ih * sc
+        let ox = -(dw - W) * ic.focusX.clamped01, oy = -(dh - H) * ic.focusY.clamped01
+        let pts = s.points.map { p -> (x: Double, y: Double) in
+            var px = p.x * dw + ox
+            if ic.flipped { px = W - px }
+            return (l.frame.x + px / cw, l.frame.y + (p.y * dh + oy) / ch)
+        }
+        return (pts, 2 * s.radius * min(iw, ih) * sc / cw)
+    }
+
     @ObservationIgnored private var strokeKey = ""
 
     func beginStroke(layer id: UUID, canvasX: Double, canvasY: Double) {
         guard let l = document.layer(id), case let (p, r)? = imagePoint(l, canvasX: canvasX, canvasY: canvasY) else { return }
+        if tool == .remove {
+            beginRemovalStroke(layer: id, point: p, radius: r)
+            return
+        }
         strokeKey = "brush-\(UUID().uuidString)"
         let stroke = MaskStroke(restore: tool == .restore, radius: r, points: [p])
         mutate(undoKey: strokeKey) { d in
@@ -811,8 +938,12 @@ final class EditorModel {
     }
 
     func extendStroke(layer id: UUID, canvasX: Double, canvasY: Double) {
-        guard let l = document.layer(id), case let (p, r)? = imagePoint(l, canvasX: canvasX, canvasY: canvasY),
-              let last = l.imageContent?.maskEdits.last?.points.last else { return }
+        guard let l = document.layer(id), case let (p, r)? = imagePoint(l, canvasX: canvasX, canvasY: canvasY) else { return }
+        if tool == .remove {
+            extendRemovalStroke(layer: id, point: p, radius: r)
+            return
+        }
+        guard let last = l.imageContent?.maskEdits.last?.points.last else { return }
         guard hypot(p.x - last.x, p.y - last.y) > r * 0.25 else { return }
         mutate(undoKey: strokeKey) { d in
             guard let i = d.index(of: id), let n = d.layers[i].imageContent?.maskEdits.count, n > 0 else { return }
@@ -822,6 +953,88 @@ final class EditorModel {
 
     func clearMaskEdits(_ id: UUID) {
         mutate { d in if let i = d.index(of: id) { d.layers[i].imageContent?.maskEdits = [] } }
+    }
+
+    // MARK: Object removal
+
+    private func beginRemovalStroke(layer id: UUID, point p: NPoint, radius r: Double) {
+        if removalLayerID != id { removalStrokes = [] }
+        removalLayerID = id
+        removalStrokes.append(MaskStroke(restore: false, radius: r, points: [p]))
+    }
+
+    private func extendRemovalStroke(layer id: UUID, point p: NPoint, radius r: Double) {
+        guard removalLayerID == id, let last = removalStrokes.last?.points.last else { return }
+        guard hypot(p.x - last.x, p.y - last.y) > r * 0.25 else { return }
+        removalStrokes[removalStrokes.count - 1].points.append(p)
+    }
+
+    func cancelRemoval() {
+        removalStrokes = []
+        removalLayerID = nil
+        if tool == .remove { tool = .select }
+    }
+
+    /// Fills in whatever the Remove strokes cover and swaps the layer's picture for the result
+    /// (a new asset, so undo brings the original back).
+    func applyRemoval(_ id: UUID) {
+        guard !isRemoving, removalLayerID == id, !removalStrokes.isEmpty,
+              let ic = document.layer(id)?.imageContent else { return }
+        let strokes = removalStrokes
+        let assetID = ic.assetID
+        let data = document.assetData(assetID)
+        isRemoving = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var encoded: Data?
+            if let full = AssetStore.shared.image(assetID, data: data, resolution: .full),
+               let mask = Inpainter.strokeMask(strokes, width: full.width, height: full.height),
+               let out = Inpainter.remove(from: full, mask: mask) {
+                encoded = AssetStore.encode(out)
+            }
+            await self?.finishRemoval(id, data: encoded, what: "Removed from the photo")
+        }
+    }
+
+    /// Removes a detected subject (an index from `AssetStore.subjects`) from the layer's photo.
+    func removeSubject(_ id: UUID, instance: Int) {
+        guard !isRemoving, let ic = document.layer(id)?.imageContent else { return }
+        let assetID = ic.assetID
+        let data = document.assetData(assetID)
+        isRemoving = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var encoded: Data?
+            if let mask = AssetStore.shared.instanceMask(assetID, data: data, instances: IndexSet(integer: instance)),
+               let full = AssetStore.shared.image(assetID, data: data, resolution: .full),
+               let out = Inpainter.remove(from: full, mask: mask) {
+                encoded = AssetStore.encode(out)
+            }
+            await self?.finishRemoval(id, data: encoded, what: "Subject removed from the photo")
+        }
+    }
+
+    private func finishRemoval(_ id: UUID, data: Data?, what: String) {
+        isRemoving = false
+        guard let data else {
+            toast = "Couldn't fill that in"
+            return
+        }
+        var newID: UUID?
+        mutate { d in
+            let nid = d.addAsset(data)
+            if let i = d.index(of: id) {
+                d.layers[i].imageContent?.assetID = nid
+                // Instance indices belong to the old picture.
+                d.layers[i].imageContent?.keptSubjects = nil
+            }
+            newID = nid
+        }
+        if let newID {
+            Task.detached(priority: .utility) { AssetStore.shared.warm(newID, data: data) }
+        }
+        removalStrokes = []
+        removalLayerID = nil
+        if tool == .remove { tool = .select }
+        toast = what
     }
 
     // MARK: Workflow tools
@@ -1006,6 +1219,8 @@ final class EditorModel {
         isDirty = true
         recoveryAvailable = false
         documentChanged()
+        versions.clear()
+        snapshot(reason: "Opened")
         toast = "Recovered your unsaved cover. Save it to keep it."
     }
 
@@ -1054,6 +1269,8 @@ final class EditorModel {
             }
             documentChanged()
             isDirty = false
+            versions.clear()
+            snapshot(reason: "Opened")
         } catch {
             toast = "Couldn't open that file: \(error.localizedDescription)"
         }

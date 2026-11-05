@@ -130,6 +130,12 @@ struct CanvasArea: View {
             Image(decorative: img, scale: 1)
                 .resizable()
                 .interpolation(.high)
+                .overlay {
+                    if model.showAttention, let heat = model.attentionMap {
+                        Image(decorative: heat, scale: 1).resizable().interpolation(.high)
+                            .opacity(0.85).allowsHitTesting(false)
+                    }
+                }
         } else {
             Rectangle().fill(model.document.background.color)
                 .overlay(ProgressView())
@@ -278,19 +284,41 @@ struct CanvasArea: View {
 
     private var maskBanner: some View {
         HStack(spacing: 10) {
-            Image(systemName: model.tool == .erase ? "eraser" : "paintbrush.pointed")
-            Text(model.tool == .erase ? "Erasing from \(model.document.layer(brushTarget)?.name ?? "photo")" : "Restoring \(model.document.layer(brushTarget)?.name ?? "photo")")
+            Image(systemName: model.tool == .erase ? "eraser" : model.tool == .remove ? "bandage" : "paintbrush.pointed")
+            Text(maskBannerTitle)
                 .font(.system(size: 12, weight: .medium))
             Slider(value: Binding(get: { model.brushSize }, set: { model.brushSize = $0 }), in: 0.01...0.2)
                 .frame(width: 110)
                 .controlSize(.small)
-            Button("Done") { model.tool = .select }
-                .controlSize(.small)
+            if model.tool == .remove {
+                if model.isRemoving {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Cancel") { model.cancelRemoval() }
+                        .controlSize(.small)
+                    Button("Apply") { if let id = brushTarget { model.applyRemoval(id) } }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.removalStrokes.isEmpty)
+                }
+            } else {
+                Button("Done") { model.tool = .select }
+                    .controlSize(.small)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(Theme.hairline))
+    }
+
+    private var maskBannerTitle: String {
+        let name = model.document.layer(brushTarget)?.name ?? "photo"
+        switch model.tool {
+        case .erase: return "Erasing from \(name)"
+        case .remove: return model.removalStrokes.isEmpty ? "Paint over what to remove from \(name)" : "Removing from \(name)"
+        default: return "Restoring \(name)"
+        }
     }
 
     /// Snaps an edge or center of a span to the golden, thirds, center and margin lines.
@@ -344,6 +372,24 @@ struct CanvasArea: View {
             snapPath.move(to: CGPoint(x: rect.minX, y: py)); snapPath.addLine(to: CGPoint(x: rect.maxX, y: py))
         }
         ctx.stroke(snapPath, with: .color(accent), lineWidth: 1)
+
+        // Pending Remove strokes, so what will be filled in is visible before Apply.
+        if !model.removalStrokes.isEmpty, let rid = model.removalLayerID, let rl = model.document.layer(rid) {
+            for s in model.removalStrokes {
+                guard let cs = model.canvasStroke(rl, s), let first = cs.points.first else { continue }
+                let width = cs.diameter * rect.width
+                var p = Path()
+                let start = CGPoint(x: rect.minX + first.x * rect.width, y: rect.minY + first.y * rect.height)
+                if cs.points.count == 1 {
+                    p.addEllipse(in: CGRect(x: start.x - width / 2, y: start.y - width / 2, width: width, height: width))
+                    ctx.fill(p, with: .color(Color.red.opacity(0.4)))
+                    continue
+                }
+                p.move(to: start)
+                for pt in cs.points.dropFirst() { p.addLine(to: CGPoint(x: rect.minX + pt.x * rect.width, y: rect.minY + pt.y * rect.height)) }
+                ctx.stroke(p, with: .color(Color.red.opacity(0.4)), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+            }
+        }
 
         guard let l = model.selectedLayer else { return }
         let f = l.frame.pixels(in: rect.size).offsetBy(dx: rect.minX, dy: rect.minY)

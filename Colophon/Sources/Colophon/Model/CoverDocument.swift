@@ -31,6 +31,24 @@ struct BookInfo: Codable, Hashable {
     var series: String = ""
     var tagline: String = ""
     var genre: Genre = .literary
+    /// The author's plot summary, any length. Source for the back-cover blurb.
+    var synopsis: String = ""
+    /// Back-cover copy, about 120–200 words.
+    var blurb: String = ""
+}
+
+extension BookInfo {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        author = try c.decodeIfPresent(String.self, forKey: .author) ?? ""
+        series = try c.decodeIfPresent(String.self, forKey: .series) ?? ""
+        tagline = try c.decodeIfPresent(String.self, forKey: .tagline) ?? ""
+        genre = try c.decodeIfPresent(Genre.self, forKey: .genre) ?? .literary
+        synopsis = try c.decodeIfPresent(String.self, forKey: .synopsis) ?? ""
+        blurb = try c.decodeIfPresent(String.self, forKey: .blurb) ?? ""
+    }
 }
 
 struct CanvasSpec: Codable, Hashable {
@@ -195,6 +213,10 @@ struct ImageContent: Codable, Hashable {
     var flipped: Bool = false
     /// Brush touch-ups to the cutout (or plain erasing when the whole image shows).
     var maskEdits: [MaskStroke] = []
+    /// Foreground instances the cutout keeps (Vision instance indices). nil = every instance.
+    var keptSubjects: [Int]? = nil
+    /// Edge-aware matte refinement of the cutout, 0 (off) ... 1.
+    var edgeRefine: Double = 0
 
     init(assetID: UUID) {
         self.assetID = assetID
@@ -209,6 +231,8 @@ struct ImageContent: Codable, Hashable {
         focusY = try c.decodeIfPresent(Double.self, forKey: .focusY) ?? 0.5
         flipped = try c.decodeIfPresent(Bool.self, forKey: .flipped) ?? false
         maskEdits = try c.decodeIfPresent([MaskStroke].self, forKey: .maskEdits) ?? []
+        keptSubjects = try c.decodeIfPresent([Int].self, forKey: .keptSubjects)
+        edgeRefine = try c.decodeIfPresent(Double.self, forKey: .edgeRefine) ?? 0
     }
 }
 
@@ -409,6 +433,12 @@ struct TextContent: Codable, Hashable {
     var fit: TextFit = .uniform
     /// Tightens display sizes and opens small caps automatically (see `TextRenderer.effectiveTracking`).
     var opticalTracking: Bool = true
+    /// Type on a path or warped type (circle, wave, flag, bulge...). When set, `arc` is ignored.
+    var path: TextPath = .none
+    /// How strong the path effect is (0...1): wave height, bulge, rise, or the share of the circle the text may span.
+    var pathAmount: Double = 0.5
+    /// Where along a closed path the text starts (0...1 turns around the circle).
+    var pathPhase: Double = 0
 }
 
 extension TextContent {
@@ -440,6 +470,30 @@ extension TextContent {
         fit = try c.decodeIfPresent(TextFit.self, forKey: .fit) ?? .uniform
         // Saved covers keep their exact spacing: only new text gets the optical adjustment.
         opticalTracking = try c.decodeIfPresent(Bool.self, forKey: .opticalTracking) ?? false
+        path = try c.decodeIfPresent(TextPath.self, forKey: .path) ?? .none
+        pathAmount = try c.decodeIfPresent(Double.self, forKey: .pathAmount) ?? 0.5
+        pathPhase = try c.decodeIfPresent(Double.self, forKey: .pathPhase) ?? 0
+    }
+}
+
+/// The shape a text layer's lines follow. `none` keeps the straight setting (and the simple `arc` arch).
+enum TextPath: String, Codable, CaseIterable, Identifiable {
+    case none, circle, wave, flag, bulge, pinch, rise, fall, perspective
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: return "Straight"
+        case .circle: return "Circle"
+        case .wave: return "Wave"
+        case .flag: return "Flag"
+        case .bulge: return "Bulge"
+        case .pinch: return "Pinch"
+        case .rise: return "Rise"
+        case .fall: return "Fall"
+        case .perspective: return "Perspective"
+        }
     }
 }
 
@@ -496,6 +550,8 @@ enum LayerContent: Codable, Hashable {
     case decor(DecorContent)
     /// Mixed and smudged paint (`PaintEngine`).
     case paint(PaintContent)
+    /// A recolorable silhouette or line icon from `IllustrationLibrary` (Tabler, Phosphor, Game-icons.net).
+    case illustration(IllustrationContent)
 }
 
 enum MaskGradientKind: String, Codable, CaseIterable, Identifiable {
@@ -698,6 +754,11 @@ struct Layer: Codable, Hashable, Identifiable {
         set { if let n = newValue { content = .decor(n) } }
     }
 
+    var illustrationContent: IllustrationContent? {
+        get { if case .illustration(let x) = content { return x }; return nil }
+        set { if let n = newValue { content = .illustration(n) } }
+    }
+
     var shapeContent: ShapeContent? {
         get { if case .shape(let s) = content { return s }; return nil }
         set { if let n = newValue { content = .shape(n) } }
@@ -711,6 +772,7 @@ struct Layer: Codable, Hashable, Identifiable {
         case .text: return "textformat"
         case .decor: return "rectangle.dashed"
         case .paint: return "paintbrush"
+        case .illustration: return "leaf"
         }
     }
 
@@ -722,6 +784,7 @@ struct Layer: Codable, Hashable, Identifiable {
         case .text(let t): return t.role.label
         case .decor(let x): return DecorLibrary.shared.item(x.itemID).map { $0.kind.rawValue.capitalized } ?? "Decor"
         case .paint(let p): return "Paint, \(p.strokes.count) strokes"
+        case .illustration(let x): return IllustrationLibrary.shared.item(x.itemID)?.name ?? "Illustration"
         }
     }
 
@@ -732,6 +795,11 @@ struct Layer: Codable, Hashable, Identifiable {
     static func decor(_ itemID: String, color: RGBA, color2: RGBA? = nil, frame: NRect) -> Layer {
         let name = DecorLibrary.shared.item(itemID)?.name ?? "Decor"
         return Layer(name: name, content: .decor(DecorContent(itemID: itemID, color: color, color2: color2)), frame: frame)
+    }
+
+    static func illustration(_ itemID: String, color: RGBA, color2: RGBA? = nil, frame: NRect) -> Layer {
+        let name = IllustrationLibrary.shared.item(itemID)?.name ?? "Illustration"
+        return Layer(name: name, content: .illustration(IllustrationContent(itemID: itemID, color: color, color2: color2)), frame: frame)
     }
 
     static func image(_ id: UUID, frame: NRect = .full, name: String = "Photo") -> Layer {

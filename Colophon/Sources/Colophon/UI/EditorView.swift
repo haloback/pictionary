@@ -10,12 +10,18 @@ struct EditorView: View {
                 .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 320)
         } detail: {
             CanvasArea()
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if model.showVersions { VersionsStrip() }
+                }
         }
         .inspector(isPresented: $model.showInspector) {
             InspectorView()
                 .inspectorColumnWidth(min: 300, ideal: 336, max: 440)
         }
         .toolbar { toolbar }
+        .sheet(isPresented: $model.showIllustrations) {
+            IllustrationBrowserSheet(ink: model.inkColor) { model.addIllustration($0) }
+        }
         .onAppear {
             model.scheduleRender()
             model.scheduleInsights()
@@ -62,6 +68,7 @@ struct EditorView: View {
                 Button { model.showDecor = .divider } label: { Label("Divider…", systemImage: "minus") }
                 Button { model.showDecor = .badge } label: { Label("Badge or Seal…", systemImage: "seal") }
                 Button { model.showDecor = .banner } label: { Label("Banner or Ribbon…", systemImage: "flag") }
+                Button { model.showIllustrations = true } label: { Label("Illustration…", systemImage: "leaf") }
             } label: {
                 Label("Add", systemImage: "plus")
             }
@@ -86,6 +93,8 @@ struct EditorView: View {
                 .help("Print wraparound: back, spine and front as a print-ready PDF")
             Button { model.showExport = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
                 .help("Export store-ready files for Kindle, Google Play, Apple Books and more")
+            Button { model.showVersions.toggle() } label: { Label("Versions", systemImage: "clock") }
+                .help(model.showVersions ? "Hide the versions you've tried this session" : "Show the versions you've tried this session")
             Button { model.showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
         }
     }

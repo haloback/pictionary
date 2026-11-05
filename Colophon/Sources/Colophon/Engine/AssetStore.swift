@@ -16,6 +16,8 @@ final class AssetStore {
 
     private var images: [String: CGImage] = [:]
     private var masks: [UUID: CGImage] = [:]
+    private var derivedMasks: [String: CGImage] = [:]
+    private var subjectSets: [UUID: (subjects: [SubjectSegmentation.Subject], labels: CGImage?)] = [:]
     private var saliency: [UUID: NRect] = [:]
     private var palettes: [UUID: [RGBA]] = [:]
     private var faceRects: [UUID: [NRect]] = [:]
@@ -82,14 +84,73 @@ final class AssetStore {
         return m
     }
 
-    func cutout(_ id: UUID, data: Data?, mode: Cutout, resolution: Resolution) -> CGImage? {
+    /// Detected subjects (people and objects), largest first. Computed once per asset at thumbnail resolution.
+    func subjects(_ id: UUID, data: Data?) -> [SubjectSegmentation.Subject] {
+        subjectSet(id, data: data).subjects
+    }
+
+    /// Per-pixel instance labels for `subjects(_:data:)` (instance index in the red channel).
+    func subjectLabels(_ id: UUID, data: Data?) -> CGImage? {
+        subjectSet(id, data: data).labels
+    }
+
+    private func subjectSet(_ id: UUID, data: Data?) -> (subjects: [SubjectSegmentation.Subject], labels: CGImage?) {
+        lock.lock()
+        if let s = subjectSets[id] { lock.unlock(); return s }
+        lock.unlock()
+        guard let base = image(id, data: data, resolution: .thumbnail) else { return ([], nil) }
+        let s = SubjectSegmentation.subjects(in: base)
+        lock.lock(); subjectSets[id] = s; lock.unlock()
+        return s
+    }
+
+    /// Soft mask of just the given foreground instances (indices from `subjects`), nil when none match.
+    func instanceMask(_ id: UUID, data: Data?, instances: IndexSet) -> CGImage? {
+        guard !instances.isEmpty else { return nil }
+        let key = "\(id.uuidString)-inst-\(instances.map { String($0) }.joined(separator: ","))"
+        lock.lock()
+        if let m = derivedMasks[key] { lock.unlock(); return m }
+        lock.unlock()
+        guard let base = image(id, data: data, resolution: .thumbnail),
+              let m = SubjectSegmentation.mask(for: instances, in: base) else { return nil }
+        lock.lock(); derivedMasks[key] = m; lock.unlock()
+        return m
+    }
+
+    /// The cutout mask for a picture: the whole foreground or only the kept instances, optionally
+    /// refined against the picture's edges. Cached per combination.
+    func mask(_ id: UUID, data: Data?, kept: [Int]?, edgeRefine: Double) -> CGImage? {
+        let amount = edgeRefine.clamped01
+        if kept == nil && amount <= 0 { return mask(id, data: data) }
+        let keptKey = kept.map { $0.map { String($0) }.joined(separator: ",") } ?? "all"
+        let key = "\(id.uuidString)-mask-\(keptKey)-\(Int((amount * 100).rounded()))"
+        lock.lock()
+        if let m = derivedMasks[key] { lock.unlock(); return m }
+        lock.unlock()
+        var base: CGImage?
+        if let kept, !kept.isEmpty {
+            base = instanceMask(id, data: data, instances: IndexSet(kept)) ?? mask(id, data: data)
+        } else {
+            base = mask(id, data: data)
+        }
+        guard var m = base else { return nil }
+        if amount > 0, let guide = image(id, data: data, resolution: .preview),
+           let refined = SubjectSegmentation.refine(mask: m, guide: guide, amount: amount) {
+            m = refined
+        }
+        lock.lock(); derivedMasks[key] = m; lock.unlock()
+        return m
+    }
+
+    func cutout(_ id: UUID, data: Data?, mode: Cutout, resolution: Resolution, kept: [Int]? = nil, edgeRefine: Double = 0) -> CGImage? {
         guard let src = image(id, data: data, resolution: resolution) else { return nil }
         if mode == .none { return src }
-        let key = "\(id.uuidString)-\(resolution.rawValue)-\(mode.rawValue)"
+        let keptKey = kept.map { $0.map { String($0) }.joined(separator: ",") } ?? "all"
+        let key = "\(id.uuidString)-\(resolution.rawValue)-\(mode.rawValue)-\(keptKey)-\(Int((edgeRefine.clamped01 * 100).rounded()))"
         lock.lock()
         if let c = images[key] { lock.unlock(); return c }
         lock.unlock()
-        guard let m = mask(id, data: data) else { return src }
+        guard let m = mask(id, data: data, kept: kept, edgeRefine: edgeRefine) else { return src }
         let out = VisionServices.applyMask(m, to: src, invert: mode == .background) ?? src
         lock.lock(); images[key] = out; lock.unlock()
         return out
