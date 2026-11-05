@@ -272,6 +272,11 @@ enum Exporter {
             if write(img, to: url, format: format, quality: quality) { urls.append(url) }
             progress(n + 1)
         }
+        // CC BY illustrations (Game-icons.net) need their artists named wherever the cover is published.
+        let credits = IllustrationLibrary.shared.credits(for: doc)
+        if !credits.isEmpty {
+            try? credits.write(to: folder.appendingPathComponent("Credits.txt"), atomically: true, encoding: .utf8)
+        }
         return urls
     }
 }
