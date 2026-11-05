@@ -42,7 +42,7 @@ extension SampleRenderTests {
         if let cg = ctx.makeImage() { _ = Exporter.write(cg, to: url, format: .png, quality: 1) }
     }
 
-    func testRenderEngineShowcase() throws {
+    func testRenderEngineShowcase() async throws {
         guard let dir = ProcessInfo.processInfo.environment["COLOPHON_SAMPLES"] else { throw XCTSkip("COLOPHON_SAMPLES not set") }
         let out = URL(fileURLWithPath: dir).appendingPathComponent("engine", isDirectory: true)
         try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
@@ -50,6 +50,9 @@ extension SampleRenderTests {
         func shot(_ d: CoverDocument) -> CGImage? { CoverRenderer.shared.render(d, size: cell, quality: .full) }
         let portrait = loadPhoto(["sig/portrait.jpg", "b-monalisa.jpg"])
         let landscape = loadPhoto(["sig/landscape.jpg", "c-earth.jpg"])
+        var photos: [String: Data] = [:]
+        if let portrait { photos["portrait"] = portrait }
+        if let landscape { photos["landscape"] = landscape; photos["space"] = landscape }
         var manifest: [[String: Any]] = []
 
         // 1. The critic: deliberately flawed covers, then what it makes of them.
@@ -235,6 +238,38 @@ extension SampleRenderTests {
         }
         sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("06-compositing.png"))
         manifest.append(["file": "06-compositing.png", "name": "Compositing: knockout, gradient map, inner shadow, feather, linear-light blend, palette harmony", "family": "Blending"])
+
+        // 7. The taste model, when CI installed it: genre fit, mood and professionalism per cover, then a search by description.
+        if ProcessInfo.processInfo.environment["COLOPHON_TASTE"] != nil && !TasteEngine.shared.isReady {
+            try? await TasteEngine.shared.install()
+        }
+        if TasteEngine.shared.isReady {
+            imgs = []; labels = []
+            let ids = ["literary-the-grid", "thriller-brand-name", "horror-unblinking", "romance-venn", "cozy-awning", "sciencefiction-planet-limb"]
+            for id in ids {
+                guard let d = SignatureLibrary.design(id) else { continue }
+                var base = SignatureLibrary.sampleDocument(d)
+                if d.usesPhoto, let data = photos[d.sample.photo] ?? portrait { _ = base.addAsset(data) }
+                let doc = SignatureLibrary.build(d, palette: 0, base: base)
+                guard let t = TasteEngine.shared.taste(of: doc), let i = shot(doc) else { continue }
+                let top = t.genreFit.prefix(2).map { "\($0.genre.label) \(Int($0.score * 100))%" }.joined(separator: ", ")
+                imgs.append(i)
+                labels.append("\(top) · pro \(Int(t.professionalism * 100)) · " + t.moodTags.prefix(3).joined(separator: ", "))
+            }
+            sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("07-taste.png"))
+            manifest.append(["file": "07-taste.png", "name": "Taste model (CLIP, local): what genre each cover reads as, how professional it looks, its mood", "family": "Taste"])
+
+            imgs = []; labels = []
+            let query = "a quiet, foggy literary novel"
+            for hit in TasteEngine.shared.search(query, in: SignatureLibrary.all, limit: 6) {
+                let d = hit.design
+                var base = SignatureLibrary.sampleDocument(d)
+                if d.usesPhoto, let data = photos[d.sample.photo] ?? portrait { _ = base.addAsset(data) }
+                if let i = shot(SignatureLibrary.build(d, palette: 0, base: base)) { imgs.append(i); labels.append("\(d.name) · \(String(format: "%.2f", hit.score))") }
+            }
+            sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("08-describe.png"))
+            manifest.append(["file": "08-describe.png", "name": "Search by description: “\(query)” across the Signature designs", "family": "Taste"])
+        }
 
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("engine.json"))

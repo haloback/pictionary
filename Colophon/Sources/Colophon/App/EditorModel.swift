@@ -100,6 +100,8 @@ final class EditorModel {
     var suggestions: [Suggestion] = []
     /// The art director's score for the cover as it stands.
     var critique: CriticReport?
+    /// What the local taste model (CLIP) makes of the cover, when it's installed.
+    var taste: TasteReport?
     var insightBackground: CGImage?
     var isAnalyzing = false
 
@@ -246,16 +248,41 @@ final class EditorModel {
             let issues = Preflight.run(doc, spec: spec, background: bg, full: full)
             let ideas = SuggestionEngine.suggestions(for: doc, background: bg)
             let verdict = Critic.review(doc, background: bg)
+            let flavor = TasteEngine.shared.isReady ? TasteEngine.shared.taste(of: doc) : nil
             if Task.isCancelled { return }
-            await self?.setInsights(issues, ideas, bg, verdict)
+            await self?.setInsights(issues, ideas, bg, verdict, flavor)
         }
     }
 
-    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?, _ verdict: CriticReport) {
+    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?, _ verdict: CriticReport, _ flavor: TasteReport?) {
         preflight = issues
         suggestions = ideas
         insightBackground = bg
         critique = verdict
+        taste = flavor
+    }
+
+    /// Downloads the taste model (about 280 MB, once) and re-reads the cover with it.
+    func installTaste() {
+        Task { @MainActor in
+            do {
+                try await TasteEngine.shared.install()
+                toast = "Taste model ready"
+                scheduleInsights()
+            } catch {
+                toast = "Taste model: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// The mood the brief gives off, for palette and genre hints in the Book panel.
+    var briefMood: BriefMood.Mood {
+        BriefMood.analyze(title: document.book.title, subtitle: document.book.subtitle, tagline: document.book.tagline)
+    }
+
+    func applyPalette(_ colors: [RGBA], name: String) {
+        mutate { d in d.palette = colors }
+        toast = "Palette: \(name)"
     }
 
     func refreshEffectBase() {

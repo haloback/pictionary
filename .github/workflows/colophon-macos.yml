@@ -48,7 +48,8 @@ jobs:
         env:
           COLOPHON_SAMPLES: ${{ github.workspace }}/Colophon/build/samples
           COLOPHON_PHOTOS: ${{ github.workspace }}/Colophon/build/photos
-        run: swift test --filter SampleRenderTests
+          COLOPHON_TASTE: "1"
+        run: swift test --filter "SampleRenderTests|TasteEngineTests"
       - uses: actions/upload-artifact@v4
         with:
           name: Colophon-Style-Samples

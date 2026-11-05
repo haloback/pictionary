@@ -46,13 +46,32 @@ struct TemplateBrowserSheet: View {
     @State private var pendingDelete: UserTemplate?
     @State private var recommended: [TemplateRecommender.Pick] = []
     @State private var recommendedFor = ""
+    @State private var described: [CoverTemplate] = []
+    @State private var describedFor = ""
     private var store: UserTemplateStore { .shared }
 
     private var hasPhoto: Bool { !model.document.photoLayers.isEmpty || !model.document.assetOrder.isEmpty }
 
     private var results: [CoverTemplate] {
         let all = TemplateLibrary.shared.search(query, genre: genre, tags: tags)
-        return (hasPhoto || showPhotoLayouts) ? all : all.filter { !$0.needsPhoto }
+        let base = (hasPhoto || showPhotoLayouts) ? all : all.filter { !$0.needsPhoto }
+        // With the taste model, a description ("foggy, quiet, literary") also finds designs that look like it.
+        if !described.isEmpty && describedFor == query {
+            var merged = described
+            for t in base where !described.contains(where: { $0.id == t.id }) { merged.append(t) }
+            return merged
+        }
+        return base
+    }
+
+    /// Asks the taste model which Signature designs look like the typed description.
+    private func describeSearch(_ q: String) async {
+        let words = q.trimmingCharacters(in: .whitespaces)
+        guard TasteEngine.shared.isReady, words.split(separator: " ").count >= 2 else { described = []; describedFor = ""; return }
+        let hits = await Task.detached(priority: .userInitiated) { TasteEngine.shared.search(words, in: SignatureLibrary.all, limit: 12) }.value
+        let lib = TemplateLibrary.shared
+        described = hits.compactMap { lib.template("sig.\($0.design.id).0") }
+        describedFor = q
     }
 
     var body: some View {
@@ -70,8 +89,13 @@ struct TemplateBrowserSheet: View {
                     Toggle("Photo layouts", isOn: $showPhotoLayouts).controlSize(.small)
                         .help("Layouts built around a photo. Without one, they use a painted ground instead.")
                 }
-                TextField("Search palette, layout, font…", text: $query)
-                    .textFieldStyle(.roundedBorder).frame(width: 220)
+                TextField(TasteEngine.shared.isReady ? "Search, or describe the cover you want…" : "Search palette, layout, font…", text: $query)
+                    .textFieldStyle(.roundedBorder).frame(width: 240)
+                    .task(id: query) {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        if Task.isCancelled { return }
+                        await describeSearch(query)
+                    }
                 Button { dismiss(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { model.showSaveTemplate = true } } label: {
                     Label("Save Current Cover…", systemImage: "square.and.arrow.down")
                 }

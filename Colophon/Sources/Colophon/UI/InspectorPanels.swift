@@ -400,6 +400,10 @@ struct CheckInspector: View {
                         ProgressView().frame(maxWidth: .infinity)
                     }
                 }
+                PanelSection("Taste", trailing: TasteEngine.shared.isReady ? nil : AnyView(
+                    Button("Install") { model.installTaste() }.controlSize(.small))) {
+                    tasteBody
+                }
                 PanelSection("Checks") {
                     if model.preflight.isEmpty { ProgressView().frame(maxWidth: .infinity) }
                     ForEach(model.preflight) { issue in
@@ -421,6 +425,60 @@ struct CheckInspector: View {
         }
     }
 
+    @ViewBuilder private var tasteBody: some View {
+        let engine = TasteEngine.shared
+        switch engine.status {
+        case .notInstalled:
+            Text("A local CLIP model (OpenAI, open source, about 280 MB, downloaded once) reads the cover the way a browsing reader would: which genre it looks like, its mood, and whether it reads as professionally designed. Nothing leaves your Mac.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        case .downloading(let p):
+            ProgressView(value: p) { Text("Downloading the taste model… \(Int(p * 100))%").font(.system(size: 11)) }
+        case .installing:
+            ProgressView { Text("Compiling the model for this Mac…").font(.system(size: 11)) }
+        case .failed(let why):
+            Text("Couldn't install: \(why)").font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            Button("Try again") { model.installTaste() }.controlSize(.small)
+        case .ready:
+            if let t = model.taste {
+                HStack(spacing: 14) {
+                    tasteStat("Reads as pro", t.professionalism)
+                    if let a = t.aesthetic { tasteStat("Aesthetic", a) }
+                    tasteStat("Fits \(model.document.book.genre.label)", t.fitForBook)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(t.genreFit.prefix(4).enumerated()), id: \.offset) { _, g in
+                        HStack(spacing: 8) {
+                            Text(g.genre.label).font(.system(size: 11)).frame(width: 110, alignment: .leading)
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.primary.opacity(0.08))
+                                    Capsule().fill(g.genre == model.document.book.genre ? Color.accentColor : Color.secondary.opacity(0.6))
+                                        .frame(width: max(2, geo.size.width * g.score))
+                                }
+                            }
+                            .frame(height: 6)
+                            Text("\(Int(g.score * 100))%").font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
+                        }
+                    }
+                }
+                if !t.moodTags.isEmpty {
+                    Text("Reads as: " + t.moodTags.joined(separator: ", ")).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func tasteStat(_ label: String, _ value: Double) -> some View {
+        VStack(spacing: 2) {
+            Text("\(Int(value * 100))").font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(value >= 0.6 ? Color.green : value >= 0.4 ? Color.orange : Color.red)
+            Text(label).font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private func icon(_ s: Severity) -> some View {
         let (name, color): (String, Color) = {
             switch s {
@@ -439,6 +497,39 @@ struct CheckInspector: View {
 struct BookInspector: View {
     @Environment(EditorModel.self) private var model
 
+    /// What the title and lines give off, and the palettes and genre that suit it.
+    @ViewBuilder private var moodSection: some View {
+        let mood = model.briefMood
+        if !mood.tags.isEmpty {
+            PanelSection("Mood of the Brief") {
+                Text("Reads as " + mood.tags.joined(separator: ", ") + ".").font(.system(size: 12))
+                if let g = BriefMood.genreHint(for: mood), g != model.document.book.genre {
+                    HStack(spacing: 6) {
+                        Text("Sounds like \(g.label).").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Button("Set genre") { var b = model.document.book; b.genre = g; model.updateBook(b) }.buttonStyle(.link).font(.system(size: 11))
+                    }
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(BriefMood.palettes(for: mood).prefix(6).enumerated()), id: \.offset) { _, p in
+                            Button { model.applyPalette(p.colors, name: p.name) } label: {
+                                VStack(spacing: 3) {
+                                    HStack(spacing: 0) {
+                                        ForEach(Array(p.colors.enumerated()), id: \.offset) { _, c in Rectangle().fill(c.color) }
+                                    }
+                                    .frame(width: 64, height: 18).clipShape(RoundedRectangle(cornerRadius: 3))
+                                    Text(p.name).font(.system(size: 9)).lineLimit(1).frame(width: 64)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                Text("Palettes that suit the mood; click one to use it.").font(.system(size: 10.5)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     var body: some View {
         let book = model.bookBinding
         ScrollView {
@@ -455,6 +546,7 @@ struct BookInspector: View {
                     Text("Edits flow straight into the matching text on the cover.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
+                moodSection
                 PanelSection("Canvas") {
                     Text("\(model.document.canvas.width) x \(model.document.canvas.height) px").font(.system(size: 12, design: .monospaced))
                     HStack {
