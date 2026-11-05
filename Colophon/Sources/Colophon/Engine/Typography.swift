@@ -491,20 +491,97 @@ enum TextRenderer {
         return CGFloat((1 - cos(a * .pi / 2)) / (a * .pi))
     }
 
+    /// The path strength clamped to 0...1.
+    static func pathAmount(_ t: TextContent) -> CGFloat {
+        CGFloat(min(1, max(0, t.pathAmount)))
+    }
+
+    /// Wave and flag height above (and below) the straight baseline: amount x half a line.
+    static func waveAmplitude(_ t: TextContent, size: CGFloat) -> CGFloat {
+        pathAmount(t) * 0.5 * size * CGFloat(t.lineHeight)
+    }
+
+    /// Extra room the path needs above and below the straight block of lines (the arc's sag, a wave's
+    /// amplitude, the tops of scaled-up glyphs). The circle lays itself out in the box and needs none.
+    static func pathEnvelope(_ t: TextContent, _ m: Metrics) -> (above: CGFloat, below: CGFloat) {
+        let a = pathAmount(t)
+        let size = m.sizes.max() ?? m.fontSize
+        switch t.path {
+        case .none:
+            let sag = m.width * sagFactor(t.arc)
+            return (t.arc < 0 ? sag : 0, t.arc > 0 ? sag : 0)
+        case .circle, .pinch, .perspective:
+            return (0, 0)
+        case .wave:
+            let amp = waveAmplitude(t, size: size)
+            return (amp, amp)
+        case .flag:
+            let amp = waveAmplitude(t, size: size)
+            return (amp + 0.15 * a * m.top, amp + 0.05 * a * size)
+        case .bulge:
+            return (0.6 * a * m.top, 0)
+        case .rise, .fall:
+            return (a * m.top, a * size * 0.25)
+        }
+    }
+
+    /// How much wider (or narrower) a shaped line is than its straight setting, on average.
+    static func pathWidthFactor(_ t: TextContent) -> CGFloat {
+        let a = pathAmount(t)
+        switch t.path {
+        case .rise, .fall: return 1 + a / 2
+        case .perspective: return 1 - 0.2 * a
+        default: return 1
+        }
+    }
+
+    /// Length of the text along a circle: every line end to end with a word space between them.
+    static func circleLength(_ m: Metrics) -> CGFloat {
+        let widths = m.bounds.map(\.width)
+        let gap = m.fontSize * 0.3
+        return widths.reduce(0, +) + gap * CGFloat(max(0, widths.count - 1))
+    }
+
+    /// Radius of the baseline circle: the box's smaller side, less the glyph height, so the tops stay inside.
+    static func circleRadius(box: CGSize, glyphHeight: CGFloat) -> CGFloat {
+        max(1, min(box.width, box.height) / 2 - glyphHeight)
+    }
+
+    /// Size at which the text's length fits the allowed share of the circumference, bounded so the glyphs
+    /// are never taller than the radius.
+    private static func circleFittedSize(_ t: TextContent, box: CGSize, lengthPerUnit: CGFloat, heightPerUnit: CGFloat) -> CGFloat {
+        let h = min(box.width, box.height)
+        let amount = max(0.05, pathAmount(t))
+        let k = max(0.3, heightPerUnit)
+        // L * s = amount * 2pi * (h / 2 - k * s)
+        let circumferenceShare = amount * 2 * CGFloat.pi
+        let s1 = amount * CGFloat.pi * h / (lengthPerUnit + circumferenceShare * k)
+        let s2 = h / (4 * k)
+        return max(2, min(s1, s2) * 0.995)
+    }
+
     /// Size that makes the text exactly fill the box (glyph bounds scale linearly with size).
     /// With a canvas height the optical tracking at the final size is taken into account.
     static func fittedSize(_ t: TextContent, box: CGSize, canvasHeight: CGFloat = 0) -> CGFloat {
         let ref: CGFloat = 100
         let m = measure(t, size: ref, wrapWidth: nil)
         guard m.width > 0, m.height > 0 else { return max(2, box.height * 0.5) }
-        let sag = m.width * sagFactor(t.arc)
-        let size = max(2, min(box.width / m.width, box.height / (m.height + sag)) * ref * 0.995)
+        if t.path == .circle {
+            let size = circleFittedSize(t, box: box, lengthPerUnit: circleLength(m) / ref, heightPerUnit: m.top / ref)
+            guard canvasHeight > 0, t.opticalTracking else { return size }
+            let m2 = measure(t, size: size, wrapWidth: nil, canvasHeight: canvasHeight)
+            guard m2.width > 0 else { return size }
+            return circleFittedSize(t, box: box, lengthPerUnit: circleLength(m2) / size, heightPerUnit: m2.top / size)
+        }
+        let env = pathEnvelope(t, m)
+        let wf = pathWidthFactor(t)
+        let size = max(2, min(box.width / (m.width * wf), box.height / (m.height + env.above + env.below)) * ref * 0.995)
         guard canvasHeight > 0, t.opticalTracking else { return size }
         // Tracking changes the width but not the height, so one refinement pass settles it.
         let m2 = measure(t, size: size, wrapWidth: nil, canvasHeight: canvasHeight)
         guard m2.width > 0 else { return size }
-        let sag2 = m2.width * sagFactor(t.arc)
-        return max(2, min(box.width / m2.width, box.height / (m2.height + sag2)) * size * 0.995)
+        let env2 = pathEnvelope(t, m2)
+        return max(2, min(box.width / (m2.width * wf), box.height / (m2.height + env2.above + env2.below)) * size * 0.995)
     }
 
     static func resolvedSize(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> CGFloat {
@@ -518,7 +595,7 @@ enum TextRenderer {
     /// caps the spread at `blockRatioCap`, then shrinks the stack uniformly if it is taller than the box.
     static func resolvedSizes(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> [CGFloat] {
         let size = resolvedSize(t, box: box, canvasHeight: canvasHeight)
-        guard t.fit == .block else {
+        guard t.fit == .block, t.path != .circle else {
             let n = lineStrings(t, size: size, wrapWidth: t.autoFit ? nil : box.width, canvasHeight: canvasHeight).count
             return Array(repeating: size, count: max(1, n))
         }
@@ -540,7 +617,8 @@ enum TextRenderer {
         let cap = smallest * blockRatioCap
         sizes = sizes.map { $0 > 0 ? min($0, cap) : smallest }
         let m = measure(t, size: sizes.max() ?? size, wrapWidth: nil, canvasHeight: canvasHeight, sizes: sizes)
-        let total = m.height + m.width * sagFactor(t.arc)
+        let env = pathEnvelope(t, m)
+        let total = m.height + env.above + env.below
         if total > box.height, total > 0 {
             let k = box.height / total * 0.995
             sizes = sizes.map { max(2, $0 * k) }
@@ -606,8 +684,21 @@ enum TextRenderer {
         guard let maskCtx = Gfx.grayContext(W, H), let fillCtx = Gfx.context(W, H), let out = Gfx.context(W, H) else { return nil }
         let rect = CGRect(x: 0, y: 0, width: W, height: H)
 
-        let sag = m.width * sagFactor(t.arc)
-        let blockTop = pad + (box.height - (m.height + sag)) / 2 + (t.arc < 0 ? sag : 0)
+        let circle = t.path == .circle
+        let env = pathEnvelope(t, m)
+        let sag = env.above + env.below
+        let blockTop = circle ? pad : pad + (box.height - (m.height + sag)) / 2 + env.above
+        // Type on a circle: one baseline circle in the box, every line continuing where the last ended.
+        let circleCenter = CGPoint(x: pad + box.width / 2, y: CGFloat(H) - pad - box.height / 2)
+        let circleR = circleRadius(box: box, glyphHeight: m.top)
+        var circleStarts: [CGFloat] = []
+        var along: CGFloat = 0
+        for b in m.bounds {
+            circleStarts.append(along)
+            along += b.width + m.fontSize * 0.3
+        }
+        let circleSpan = circleLength(m) / circleR
+        let circleStart = CGFloat(t.pathPhase) * 2 * CGFloat.pi - circleSpan / 2
         var positions: [CGPoint] = []
         for (i, b) in m.bounds.enumerated() {
             let baselineFromTop = blockTop + m.baselineOffset(i)
@@ -621,43 +712,119 @@ enum TextRenderer {
             positions.append(CGPoint(x: x, y: CGFloat(H) - baselineFromTop))
         }
 
-        func drawLine(_ ctx: CGContext, _ i: Int) {
+        func drawArc(_ ctx: CGContext, _ i: Int) {
             let line = m.lines[i], pos = positions[i], b = m.bounds[i]
-            guard abs(t.arc) > 0.001, b.width > 1 else {
-                ctx.textPosition = pos
-                CTLineDraw(line, ctx)
-                return
-            }
             // Set each glyph on a circle so the line arches.
             let R = b.width / (CGFloat(abs(t.arc)) * .pi)
             let sgn: CGFloat = t.arc > 0 ? 1 : -1
             let cx = pos.x + b.minX + b.width / 2
             let center = CGPoint(x: cx, y: pos.y - sgn * R)
-            guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return }
-            for run in runs {
-                let count = CTRunGetGlyphCount(run)
-                guard count > 0 else { continue }
-                var glyphs = [CGGlyph](repeating: 0, count: count)
-                var points = [CGPoint](repeating: .zero, count: count)
-                var advances = [CGSize](repeating: .zero, count: count)
-                CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
-                CTRunGetPositions(run, CFRange(location: 0, length: 0), &points)
-                CTRunGetAdvances(run, CFRange(location: 0, length: 0), &advances)
-                let attrs = CTRunGetAttributes(run) as NSDictionary
-                guard let fontValue = attrs[kCTFontAttributeName as String] else { continue }
-                let font = fontValue as! CTFont
-                for g in 0..<count {
-                    let gx = pos.x + points[g].x + advances[g].width / 2
-                    let phi = (gx - cx) / R
-                    let p = CGPoint(x: center.x + R * sin(phi), y: center.y + sgn * R * cos(phi))
-                    ctx.saveGState()
-                    ctx.translateBy(x: p.x, y: p.y)
-                    ctx.rotate(by: -sgn * phi)
-                    var glyph = glyphs[g]
-                    var origin = CGPoint(x: -advances[g].width / 2, y: points[g].y)
-                    CTFontDrawGlyphs(font, &glyph, &origin, 1, ctx)
-                    ctx.restoreGState()
+            for g in runGlyphs(line) {
+                let gx = pos.x + g.x + g.advance / 2
+                let phi = (gx - cx) / R
+                let p = CGPoint(x: center.x + R * sin(phi), y: center.y + sgn * R * cos(phi))
+                ctx.saveGState()
+                ctx.translateBy(x: p.x, y: p.y)
+                ctx.rotate(by: -sgn * phi)
+                g.draw(ctx, at: CGPoint(x: -g.advance / 2, y: g.y))
+                ctx.restoreGState()
+            }
+        }
+        func drawCircle(_ ctx: CGContext, _ i: Int) {
+            let line = m.lines[i], b = m.bounds[i]
+            let theta0 = circleStart + circleStarts[i] / circleR
+            for g in runGlyphs(line) {
+                let theta = theta0 + (g.x + g.advance / 2 - b.minX) / circleR
+                let p = CGPoint(x: circleCenter.x + circleR * sin(theta), y: circleCenter.y + circleR * cos(theta))
+                ctx.saveGState()
+                ctx.translateBy(x: p.x, y: p.y)
+                ctx.rotate(by: -theta)
+                g.draw(ctx, at: CGPoint(x: -g.advance / 2, y: g.y))
+                ctx.restoreGState()
+            }
+        }
+        func drawWarped(_ ctx: CGContext, _ i: Int) {
+            let line = m.lines[i], pos = positions[i], b = m.bounds[i]
+            let glyphs = runGlyphs(line)
+            guard let first = glyphs.first, let last = glyphs.last else { return }
+            let size = m.lineSize(i)
+            let a = pathAmount(t)
+            let amp = waveAmplitude(t, size: size)
+            let w = max(1, b.width)
+            // Per-glyph shaping along the line (u runs 0...1 from the ink's left to its right).
+            var sx: [CGFloat] = [], sy: [CGFloat] = [], dy: [CGFloat] = [], rot: [CGFloat] = []
+            for g in glyphs {
+                let u = min(1, max(0, (g.x + g.advance / 2 - b.minX) / w))
+                let phase = 2 * CGFloat.pi * u
+                switch t.path {
+                case .wave:
+                    sx.append(1); sy.append(1)
+                    dy.append(amp * sin(phase))
+                    rot.append(atan(amp * 2 * CGFloat.pi / w * cos(phase)))
+                case .flag:
+                    let s = 1 + 0.15 * a * sin(phase)
+                    sx.append(s); sy.append(s)
+                    dy.append(amp * sin(phase))
+                    rot.append(atan(amp * 2 * CGFloat.pi / w * cos(phase)))
+                case .bulge:
+                    sx.append(1); sy.append(1 + 0.6 * a * cos(CGFloat.pi * (u - 0.5)))
+                    dy.append(0); rot.append(0)
+                case .pinch:
+                    sx.append(1); sy.append(1 - 0.5 * a * cos(CGFloat.pi * (u - 0.5)))
+                    dy.append(0); rot.append(0)
+                case .rise:
+                    let s = 1 + a * u
+                    sx.append(s); sy.append(s); dy.append(0); rot.append(0)
+                case .fall:
+                    let s = 1 + a * (1 - u)
+                    sx.append(s); sy.append(s); dy.append(0); rot.append(0)
+                case .perspective:
+                    let s = (1 - 0.4 * a) + 0.4 * a * u
+                    sx.append(s); sy.append(s); dy.append(0); rot.append(0)
+                case .none, .circle:
+                    sx.append(1); sy.append(1); dy.append(0); rot.append(0)
                 }
+            }
+            // Shaped x origins: each pen advance is scaled by its glyph, which keeps the kerning.
+            var xs: [CGFloat] = [0]
+            for j in 1..<glyphs.count {
+                let step = (glyphs[j].x - glyphs[j - 1].x) * sx[j - 1]
+                xs.append(xs[j - 1] + step)
+            }
+            let shapedWidth = (xs.last ?? 0) + last.advance * sx[sx.count - 1]
+            let straightWidth = last.x + last.advance - first.x
+            var startX = pos.x + first.x
+            switch t.alignment {
+            case .left: break
+            case .center: startX += (straightWidth - shapedWidth) / 2
+            case .right: startX += straightWidth - shapedWidth
+            }
+            // Perspective scales about the line's middle so both the tops and the bottoms recede.
+            let pivot: CGFloat = t.path == .perspective ? size * 0.35 : 0
+            for (j, g) in glyphs.enumerated() {
+                let cx = startX + xs[j] + g.advance * sx[j] / 2
+                ctx.saveGState()
+                ctx.translateBy(x: cx, y: pos.y + g.y + dy[j])
+                if rot[j] != 0 { ctx.rotate(by: rot[j]) }
+                ctx.translateBy(x: 0, y: pivot)
+                ctx.scaleBy(x: sx[j], y: sy[j])
+                ctx.translateBy(x: 0, y: -pivot)
+                g.draw(ctx, at: CGPoint(x: -g.advance / 2, y: 0))
+                ctx.restoreGState()
+            }
+        }
+        func drawLine(_ ctx: CGContext, _ i: Int) {
+            let line = m.lines[i], pos = positions[i], b = m.bounds[i]
+            let shaped = t.path != .none || abs(t.arc) > 0.001
+            guard shaped, b.width > 1 else {
+                ctx.textPosition = pos
+                CTLineDraw(line, ctx)
+                return
+            }
+            switch t.path {
+            case .none: drawArc(ctx, i)
+            case .circle: drawCircle(ctx, i)
+            default: drawWarped(ctx, i)
             }
         }
         func drawLines(_ ctx: CGContext) {
@@ -672,7 +839,7 @@ enum TextRenderer {
         guard let mask = maskCtx.makeImage() else { return nil }
 
         // Fill: flat, gradient, metal ramp or a hot neon core.
-        let topY = CGFloat(H) - blockTop, bottomY = topY - m.height - sag
+        let topY = CGFloat(H) - blockTop, bottomY = circle ? pad : topY - m.height - sag
         var stops: [RGBA]?
         if let metal = t.texture.metalStops {
             stops = metal
@@ -757,6 +924,43 @@ enum TextRenderer {
         out.draw(fill, in: rect)
         guard let img = out.makeImage() else { return nil }
         return (img, pad)
+    }
+
+    /// One glyph of a typeset line with its font, pen position and advance, for setting type glyph by glyph.
+    struct RunGlyph {
+        let font: CTFont
+        let glyph: CGGlyph
+        let x: CGFloat
+        let y: CGFloat
+        let advance: CGFloat
+
+        func draw(_ ctx: CGContext, at origin: CGPoint) {
+            var g = glyph
+            var o = origin
+            CTFontDrawGlyphs(font, &g, &o, 1, ctx)
+        }
+    }
+
+    static func runGlyphs(_ line: CTLine) -> [RunGlyph] {
+        var out: [RunGlyph] = []
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return out }
+        for run in runs {
+            let count = CTRunGetGlyphCount(run)
+            guard count > 0 else { continue }
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var points = [CGPoint](repeating: .zero, count: count)
+            var advances = [CGSize](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+            CTRunGetPositions(run, CFRange(location: 0, length: 0), &points)
+            CTRunGetAdvances(run, CFRange(location: 0, length: 0), &advances)
+            let attrs = CTRunGetAttributes(run) as NSDictionary
+            guard let fontValue = attrs[kCTFontAttributeName as String] else { continue }
+            let font = fontValue as! CTFont
+            for g in 0..<count {
+                out.append(RunGlyph(font: font, glyph: glyphs[g], x: points[g].x, y: points[g].y, advance: advances[g].width))
+            }
+        }
+        return out
     }
 
     /// Surface treatments applied to the filled type.
