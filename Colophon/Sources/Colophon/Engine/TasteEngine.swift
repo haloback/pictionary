@@ -211,11 +211,27 @@ final class TasteEngine {
             tokenizer = tok
             aestheticHead = TasteEngine.loadHead(aestheticURL)
             genreHead = TasteEngine.loadGenreHead(genreHeadURL)
+            if genreHead == nil { fetchGenreHeadLater() }
             return true
         } catch {
             let message: String = TasteEngine.message(for: error)
             setStatus(.failed(message))
             return false
+        }
+    }
+
+    /// Installs made before the trained head existed pick it up quietly in the background.
+    private func fetchGenreHeadLater() {
+        guard let remote = TasteEngine.url(for: TasteEngine.genreHeadAsset) else { return }
+        let dest = genreHeadURL
+        Task.detached(priority: .utility) { [weak self] in
+            let temp = dest.appendingPathExtension("part")
+            guard (try? TasteEngine.download(remote, to: temp, progress: { _ in })) != nil,
+                  ((try? Data(contentsOf: temp))?.count ?? 0) > 1000 else { try? FileManager.default.removeItem(at: temp); return }
+            try? FileManager.default.removeItem(at: dest)
+            try? FileManager.default.moveItem(at: temp, to: dest)
+            guard let self, let head = TasteEngine.loadGenreHead(dest) else { return }
+            self.lock.lock(); self.genreHead = head; self.lock.unlock()
         }
     }
 
