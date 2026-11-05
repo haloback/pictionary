@@ -72,6 +72,30 @@ enum BlendMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// The Core Image blend filter that performs this mode (source over for normal).
+    var ciFilterName: String {
+        switch self {
+        case .normal: return "CISourceOverCompositing"
+        case .multiply: return "CIMultiplyBlendMode"
+        case .screen: return "CIScreenBlendMode"
+        case .overlay: return "CIOverlayBlendMode"
+        case .softLight: return "CISoftLightBlendMode"
+        case .hardLight: return "CIHardLightBlendMode"
+        case .colorDodge: return "CIColorDodgeBlendMode"
+        case .colorBurn: return "CIColorBurnBlendMode"
+        case .darken: return "CIDarkenBlendMode"
+        case .lighten: return "CILightenBlendMode"
+        case .difference: return "CIDifferenceBlendMode"
+        case .exclusion: return "CIExclusionBlendMode"
+        case .hue: return "CIHueBlendMode"
+        case .saturation: return "CISaturationBlendMode"
+        case .color: return "CIColorBlendMode"
+        case .luminosity: return "CILuminosityBlendMode"
+        case .linearBurn: return "CILinearBurnBlendMode"
+        case .linearDodge: return "CILinearDodgeBlendMode"
+        }
+    }
+
     var label: String {
         switch self {
         case .softLight: return "Soft Light"
@@ -321,7 +345,7 @@ enum TextAlign: String, Codable, CaseIterable, Identifiable {
 }
 
 enum LetterCase: String, Codable, CaseIterable, Identifiable {
-    case asTyped, upper, lower, title
+    case asTyped, upper, lower, title, smallCaps
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -329,6 +353,19 @@ enum LetterCase: String, Codable, CaseIterable, Identifiable {
         case .upper: return "UPPERCASE"
         case .lower: return "lowercase"
         case .title: return "Title Case"
+        case .smallCaps: return "Small Caps"
+        }
+    }
+}
+
+/// How a multi-line text block is sized: one size for every line, or each line scaled to fill the width.
+enum TextFit: String, Codable, CaseIterable, Identifiable {
+    case uniform, block
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .uniform: return "Uniform"
+        case .block: return "Block (Justified Stack)"
         }
     }
 }
@@ -368,6 +405,10 @@ struct TextContent: Codable, Hashable {
     var flourishColor: RGBA?
     /// The gradient mixes like paint between its two colors.
     var paintMix: Bool = false
+    /// Block fit scales each line to fill the box width (the classic justified stack).
+    var fit: TextFit = .uniform
+    /// Tightens display sizes and opens small caps automatically (see `TextRenderer.effectiveTracking`).
+    var opticalTracking: Bool = true
 }
 
 extension TextContent {
@@ -396,6 +437,9 @@ extension TextContent {
         flourish = try c.decodeIfPresent(TextFlourish.self, forKey: .flourish) ?? .none
         flourishColor = try c.decodeIfPresent(RGBA.self, forKey: .flourishColor)
         paintMix = try c.decodeIfPresent(Bool.self, forKey: .paintMix) ?? false
+        fit = try c.decodeIfPresent(TextFit.self, forKey: .fit) ?? .uniform
+        // Saved covers keep their exact spacing: only new text gets the optical adjustment.
+        opticalTracking = try c.decodeIfPresent(Bool.self, forKey: .opticalTracking) ?? false
     }
 }
 
@@ -522,8 +566,46 @@ struct Adjustments: Codable, Hashable {
     var warmth: Double = 0
     var sharpness: Double = 0
     var blur: Double = 0
+    /// Shadows (-1...1): positive lifts the blacks, negative crushes them.
+    var lift: Double = 0
+    /// Mids (-1...1): positive brightens the midtones.
+    var gamma: Double = 0
+    /// Highlights (-1...1): scales the top of the range.
+    var gain: Double = 0
+    /// Split toning: a color multiplied into the shadows and one screened into the highlights.
+    var shadowTint: RGBA? = nil
+    var highlightTint: RGBA? = nil
+    var tintAmount: Double = 0.5
+    var vibrance: Double = 0
+    /// Matte lift of the blacks (0...1).
+    var fade: Double = 0
+    var grain: Double = 0
+    var vignette: Double = 0
 
     var isIdentity: Bool { self == Adjustments() }
+}
+
+extension Adjustments {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        exposure = try c.decodeIfPresent(Double.self, forKey: .exposure) ?? 0
+        contrast = try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 0
+        saturation = try c.decodeIfPresent(Double.self, forKey: .saturation) ?? 0
+        warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0
+        sharpness = try c.decodeIfPresent(Double.self, forKey: .sharpness) ?? 0
+        blur = try c.decodeIfPresent(Double.self, forKey: .blur) ?? 0
+        lift = try c.decodeIfPresent(Double.self, forKey: .lift) ?? 0
+        gamma = try c.decodeIfPresent(Double.self, forKey: .gamma) ?? 0
+        gain = try c.decodeIfPresent(Double.self, forKey: .gain) ?? 0
+        shadowTint = try c.decodeIfPresent(RGBA.self, forKey: .shadowTint)
+        highlightTint = try c.decodeIfPresent(RGBA.self, forKey: .highlightTint)
+        tintAmount = try c.decodeIfPresent(Double.self, forKey: .tintAmount) ?? 0.5
+        vibrance = try c.decodeIfPresent(Double.self, forKey: .vibrance) ?? 0
+        fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
+        grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
+        vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
+    }
 }
 
 struct Layer: Codable, Hashable, Identifiable {
@@ -546,6 +628,17 @@ struct Layer: Codable, Hashable, Identifiable {
     var mask = LayerMask()
     /// Clip to the layer directly below, like a clipping mask: a photo inside the title.
     var clipToBelow = false
+    /// Punch this layer's shape out of everything below it, showing the document background
+    /// (a title cut out of the photo).
+    var knockout = false
+    /// Perform this layer's blend in linear light instead of gamma-encoded sRGB.
+    var linearBlend = false
+    /// Map the layer's tones onto these colors, dark to light (2 to 4 stops: duotone, tritone...).
+    var gradientMap: [RGBA]?
+    /// Softens the layer's alpha edge (0...1), for cutouts and clipped photos.
+    var feather: Double = 0
+    /// An inner shadow on the layer's alpha: the pressed, letterpress look.
+    var innerShadow: ShadowStyle?
 
     init(id: UUID = UUID(), name: String, content: LayerContent, frame: NRect = .full) {
         self.id = id
@@ -573,6 +666,11 @@ struct Layer: Codable, Hashable, Identifiable {
         adjust = try c.decodeIfPresent(Adjustments.self, forKey: .adjust) ?? Adjustments()
         mask = try c.decodeIfPresent(LayerMask.self, forKey: .mask) ?? LayerMask()
         clipToBelow = try c.decodeIfPresent(Bool.self, forKey: .clipToBelow) ?? false
+        knockout = try c.decodeIfPresent(Bool.self, forKey: .knockout) ?? false
+        linearBlend = try c.decodeIfPresent(Bool.self, forKey: .linearBlend) ?? false
+        gradientMap = try c.decodeIfPresent([RGBA].self, forKey: .gradientMap)
+        feather = try c.decodeIfPresent(Double.self, forKey: .feather) ?? 0
+        innerShadow = try c.decodeIfPresent(ShadowStyle.self, forKey: .innerShadow)
     }
 
     var textContent: TextContent? {

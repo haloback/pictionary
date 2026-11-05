@@ -369,6 +369,37 @@ struct CheckInspector: View {
                         .background(Color.white, in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
+                PanelSection("Design Score", trailing: model.critique == nil ? nil : AnyView(
+                    Menu("Fix") {
+                        Button("Fix colors, lifts and backings") { model.autoRepair(moveType: false) }
+                        Button("Fix everything, including moving type") { model.autoRepair(moveType: true) }
+                    }.controlSize(.small).fixedSize())) {
+                    if let c = model.critique {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\(Int(c.score))").font(.system(size: 30, weight: .bold, design: .rounded))
+                                .foregroundStyle(c.score >= 84 ? Color.green : c.score >= 68 ? Color.orange : Color.red)
+                            Text(c.grade).font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(c.issues.isEmpty ? "Nothing to fix" : "\(c.issues.count) note\(c.issues.count == 1 ? "" : "s")")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Text("Measured like an art director would: contrast under every line, collisions, trim, faces, thumbnail size.")
+                            .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        ForEach(c.issues) { issue in
+                            HStack(alignment: .top, spacing: 9) {
+                                icon(issue.severity)
+                                Text(issue.message).font(.system(size: 11)).fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 4)
+                                if let id = issue.layerID, model.document.layer(id) != nil {
+                                    Button("Select") { model.selection = id }.buttonStyle(.link).font(.system(size: 11))
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                }
                 PanelSection("Checks") {
                     if model.preflight.isEmpty { ProgressView().frame(maxWidth: .infinity) }
                     ForEach(model.preflight) { issue in

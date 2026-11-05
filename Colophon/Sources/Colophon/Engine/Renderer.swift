@@ -32,6 +32,9 @@ final class CoverRenderer {
         var fadeAmount: Double
         var quality: Int
         var cutout: Cutout?
+        var gradientMap: [RGBA]?
+        var feather: Double
+        var innerShadow: ShadowStyle?
     }
 
     private var cache: [RasterKey: LayerRaster] = [:]
@@ -69,7 +72,14 @@ final class CoverRenderer {
                     r.image = blended
                 }
             }
-            composite(r, layer: layer, in: ctx, canvas: canvas)
+            if layer.knockout {
+                // Punch the layer's shape out of the canvas; the background returns underneath at the end.
+                composite(r, layer: layer, in: ctx, canvas: canvas, blendOverride: .destinationOut)
+            } else if layer.linearBlend, layer.blend != .normal, let soFar = ctx.makeImage() {
+                compositeLinear(r, layer: layer, below: soFar, in: ctx, canvas: canvas)
+            } else {
+                composite(r, layer: layer, in: ctx, canvas: canvas)
+            }
             // A clipped layer clips to the same base as the layer it sits on.
             if !layer.clipToBelow { below = ownRaster }
 
@@ -84,7 +94,44 @@ final class CoverRenderer {
                 }
             }
         }
+        // Knockouts leave holes; the background shows through them and the export stays opaque.
+        ctx.saveGState()
+        ctx.setBlendMode(.destinationOver)
+        ctx.setFillColor(doc.background.withAlpha(1).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: W, height: H))
+        ctx.restoreGState()
         return ctx.makeImage()
+    }
+
+    /// Blends a layer in linear light: the layer (with its rotation and drop shadow) is drawn
+    /// alone onto a transparent canvas, blended over the snapshot of the cover so far in
+    /// `Compositor`, and the result copied back over the region it touched.
+    private func compositeLinear(_ r: LayerRaster, layer: Layer, below: CGImage, in ctx: CGContext, canvas: CGSize) {
+        let W = Int(canvas.width), H = Int(canvas.height)
+        guard let top = Gfx.context(W, H) else {
+            composite(r, layer: layer, in: ctx, canvas: canvas)
+            return
+        }
+        top.translateBy(x: 0, y: CGFloat(H))
+        top.scaleBy(x: 1, y: -1)
+        var plain = layer
+        plain.opacity = 1
+        plain.blend = .normal
+        composite(r, layer: plain, in: top, canvas: canvas)
+        let canvasRect = CGRect(x: 0, y: 0, width: canvas.width, height: canvas.height)
+        // Rotation and shadows spill past the raster's rect; compute the whole canvas then.
+        let region = (layer.rotation != 0 || layer.shadow != nil) ? canvasRect : r.rect.integral.intersection(canvasRect)
+        guard let topImage = top.makeImage(),
+              let blended = Compositor.blendLinear(topImage, over: below, mode: layer.blend, opacity: layer.opacity.clamped01,
+                                                   in: region, canvas: canvas) else {
+            composite(r, layer: layer, in: ctx, canvas: canvas)
+            return
+        }
+        let target = region.integral.intersection(canvasRect)
+        ctx.saveGState()
+        ctx.setBlendMode(.copy)
+        Gfx.drawUpright(blended, in: target, ctx)
+        ctx.restoreGState()
     }
 
     /// The part of the cover under a raster, padded with transparency where it runs off the edge.
@@ -99,11 +146,12 @@ final class CoverRenderer {
         return ctx.makeImage()
     }
 
-    private func composite(_ r: LayerRaster, layer: Layer, in ctx: CGContext, canvas: CGSize) {
+    private func composite(_ r: LayerRaster, layer: Layer, in ctx: CGContext, canvas: CGSize, blendOverride: CGBlendMode? = nil) {
         ctx.saveGState()
         ctx.setAlpha(CGFloat(layer.opacity.clamped01))
-        ctx.setBlendMode(layer.blend.cg)
-        if let s = layer.shadow {
+        ctx.setBlendMode(blendOverride ?? layer.blend.cg)
+        // A knockout erases; its drop shadow would only erase more.
+        if let s = layer.shadow, blendOverride == nil {
             ctx.setShadow(offset: CGSize(width: s.dx * canvas.height, height: -s.dy * canvas.height),
                           blur: s.radius * canvas.height, color: s.color.cgColor)
         }
@@ -122,7 +170,8 @@ final class CoverRenderer {
         let w = max(1, Int(frame.width.rounded())), h = max(1, Int(frame.height.rounded()))
         let key = RasterKey(content: layer.content, w: w, h: h, canvasW: Int(canvas.width), canvasH: Int(canvas.height),
                             effects: layer.effects, adjust: layer.adjust, mask: layer.mask, clip: layer.clipShape, fade: layer.fade, fadeAmount: layer.fadeAmount,
-                            quality: quality.rawValue, cutout: cutoutOverride)
+                            quality: quality.rawValue, cutout: cutoutOverride,
+                            gradientMap: layer.gradientMap, feather: layer.feather, innerShadow: layer.innerShadow)
         lock.lock()
         if let hit = cache[key] {
             lock.unlock()
@@ -159,6 +208,9 @@ final class CoverRenderer {
         if !layer.effects.isEmpty {
             img = applyEffects(layer.effects, to: img, canvas: canvas, seed: Int(layer.id.uuid.0) << 8 | Int(layer.id.uuid.1), palette: doc.palette) ?? img
         }
+        if let stops = layer.gradientMap, !stops.isEmpty {
+            img = gradientMapImage(img, stops: stops) ?? img
+        }
         if let clip = layer.clipShape {
             img = clipImage(img, to: clip, pad: pad) ?? img
         }
@@ -167,6 +219,12 @@ final class CoverRenderer {
         }
         if layer.mask.gradient != .none || layer.mask.keepDarks > 0 || layer.mask.keepLights > 0 || layer.mask.textureID != nil {
             img = Masking.applyLocal(layer.mask, to: img) ?? img
+        }
+        if layer.feather > 0 {
+            img = featherImage(img, amount: layer.feather) ?? img
+        }
+        if let s = layer.innerShadow {
+            img = innerShadowImage(img, style: s, canvas: canvas) ?? img
         }
 
         let raster = LayerRaster(image: img, rect: CGRect(x: frame.minX - pad, y: frame.minY - pad,
@@ -227,12 +285,49 @@ final class CoverRenderer {
         var ci = original
         let scale = canvas.height / 1000
         if a.exposure != 0 { ci = ci.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure * 1.5]) }
+        // Lift / gamma / gain work on gamma-encoded values so "shadows" and "highlights" mean what they say.
+        if a.lift != 0 || a.gamma != 0 || a.gain != 0 {
+            var t = FX.toPerceptual(ci)
+            let lift = (a.lift * 0.3).clamped(-0.3, 0.3)
+            let gainScale = 1 + (a.gain * 0.3).clamped(-0.3, 0.3)
+            if lift != 0 || gainScale != 1 {
+                // out = lift + (1 - lift) * gain * in: lift raises the blacks, gain scales the whites.
+                let a1 = (1 - lift) * gainScale
+                t = t.applyingFilter("CIColorPolynomial", parameters: [
+                    "inputRedCoefficients": CIVector(x: lift, y: a1, z: 0, w: 0),
+                    "inputGreenCoefficients": CIVector(x: lift, y: a1, z: 0, w: 0),
+                    "inputBlueCoefficients": CIVector(x: lift, y: a1, z: 0, w: 0),
+                    "inputAlphaCoefficients": CIVector(x: 0, y: 1, z: 0, w: 0)
+                ])
+            }
+            if a.gamma != 0 {
+                t = t.applyingFilter("CIGammaAdjust", parameters: ["inputPower": pow(2, -a.gamma.clamped(-1, 1))])
+            }
+            ci = FX.fromPerceptual(t)
+        }
         if a.contrast != 0 || a.saturation != 0 {
             ci = FX.controls(ci, saturation: 1 + a.saturation, contrast: 1 + a.contrast * 0.5)
+        }
+        if a.vibrance != 0 {
+            ci = ci.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance.clamped(-1, 1)])
         }
         if a.warmth != 0 {
             let w = a.warmth * 0.12
             ci = FX.matrix(ci, r: (1 + w, 0, 0), g: (0, 1 + w * 0.2, 0), b: (0, 0, 1 - w))
+        }
+        if (a.shadowTint != nil || a.highlightTint != nil) && a.tintAmount > 0 {
+            ci = splitTone(ci, shadows: a.shadowTint, highlights: a.highlightTint, amount: a.tintAmount.clamped01)
+        }
+        if a.fade > 0 {
+            // Matte look: the blacks come up to a soft gray while the whites stay put.
+            let f = a.fade.clamped01 * 0.2
+            let t = FX.toPerceptual(ci).applyingFilter("CIColorPolynomial", parameters: [
+                "inputRedCoefficients": CIVector(x: f, y: 1 - f, z: 0, w: 0),
+                "inputGreenCoefficients": CIVector(x: f, y: 1 - f, z: 0, w: 0),
+                "inputBlueCoefficients": CIVector(x: f, y: 1 - f, z: 0, w: 0),
+                "inputAlphaCoefficients": CIVector(x: 0, y: 1, z: 0, w: 0)
+            ])
+            ci = FX.fromPerceptual(t)
         }
         if a.sharpness > 0 {
             ci = ci.applyingFilter("CISharpenLuminance", parameters: ["inputSharpness": a.sharpness * 1.5])
@@ -240,8 +335,80 @@ final class CoverRenderer {
             ci = FX.blur(ci, CGFloat(-a.sharpness) * 2 * scale)
         }
         if a.blur > 0 { ci = FX.blur(ci, CGFloat(a.blur) * 30 * scale) }
+        if a.grain > 0 {
+            let size = max(1, 1.4 * scale)
+            ci = FX.grain(ci, seed: 23, strength: a.grain.clamped01 * 0.18, size: size)
+        }
+        if a.vignette > 0 {
+            ci = FX.vignette(ci, intensity: a.vignette.clamped01 * 1.4, radiusFactor: 0.8)
+        }
         ci = ci.cropped(to: original.extent).applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: original])
         return Gfx.render(ci, extent: original.extent)
+    }
+
+    /// Multiplies a color into the darks and screens another into the lights, each through a luminance mask.
+    private func splitTone(_ ci: CIImage, shadows: RGBA?, highlights: RGBA?, amount: Double) -> CIImage {
+        let extent = ci.extent
+        // Perceptual luminance so mid-gray lands mid-mask.
+        let lum = FX.toPerceptual(FX.mono(ci)).settingAlphaOne(in: extent)
+        var out = ci
+        if let s = shadows {
+            let shadowMask = FX.matrix(lum, r: (-amount, 0, 0), g: (0, -amount, 0), b: (0, 0, -amount), bias: (amount, amount, amount))
+            let tinted = FX.blend(FX.solid(s, extent), over: ci, mode: "CIMultiplyBlendMode")
+            out = FX.blendWithMask(tinted, over: out, mask: shadowMask)
+        }
+        if let h = highlights {
+            let highlightMask = FX.matrix(lum, r: (amount, 0, 0), g: (0, amount, 0), b: (0, 0, amount))
+            let tinted = FX.blend(FX.solid(h, extent), over: out, mode: "CIScreenBlendMode")
+            out = FX.blendWithMask(tinted, over: out, mask: highlightMask)
+        }
+        return out.cropped(to: extent)
+    }
+
+    /// Maps the layer's luminance onto `stops` (dark to light), keeping its transparency.
+    private func gradientMapImage(_ img: CGImage, stops: [RGBA]) -> CGImage? {
+        let original = CIImage(cgImage: img)
+        let cols = Array(stops.prefix(4))
+        var ci = FX.gradientMap(original, cols.count == 1 ? [cols[0], cols[0]] : cols)
+        ci = ci.cropped(to: original.extent).applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: original])
+        return Gfx.render(ci, extent: original.extent)
+    }
+
+    /// Softens the alpha edge: the alpha is blurred (without clamping, so the raster's own
+    /// border softens too) and intersected with the original so nothing spreads outward.
+    private func featherImage(_ img: CGImage, amount: Double) -> CGImage? {
+        let original = CIImage(cgImage: img)
+        let ext = original.extent
+        let sigma = Double(amount.clamped01) * Double(min(ext.width, ext.height)) * 0.08
+        guard sigma > 0.05 else { return nil }
+        let soft = original.applyingGaussianBlur(sigma: sigma).cropped(to: ext)
+        let out = original.applyingFilter("CIBlendWithAlphaMask", parameters: [
+            kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: soft
+        ])
+        return Gfx.render(out, extent: ext)
+    }
+
+    /// Inner shadow: the inverted alpha is offset and blurred, kept only where the layer is
+    /// opaque, and that region is darkened with the shadow color.
+    private func innerShadowImage(_ img: CGImage, style s: ShadowStyle, canvas: CGSize) -> CGImage? {
+        let original = CIImage(cgImage: img)
+        let ext = original.extent
+        let blur = CGFloat(s.radius) * canvas.height
+        let dx = CGFloat(s.dx) * canvas.height
+        // Core Image's y runs up; a positive dy in the model runs down.
+        let dy = -CGFloat(s.dy) * canvas.height
+        let pad = blur * 3 + abs(dx) + abs(dy) + 2
+        // Outside the raster counts as outside the shape, so edges of full-frame layers shade too.
+        let big = ext.insetBy(dx: -pad, dy: -pad)
+        var inverted = FX.solid(.white, big).applyingFilter("CISourceOutCompositing", parameters: [kCIInputBackgroundImageKey: original])
+        inverted = inverted.transformed(by: CGAffineTransform(translationX: dx, y: dy))
+        if blur > 0.05 { inverted = inverted.applyingGaussianBlur(sigma: Double(blur)) }
+        let shadowMask = inverted.cropped(to: ext).applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: original])
+        let shadow = FX.solid(s.color, ext).applyingFilter("CIBlendWithAlphaMask", parameters: [
+            kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: shadowMask
+        ])
+        let out = shadow.applyingFilter("CISourceOverCompositing", parameters: [kCIInputBackgroundImageKey: original]).cropped(to: ext)
+        return Gfx.render(out, extent: ext)
     }
 
     private func clipImage(_ img: CGImage, to kind: ShapeKind, pad: CGFloat) -> CGImage? {

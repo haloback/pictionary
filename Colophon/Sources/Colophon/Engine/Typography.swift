@@ -131,6 +131,9 @@ enum FontCatalog {
 
 /// Splits a title into lines a designer would choose: balanced, never leaving a lonely short word.
 enum TitleBreaker {
+    /// Words a line should not end on ("the", "of"...): the reader expects what follows on the same line.
+    static let connectives: Set<String> = ["the", "of", "a", "an", "and", "in", "to", "for", "or", "at", "on", "by", "with"]
+
     static func balanced(_ title: String, lines n: Int) -> String {
         let words = title.split(separator: " ").map(String.init)
         guard n > 1, words.count > 1 else { return words.joined(separator: " ") }
@@ -143,6 +146,52 @@ enum TitleBreaker {
                 let lens = candidate.map { Double($0.joined(separator: " ").count) }
                 // Penalize the longest line, and short trailing lines (widows).
                 let score = lens.max()! * 2 + (lens.max()! - lens.min()!) + (lens.last! < 4 ? 6 : 0)
+                if score < bestScore { bestScore = score; best = candidate }
+                return
+            }
+            guard start < words.count - remaining + 1 else { return }
+            for end in (start + 1)...(words.count - remaining + 1) {
+                search(end, remaining - 1, acc + [Array(words[start..<end])])
+            }
+        }
+        search(0, lines, [])
+        return best.map { $0.joined(separator: " ") }.joined(separator: "\n")
+    }
+
+    static func isConnective(_ word: String) -> Bool {
+        let clean = word.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        return connectives.contains(clean)
+    }
+
+    /// Letters in a word, ignoring quotes and punctuation.
+    static func letterCount(_ word: String) -> Int {
+        word.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+    }
+
+    /// Balanced breaking scored by real measured widths. Lines never end on a connective and the last
+    /// line is never one short word, unless every split would have to.
+    static func balanced(_ title: String, lines n: Int, measure: (String) -> Double) -> String {
+        let words = title.split(separator: " ").map(String.init)
+        guard n > 1, words.count > 1 else { return words.joined(separator: " ") }
+        let lines = min(n, words.count)
+        var best: [[String]] = [words]
+        var bestScore = Double.greatestFiniteMagnitude
+        var widthCache: [String: Double] = [:]
+        func width(_ s: String) -> Double {
+            if let w = widthCache[s] { return w }
+            let w = max(0, measure(s))
+            widthCache[s] = w
+            return w
+        }
+        func search(_ start: Int, _ remaining: Int, _ acc: [[String]]) {
+            if remaining == 1 {
+                let candidate = acc + [Array(words[start...])]
+                let widths = candidate.map { width($0.joined(separator: " ")) }
+                let longest = widths.max()!, shortest = widths.min()!
+                var score = longest * 2 + (longest - shortest)
+                // A line ending on "the" or "of" reads as a mistake: push it out unless nothing else works.
+                for line in candidate.dropLast() where isConnective(line.last!) { score += longest * 2 }
+                if let last = candidate.last, last.count == 1, letterCount(last[0]) < 4 { score += longest * 0.4 }
                 if score < bestScore { bestScore = score; best = candidate }
                 return
             }
@@ -175,71 +224,264 @@ enum TextRenderer {
     struct Metrics {
         var lines: [CTLine]
         var bounds: [CGRect]
+        /// Baseline-to-baseline distance at the uniform size.
         var advance: CGFloat
         var width: CGFloat
         var height: CGFloat
         var top: CGFloat
         var fontSize: CGFloat
+        /// Each line's own size (all equal unless the text uses block fit).
+        var sizes: [CGFloat] = []
+        /// Each line's baseline measured down from the top of the block.
+        var baselines: [CGFloat] = []
+        /// Horizontal shift per line that hangs leading/trailing punctuation outside the text edge.
+        var hang: [CGFloat] = []
+
+        func lineSize(_ line: Int) -> CGFloat { line < sizes.count ? sizes[line] : fontSize }
+        func baselineOffset(_ line: Int) -> CGFloat { line < baselines.count ? baselines[line] : top + CGFloat(line) * advance }
+        func hangOffset(_ line: Int) -> CGFloat { line < hang.count ? hang[line] : 0 }
+    }
+
+    static func applyCase(_ s: String, _ c: LetterCase) -> String {
+        switch c {
+        case .asTyped, .smallCaps: return s
+        case .upper: return s.uppercased()
+        case .lower: return s.lowercased()
+        case .title: return s.capitalized
+        }
     }
 
     static func displayString(_ t: TextContent) -> String {
-        switch t.letterCase {
-        case .asTyped: return t.text
-        case .upper: return t.text.uppercased()
-        case .lower: return t.text.lowercased()
-        case .title: return t.text.capitalized
+        applyCase(t.text, t.letterCase)
+    }
+
+    // MARK: - Tracking
+
+    /// Tracking in ems after the optical adjustment: display sizes tighten, small caps open up.
+    /// `canvasHeight` 0 means no adjustment.
+    static func effectiveTracking(_ t: TextContent, size: CGFloat, canvasHeight: CGFloat) -> Double {
+        guard t.opticalTracking, canvasHeight > 0, size > 0 else { return t.tracking }
+        let cap = CTFontGetCapHeight(FontCatalog.ctFont(t.fontName, size: size))
+        let ratio = Double(cap / canvasHeight)
+        var adjustment = 0.0
+        if ratio >= 0.14 {
+            adjustment = -0.025
+        } else if ratio >= 0.09 {
+            adjustment = -0.015
+        } else if ratio <= 0.016, t.letterCase == .upper || t.letterCase == .smallCaps {
+            adjustment = 0.03
+        }
+        let lowest = min(t.tracking, -0.06)
+        return max(lowest, t.tracking + adjustment)
+    }
+
+    // MARK: - Small caps
+
+    private static let smallCapsLock = NSLock()
+    private static var smallCapsSupport: [String: Bool] = [:]
+    /// Synthesized small caps draw converted lowercase letters at this share of the size.
+    static let synthesizedSmallCapScale: CGFloat = 0.78
+
+    private static func firstGlyph(_ s: String, _ font: CTFont) -> CGGlyph {
+        let attr = NSAttributedString(string: s, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        let line = CTLineCreateWithAttributedString(attr)
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun], let run = runs.first, CTRunGetGlyphCount(run) > 0 else { return 0 }
+        var glyph: CGGlyph = 0
+        CTRunGetGlyphs(run, CFRange(location: 0, length: 1), &glyph)
+        return glyph
+    }
+
+    /// The font with its small-caps feature switched on, or nil when the face has no such feature.
+    static func nativeSmallCapsFont(_ name: String, size: CGFloat) -> CTFont? {
+        let base = FontCatalog.ctFont(name, size: size)
+        let feature: [String: Any] = [
+            kCTFontFeatureTypeIdentifierKey as String: kLowerCaseType,
+            kCTFontFeatureSelectorIdentifierKey as String: kLowerCaseSmallCapsSelector
+        ]
+        let attrs: [String: Any] = [kCTFontFeatureSettingsAttribute as String: [feature]]
+        let descriptor = CTFontDescriptorCreateWithAttributes(attrs as CFDictionary)
+        let font = CTFontCreateCopyWithAttributes(base, size, nil, descriptor)
+        smallCapsLock.lock()
+        defer { smallCapsLock.unlock() }
+        if let known = smallCapsSupport[name] { return known ? font : nil }
+        // The feature only counts if it changes the glyph a lowercase letter shapes to.
+        let supported = firstGlyph("a", font) != firstGlyph("a", base)
+        smallCapsSupport[name] = supported
+        return supported ? font : nil
+    }
+
+    static func hasNativeSmallCaps(_ name: String) -> Bool {
+        nativeSmallCapsFont(name, size: 24) != nil
+    }
+
+    private static func attributes(_ font: CTFont, kern: Double) -> [NSAttributedString.Key: Any] {
+        [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTKernAttributeName as String): NSNumber(value: kern),
+            NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): NSNumber(value: true)
+        ]
+    }
+
+    /// Small caps built by hand: lowercase letters become capitals at a reduced size, kerning kept.
+    private static func synthesizedSmallCaps(_ s: String, _ t: TextContent, size: CGFloat, tracking: Double) -> NSAttributedString {
+        let fullFont = FontCatalog.ctFont(t.fontName, size: size)
+        let smallSize = size * synthesizedSmallCapScale
+        let smallFont = FontCatalog.ctFont(t.fontName, size: smallSize)
+        let out = NSMutableAttributedString()
+        var run = ""
+        var runIsSmall = false
+        func flush() {
+            guard !run.isEmpty else { return }
+            if runIsSmall {
+                out.append(NSAttributedString(string: run.uppercased(), attributes: attributes(smallFont, kern: tracking * Double(smallSize))))
+            } else {
+                out.append(NSAttributedString(string: run, attributes: attributes(fullFont, kern: tracking * Double(size))))
+            }
+            run = ""
+        }
+        for ch in s {
+            let small = ch.isLowercase
+            if small != runIsSmall { flush(); runIsSmall = small }
+            run.append(ch)
+        }
+        flush()
+        if out.length == 0 {
+            out.append(NSAttributedString(string: " ", attributes: attributes(fullFont, kern: tracking * Double(size))))
+        }
+        return out
+    }
+
+    static func attributed(_ s: String, _ t: TextContent, size: CGFloat, canvasHeight: CGFloat = 0) -> NSAttributedString {
+        let tracking = effectiveTracking(t, size: size, canvasHeight: canvasHeight)
+        if t.letterCase == .smallCaps {
+            if let font = nativeSmallCapsFont(t.fontName, size: size) {
+                return NSAttributedString(string: s, attributes: attributes(font, kern: tracking * Double(size)))
+            }
+            return synthesizedSmallCaps(s, t, size: size, tracking: tracking)
+        }
+        let font = FontCatalog.ctFont(t.fontName, size: size)
+        return NSAttributedString(string: s, attributes: attributes(font, kern: tracking * Double(size)))
+    }
+
+    static func lineWidth(_ s: String, _ t: TextContent, _ size: CGFloat, canvasHeight: CGFloat = 0) -> CGFloat {
+        let line = CTLineCreateWithAttributedString(attributed(s, t, size: size, canvasHeight: canvasHeight))
+        let b = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        return b.isNull || b.isInfinite ? 0 : b.width
+    }
+
+    // MARK: - Hanging punctuation
+
+    private static let openers: Set<Character> = ["\u{201C}", "\"", "\u{2018}", "'"]
+    private static let closers: Set<Character> = ["\u{201D}", "\"", "\u{2019}", "'", ".", ","]
+
+    /// Advance of the punctuation that opens and closes the line, from the same attributed string.
+    static func hangingAdvances(_ s: String, _ attr: NSAttributedString) -> (leading: CGFloat, trailing: CGFloat) {
+        guard attr.length > 0, let first = s.first, let last = s.last else { return (0, 0) }
+        func advance(_ range: NSRange) -> CGFloat {
+            guard range.location >= 0, range.location + range.length <= attr.length else { return 0 }
+            let sub = attr.attributedSubstring(from: range)
+            let line = CTLineCreateWithAttributedString(sub)
+            return CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+        }
+        var leading: CGFloat = 0, trailing: CGFloat = 0
+        if openers.contains(first) {
+            leading = advance(NSRange(location: 0, length: String(first).utf16.count))
+        }
+        if closers.contains(last), s.count > 1 {
+            let n = String(last).utf16.count
+            trailing = advance(NSRange(location: attr.length - n, length: n))
+        }
+        return (leading, trailing)
+    }
+
+    /// Horizontal shift that hangs the line's punctuation outside the measured text edge.
+    static func hangShift(_ s: String, _ attr: NSAttributedString, alignment: TextAlign) -> CGFloat {
+        let (leading, trailing) = hangingAdvances(s, attr)
+        switch alignment {
+        case .left: return -leading
+        case .center: return (trailing - leading) / 2
+        case .right: return trailing
         }
     }
 
-    static func attributed(_ s: String, _ t: TextContent, size: CGFloat) -> NSAttributedString {
-        let font = FontCatalog.ctFont(t.fontName, size: size)
-        return NSAttributedString(string: s, attributes: [
-            NSAttributedString.Key(kCTFontAttributeName as String): font,
-            NSAttributedString.Key(kCTKernAttributeName as String): NSNumber(value: t.tracking * Double(size)),
-            NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): NSNumber(value: true)
-        ])
-    }
+    // MARK: - Wrapping and measuring
 
-    private static func lineWidth(_ s: String, _ t: TextContent, _ size: CGFloat) -> CGFloat {
-        let line = CTLineCreateWithAttributedString(attributed(s, t, size: size))
-        return CTLineGetBoundsWithOptions(line, .useGlyphPathBounds).width
-    }
-
-    static func measure(_ t: TextContent, size: CGFloat, wrapWidth: CGFloat?) -> Metrics {
-        let text = displayString(t)
-        var lineStrings: [String] = []
-        for para in text.components(separatedBy: "\n") {
-            guard let wrap = wrapWidth, wrap > 0 else { lineStrings.append(para); continue }
-            var current = ""
-            for word in para.split(separator: " ", omittingEmptySubsequences: true) {
-                let w = String(word)
-                let candidate = current.isEmpty ? w : current + " " + w
-                if !current.isEmpty && lineWidth(candidate, t, size) > wrap {
-                    lineStrings.append(current)
-                    current = w
-                } else {
-                    current = candidate
-                }
+    /// Greedy wrap of a paragraph, then a widow pass: a lone short last word pulls the word above it down.
+    static func wrap(_ para: String, _ t: TextContent, size: CGFloat, width wrap: CGFloat, canvasHeight: CGFloat = 0) -> [String] {
+        var lines: [String] = []
+        var current = ""
+        for word in para.split(separator: " ", omittingEmptySubsequences: true) {
+            let w = String(word)
+            let candidate = current.isEmpty ? w : current + " " + w
+            if !current.isEmpty && lineWidth(candidate, t, size, canvasHeight: canvasHeight) > wrap {
+                lines.append(current)
+                current = w
+            } else {
+                current = candidate
             }
-            lineStrings.append(current)
+        }
+        lines.append(current)
+        guard lines.count >= 2, let last = lines.last else { return lines }
+        let lastWords = last.split(separator: " ")
+        var prevWords = lines[lines.count - 2].split(separator: " ").map(String.init)
+        if lastWords.count == 1, TitleBreaker.letterCount(last) <= 5, prevWords.count >= 3 {
+            let moved = prevWords.removeLast()
+            let newLast = moved + " " + last
+            if lineWidth(newLast, t, size, canvasHeight: canvasHeight) <= wrap {
+                lines[lines.count - 2] = prevWords.joined(separator: " ")
+                lines[lines.count - 1] = newLast
+            }
+        }
+        return lines
+    }
+
+    /// Lines the text sets as: explicit breaks, wrapped to `wrapWidth` when given.
+    static func lineStrings(_ t: TextContent, size: CGFloat, wrapWidth: CGFloat?, canvasHeight: CGFloat = 0) -> [String] {
+        var out: [String] = []
+        for para in displayString(t).components(separatedBy: "\n") {
+            guard let w = wrapWidth, w > 0 else { out.append(para); continue }
+            out.append(contentsOf: wrap(para, t, size: size, width: w, canvasHeight: canvasHeight))
+        }
+        return out
+    }
+
+    /// Typesets the text. `sizes` gives each line its own size (block fit); otherwise every line uses `size`.
+    static func measure(_ t: TextContent, size: CGFloat, wrapWidth: CGFloat?, canvasHeight: CGFloat = 0, sizes: [CGFloat]? = nil) -> Metrics {
+        let strings = lineStrings(t, size: size, wrapWidth: wrapWidth, canvasHeight: canvasHeight)
+        var lineSizes: [CGFloat] = []
+        if let sizes, sizes.count == strings.count {
+            lineSizes = sizes.map { max(1, $0) }
+        } else {
+            lineSizes = Array(repeating: size, count: strings.count)
         }
         var lines: [CTLine] = []
         var bounds: [CGRect] = []
-        for s in lineStrings {
-            let line = CTLineCreateWithAttributedString(attributed(s.isEmpty ? " " : s, t, size: size))
+        var hang: [CGFloat] = []
+        for (i, s) in strings.enumerated() {
+            let attr = attributed(s.isEmpty ? " " : s, t, size: lineSizes[i], canvasHeight: canvasHeight)
+            let line = CTLineCreateWithAttributedString(attr)
             lines.append(line)
             var b = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
             if s.trimmingCharacters(in: .whitespaces).isEmpty || b.isNull || b.isInfinite { b = .zero }
             bounds.append(b)
+            hang.append(b.width > 0 ? hangShift(s, attr, alignment: t.alignment) : 0)
         }
         let advance = size * CGFloat(t.lineHeight)
         let width = bounds.map(\.width).max() ?? 0
-        let font = FontCatalog.ctFont(t.fontName, size: size)
+        let font = FontCatalog.ctFont(t.fontName, size: lineSizes.first ?? size)
         let first = bounds.first ?? .zero, last = bounds.last ?? .zero
         let top = first.height > 0 ? first.maxY : CTFontGetCapHeight(font)
         let bottom = last.height > 0 ? last.minY : 0
-        let height = CGFloat(max(0, lines.count - 1)) * advance + top - bottom
-        return Metrics(lines: lines, bounds: bounds, advance: advance, width: width, height: max(1, height), top: top, fontSize: size)
+        // Each line advances by its own size, so a smaller line sits closer under the one above.
+        var baselines: [CGFloat] = []
+        var y = top
+        for (i, s) in lineSizes.enumerated() {
+            if i > 0 { y += s * CGFloat(t.lineHeight) }
+            baselines.append(y)
+        }
+        let height = (baselines.last ?? top) - bottom
+        return Metrics(lines: lines, bounds: bounds, advance: advance, width: width, height: max(1, height), top: top,
+                       fontSize: size, sizes: lineSizes, baselines: baselines, hang: hang)
     }
 
     /// How far an arched line bends beyond its straight height, per unit of line width.
@@ -250,16 +492,84 @@ enum TextRenderer {
     }
 
     /// Size that makes the text exactly fill the box (glyph bounds scale linearly with size).
-    static func fittedSize(_ t: TextContent, box: CGSize) -> CGFloat {
+    /// With a canvas height the optical tracking at the final size is taken into account.
+    static func fittedSize(_ t: TextContent, box: CGSize, canvasHeight: CGFloat = 0) -> CGFloat {
         let ref: CGFloat = 100
         let m = measure(t, size: ref, wrapWidth: nil)
         guard m.width > 0, m.height > 0 else { return max(2, box.height * 0.5) }
         let sag = m.width * sagFactor(t.arc)
-        return max(2, min(box.width / m.width, box.height / (m.height + sag)) * ref * 0.995)
+        let size = max(2, min(box.width / m.width, box.height / (m.height + sag)) * ref * 0.995)
+        guard canvasHeight > 0, t.opticalTracking else { return size }
+        // Tracking changes the width but not the height, so one refinement pass settles it.
+        let m2 = measure(t, size: size, wrapWidth: nil, canvasHeight: canvasHeight)
+        guard m2.width > 0 else { return size }
+        let sag2 = m2.width * sagFactor(t.arc)
+        return max(2, min(box.width / m2.width, box.height / (m2.height + sag2)) * size * 0.995)
     }
 
     static func resolvedSize(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> CGFloat {
-        t.autoFit ? fittedSize(t, box: box) : max(2, CGFloat(t.fontSize) * canvasHeight)
+        t.autoFit ? fittedSize(t, box: box, canvasHeight: canvasHeight) : max(2, CGFloat(t.fontSize) * canvasHeight)
+    }
+
+    /// Largest ratio allowed between the biggest and smallest line in a block-fitted stack.
+    static let blockRatioCap: CGFloat = 2.4
+
+    /// One size per line. Uniform fit repeats the resolved size; block fit scales each line to the box width,
+    /// caps the spread at `blockRatioCap`, then shrinks the stack uniformly if it is taller than the box.
+    static func resolvedSizes(_ t: TextContent, box: CGSize, canvasHeight: CGFloat) -> [CGFloat] {
+        let size = resolvedSize(t, box: box, canvasHeight: canvasHeight)
+        guard t.fit == .block else {
+            let n = lineStrings(t, size: size, wrapWidth: t.autoFit ? nil : box.width, canvasHeight: canvasHeight).count
+            return Array(repeating: size, count: max(1, n))
+        }
+        let strings = lineStrings(t, size: size, wrapWidth: nil)
+        guard box.width > 0, box.height > 0 else { return Array(repeating: size, count: max(1, strings.count)) }
+        let ref: CGFloat = 100
+        var sizes: [CGFloat] = []
+        for s in strings {
+            let w0 = lineWidth(s, t, ref)
+            guard w0 > 0 else { sizes.append(0); continue }
+            var fitted = box.width / w0 * ref
+            // Optical tracking depends on the size, so measure once more at the size it produced.
+            let w1 = lineWidth(s, t, fitted, canvasHeight: canvasHeight)
+            if w1 > 0 { fitted = fitted * box.width / w1 }
+            sizes.append(max(2, fitted * 0.995))
+        }
+        let positive = sizes.filter { $0 > 0 }
+        guard let smallest = positive.min() else { return Array(repeating: size, count: max(1, strings.count)) }
+        let cap = smallest * blockRatioCap
+        sizes = sizes.map { $0 > 0 ? min($0, cap) : smallest }
+        let m = measure(t, size: sizes.max() ?? size, wrapWidth: nil, canvasHeight: canvasHeight, sizes: sizes)
+        let total = m.height + m.width * sagFactor(t.arc)
+        if total > box.height, total > 0 {
+            let k = box.height / total * 0.995
+            sizes = sizes.map { max(2, $0 * k) }
+        }
+        return sizes
+    }
+
+    /// Best line breaks for a title measured with its real font: tries 1...maxLines lines and keeps the
+    /// layout that sets largest in the box with lines within 1.9x of each other.
+    static func bestBreaks(_ t: TextContent, box: CGSize, maxLines: Int = 4) -> String {
+        let flat = t.text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        let words = flat.split(separator: " ").map(String.init)
+        guard words.count > 1, box.width > 0, box.height > 0 else { return flat }
+        let measureLine: (String) -> Double = { Double(lineWidth(applyCase($0, t.letterCase), t, 100)) }
+        var candidates: [(text: String, size: CGFloat, ratio: Double)] = []
+        for n in 1...max(1, min(maxLines, words.count)) {
+            let text = n == 1 ? words.joined(separator: " ") : TitleBreaker.balanced(flat, lines: n, measure: measureLine)
+            if candidates.contains(where: { $0.text == text }) { continue }
+            var probe = t
+            probe.text = text
+            probe.fit = .uniform
+            let size = fittedSize(probe, box: box)
+            let widths = text.components(separatedBy: "\n").map(measureLine).filter { $0 > 0 }
+            let ratio = (widths.max() ?? 1) / max(1, widths.min() ?? 1)
+            candidates.append((text, size, ratio))
+        }
+        let balancedOnes = candidates.filter { $0.ratio <= 1.9 }
+        let pool = balancedOnes.isEmpty ? candidates : balancedOnes
+        return pool.max(by: { $0.size < $1.size })?.text ?? flat
     }
 
     private static func seed(_ s: String) -> Int {
@@ -271,15 +581,27 @@ enum TextRenderer {
         guard box.width >= 1, box.height >= 1 else { return nil }
         // Decorations need room beside or around the type, so it fits a smaller box.
         let fitBox = CGSize(width: box.width * t.flourish.textWidthShare, height: box.height * t.flourish.textHeightShare)
-        let size = resolvedSize(t, box: fitBox, canvasHeight: canvasHeight)
-        let m = measure(t, size: size, wrapWidth: t.autoFit ? nil : fitBox.width)
+        let m: Metrics
+        let size: CGFloat
+        if t.fit == .block {
+            let sizes = resolvedSizes(t, box: fitBox, canvasHeight: canvasHeight)
+            size = sizes.reduce(0, +) / CGFloat(max(1, sizes.count))
+            m = measure(t, size: max(2, size), wrapWidth: nil, canvasHeight: canvasHeight, sizes: sizes)
+        } else {
+            size = resolvedSize(t, box: fitBox, canvasHeight: canvasHeight)
+            m = measure(t, size: size, wrapWidth: t.autoFit ? nil : fitBox.width, canvasHeight: canvasHeight)
+        }
+        let padSize = m.sizes.max() ?? size
         let neon = t.texture == .neon
         let glowColor: RGBA? = neon ? t.color : t.glowColor
         let glowRadius = neon ? max(t.glowRadius, 0.35) : t.glowRadius
         var pad: CGFloat = 2
-        if glowColor != nil { pad += size * CGFloat(glowRadius) * 1.6 }
-        if t.strokeColor != nil { pad += size * CGFloat(t.strokeWidth) * 2 }
-        if t.style.isActive { pad += size * CGFloat(t.style.paddingFactor) }
+        if glowColor != nil { pad += padSize * CGFloat(glowRadius) * 1.6 }
+        if t.strokeColor != nil { pad += padSize * CGFloat(t.strokeWidth) * 2 }
+        if t.style.isActive { pad += padSize * CGFloat(t.style.paddingFactor) }
+        // Hanging punctuation reaches past the box edge.
+        let maxHang = m.hang.map { abs($0) }.max() ?? 0
+        if maxHang > 0 { pad += ceil(maxHang) }
         let W = Int(ceil(box.width + 2 * pad)), H = Int(ceil(box.height + 2 * pad))
         guard let maskCtx = Gfx.grayContext(W, H), let fillCtx = Gfx.context(W, H), let out = Gfx.context(W, H) else { return nil }
         let rect = CGRect(x: 0, y: 0, width: W, height: H)
@@ -288,13 +610,14 @@ enum TextRenderer {
         let blockTop = pad + (box.height - (m.height + sag)) / 2 + (t.arc < 0 ? sag : 0)
         var positions: [CGPoint] = []
         for (i, b) in m.bounds.enumerated() {
-            let baselineFromTop = blockTop + m.top + CGFloat(i) * m.advance
-            let x: CGFloat
+            let baselineFromTop = blockTop + m.baselineOffset(i)
+            var x: CGFloat
             switch t.alignment {
             case .left: x = pad - b.minX
             case .center: x = pad + (box.width - b.width) / 2 - b.minX
             case .right: x = pad + box.width - b.width - b.minX
             }
+            x += m.hangOffset(i)
             positions.append(CGPoint(x: x, y: CGFloat(H) - baselineFromTop))
         }
 
