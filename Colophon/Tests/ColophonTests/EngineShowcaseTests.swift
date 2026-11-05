@@ -79,7 +79,7 @@ extension SampleRenderTests {
             if let portrait { _ = d.addAsset(portrait) }
             let photos = d.assetOrder
             if let p = photos.first { d.layers.append(Layer.image(p, frame: .full)) }
-            else { d.layers.append(Layer.fill(.splatter, colors: [RGBA(hex: "5A5A5A"), RGBA(hex: "B0B0B0"), RGBA(hex: "202020")], frame: .full, seed: 9, intensity: 0.9)) }
+            else { d.layers.append(Layer.fill(.halftone, colors: [RGBA(hex: "5A5A5A"), RGBA(hex: "B0B0B0"), RGBA(hex: "202020")], frame: .full, seed: 9, intensity: 0.9)) }
             d.layers.append(Layer.text("NO ONE\nLEAVES", role: .title, frame: NRect(0.08, 0.2, 0.84, 0.3), font: "Anton-Regular", color: RGBA(hex: "8A8A8A")))
             d.layers.append(Layer.text("Mara Kellen", role: .author, frame: NRect(0.1, 0.4, 0.8, 0.05), font: "BebasNeue-Regular", color: RGBA(hex: "9A9A9A")))
             d.layers.append(Layer.text("Some doors only open one way", role: .tagline, frame: NRect(0.1, 0.44, 0.8, 0.025), font: "Montserrat-Black", color: RGBA(hex: "A0A0A0")))
