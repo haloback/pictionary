@@ -44,6 +44,8 @@ struct TemplateBrowserSheet: View {
     @State private var tags: Set<String> = []
     @State private var mine = false
     @State private var pendingDelete: UserTemplate?
+    @State private var recommended: [TemplateRecommender.Pick] = []
+    @State private var recommendedFor = ""
     private var store: UserTemplateStore { .shared }
 
     private var hasPhoto: Bool { !model.document.photoLayers.isEmpty || !model.document.assetOrder.isEmpty }
@@ -111,6 +113,44 @@ struct TemplateBrowserSheet: View {
                 myTemplates
             } else {
             ScrollView {
+                if query.isEmpty && tags.isEmpty && (genre == nil || genre == base.book.genre) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+                            Text("Recommended for “\(base.book.title.isEmpty ? "your book" : base.book.title)”").font(.system(size: 12, weight: .semibold))
+                            Text(recommended.isEmpty ? "judging designs with your title and photo…" : "the designs that score highest with your words and pictures")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(alignment: .top, spacing: 14) {
+                                if recommended.isEmpty { ProgressView().controlSize(.small).padding(.vertical, 40) }
+                                ForEach(recommended) { pick in
+                                    TemplateTile(template: pick.template, base: base, signature: sig, current: base.templateID == pick.template.id) {
+                                        model.applyTemplate(pick.template)
+                                        dismiss()
+                                    }
+                                    .frame(width: 128)
+                                    .overlay(alignment: .topTrailing) {
+                                        Text("\(Int(pick.score))").font(.system(size: 9.5, weight: .bold, design: .rounded))
+                                            .padding(.horizontal, 5).padding(.vertical, 2)
+                                            .background(Color.black.opacity(0.6), in: Capsule()).foregroundStyle(.white).padding(5)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                        }
+                        Divider().padding(.horizontal, 14)
+                    }
+                    .padding(.top, 10)
+                    .task(id: sig + "|" + base.book.genre.rawValue) {
+                        let key = sig + "|" + base.book.genre.rawValue
+                        if recommendedFor == key { return }
+                        let snapshot = base
+                        let picks = await Task.detached(priority: .userInitiated) { TemplateRecommender.rank(for: snapshot) }.value
+                        recommended = picks
+                        recommendedFor = key
+                    }
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 14)], spacing: 16) {
                     ForEach(results.prefix(limit)) { t in
                         TemplateTile(template: t, base: base, signature: sig, current: base.templateID == t.id) {

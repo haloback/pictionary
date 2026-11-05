@@ -11,13 +11,13 @@ enum Polisher {
                                            quality: .preview, excluding: textIDs)
     }
 
-    static func polish(_ doc: inout CoverDocument, palette: PaletteRoles? = nil) {
-        guard let bg = backgroundSample(doc) else { return }
+    static func polish(_ doc: inout CoverDocument, palette: PaletteRoles? = nil, background: CGImage? = nil) {
+        guard let bg = background ?? backgroundSample(doc) else { return }
         let p = palette ?? PaletteRoles(doc.palette)
         var insertions: [(Int, Layer)] = []
 
         for (i, layer) in doc.layers.enumerated() {
-            guard var t = layer.textContent else { continue }
+            guard var t = layer.textContent, layer.isVisible, layer.opacity >= 0.5 else { continue }
             let stats = PixelSampler.stats(bg, region: layer.frame)
             let need = t.role.minimumContrast
             let onDark = stats.mean.luminance < 0.36

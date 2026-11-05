@@ -261,6 +261,8 @@ enum SignatureLibrary {
                 doc.layers.append(l)
             }
         }
+        // The safety net: anything the design leaves hard to read gets a better color, a lift or a backing.
+        Critic.repair(&doc, geometry: false, palette: PaletteRoles(p.colors))
         return doc
     }
 

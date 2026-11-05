@@ -69,13 +69,23 @@ enum SmartRandomizer {
             return sig
         }
         let old = currentRecipe(doc)
-        var best = old
-        for _ in 0..<12 {
+        // Several fresh recipes, built and judged; the best-scoring one wins. Like a designer
+        // sketching a few directions and keeping the strongest.
+        var candidates: [CoverDocument] = []
+        var tried = Set<Int>()
+        var attempts = 0
+        while candidates.count < 3 && attempts < 14 {
+            attempts += 1
             let r = roll(old, doc: doc, options: options, rng: &rng)
-            best = r
-            if !recent.contains(r.signature) && r.signature != old.signature { break }
+            if tried.contains(r.signature) { continue }
+            if (recent.contains(r.signature) || r.signature == old.signature) && attempts < 12 { continue }
+            tried.insert(r.signature)
+            var out = TemplateLibrary.build(r, base: doc)
+            restoreLockedLayers(from: doc, into: &out)
+            candidates.append(out)
         }
-        var out = TemplateLibrary.build(best, base: doc)
+        if let w = Critic.best(candidates) { return w.0 }
+        var out = TemplateLibrary.build(old, base: doc)
         restoreLockedLayers(from: doc, into: &out)
         return out
     }

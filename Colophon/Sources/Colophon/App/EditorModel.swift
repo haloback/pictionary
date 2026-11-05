@@ -98,6 +98,8 @@ final class EditorModel {
     var targetStoreID = "kdp"
     var preflight: [PreflightIssue] = []
     var suggestions: [Suggestion] = []
+    /// The art director's score for the cover as it stands.
+    var critique: CriticReport?
     var insightBackground: CGImage?
     var isAnalyzing = false
 
@@ -243,15 +245,17 @@ final class EditorModel {
             let full = CoverRenderer.shared.render(doc, size: CGSize(width: 200, height: (200 * doc.canvas.aspect).rounded()), quality: .preview)
             let issues = Preflight.run(doc, spec: spec, background: bg, full: full)
             let ideas = SuggestionEngine.suggestions(for: doc, background: bg)
+            let verdict = Critic.review(doc, background: bg)
             if Task.isCancelled { return }
-            await self?.setInsights(issues, ideas, bg)
+            await self?.setInsights(issues, ideas, bg, verdict)
         }
     }
 
-    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?) {
+    private func setInsights(_ issues: [PreflightIssue], _ ideas: [Suggestion], _ bg: CGImage?, _ verdict: CriticReport) {
         preflight = issues
         suggestions = ideas
         insightBackground = bg
+        critique = verdict
     }
 
     func refreshEffectBase() {
@@ -674,6 +678,15 @@ final class EditorModel {
         let p = PaletteRoles(document.palette)
         mutate { d in Polisher.polish(&d, palette: p) }
         toast = "Polished type color, shadows and scrims"
+    }
+
+    /// Lets the critic fix everything it measured: colors, lifts, backings, and type moved off faces, collisions and the trim.
+    func autoRepair(moveType: Bool = true) {
+        let p = PaletteRoles(document.palette)
+        var report = CriticReport.perfect
+        mutate { d in report = Critic.repair(&d, geometry: moveType, palette: p) }
+        critique = report
+        toast = "Design score \(Int(report.score)) (\(report.grade))"
     }
 
     func reextractPalette() {

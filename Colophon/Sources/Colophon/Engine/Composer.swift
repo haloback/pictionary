@@ -128,7 +128,7 @@ enum CoverComposer {
                 if preset.category != "Light" && preset.category != "Genre" { t.color = keepColor }
                 doc.layers[ti].textContent = t
             }
-            Polisher.polish(&doc, palette: palette)
+            Critic.repair(&doc, geometry: true, palette: palette)
             docs.append(doc)
         }
         return docs
@@ -185,7 +185,7 @@ enum CoverComposer {
             if preset.category != "Light" && preset.category != "Genre" { t.color = keepColor }
             doc.layers[ti].textContent = t
         }
-        Polisher.polish(&doc, palette: palette)
+        Critic.repair(&doc, geometry: true, palette: palette)
         return doc
     }
 
