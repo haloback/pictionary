@@ -46,6 +46,43 @@ enum VisionServices {
         return Gfx.render(out, extent: src.extent)
     }
 
+    /// Where eyes go first: Vision's attention map as a heat image (transparent where nothing draws the eye,
+    /// warm where it does), plus the normalized map itself (row-major, top-left) for measurements.
+    static func attention(for image: CGImage) -> (heat: CGImage, map: [Float], width: Int, height: Int)? {
+        let request = VNGenerateAttentionBasedSaliencyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        do {
+            try handler.perform([request])
+            guard let obs = request.results?.first else { return nil }
+            let pb = obs.pixelBuffer
+            CVPixelBufferLockBaseAddress(pb, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
+            let w = CVPixelBufferGetWidth(pb), h = CVPixelBufferGetHeight(pb)
+            let stride = CVPixelBufferGetBytesPerRow(pb) / MemoryLayout<Float>.size
+            guard let base = CVPixelBufferGetBaseAddress(pb)?.assumingMemoryBound(to: Float.self) else { return nil }
+            var map = [Float](repeating: 0, count: w * h)
+            var peak: Float = 1e-6
+            for y in 0..<h { for x in 0..<w { let v = base[y * stride + x]; map[y * w + x] = v; peak = max(peak, v) } }
+            for i in map.indices { map[i] /= peak }
+            var rgba = [UInt8](repeating: 0, count: w * h * 4)
+            for i in 0..<(w * h) {
+                let v = map[i]
+                // Cool to warm: faint blue, then orange, then yellow-white at the peak.
+                let r = min(1, v * 1.6), g = max(0, v - 0.35) * 1.4, b = max(0, 0.5 - v) * 0.9
+                let a = v * v * 0.9
+                rgba[i * 4] = UInt8(min(255, r * 255)); rgba[i * 4 + 1] = UInt8(min(255, g * 255))
+                rgba[i * 4 + 2] = UInt8(min(255, b * 255)); rgba[i * 4 + 3] = UInt8(min(255, a * 255))
+            }
+            guard let provider = CGDataProvider(data: Data(rgba) as CFData),
+                  let heat = CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4, space: Gfx.sRGB,
+                                     bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue), provider: provider,
+                                     decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+            return (heat, map, w, h)
+        } catch {
+            return nil
+        }
+    }
+
     /// Union of salient objects, normalized with a top-left origin.
     static func saliency(for image: CGImage) -> NRect? {
         let request = VNGenerateAttentionBasedSaliencyImageRequest()

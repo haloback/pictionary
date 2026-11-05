@@ -66,6 +66,8 @@ final class TasteEngine {
     static let textAsset: String = "clip-vit-b32-text.mlpackage.zip"
     static let tokenizerAsset: String = "clip-tokenizer.zip"
     static let aestheticAsset: String = "aesthetic-vit-b32.json"
+    /// Optional: a head trained on real covers; when present, genre fit uses it instead of zero-shot prompts.
+    static let genreHeadAsset: String = "genre-head-vit-b32.json"
     static let manifestAsset: String = "manifest.json"
     static let imageSide: Int = 224
     static let contextLength: Int = 77
@@ -130,6 +132,7 @@ final class TasteEngine {
     @ObservationIgnored private var textModel: MLModel?
     @ObservationIgnored private var tokenizer: ClipTokenizer?
     @ObservationIgnored private var aestheticHead: (weight: [Float], bias: Float)?
+    @ObservationIgnored private var genreHead: (genres: [Genre], weight: [[Float]], bias: [Float])?
     @ObservationIgnored private var loadAttempted: Bool = false
     @ObservationIgnored private var inFlight: Task<Void, Error>?
 
@@ -177,6 +180,9 @@ final class TasteEngine {
     private var compiledTextURL: URL { modelsDirectory.appendingPathComponent("clip-vit-b32-text.mlmodelc", isDirectory: true) }
     private var tokenizerURL: URL { modelsDirectory.appendingPathComponent("clip-tokenizer", isDirectory: true) }
     private var aestheticURL: URL { modelsDirectory.appendingPathComponent(TasteEngine.aestheticAsset) }
+    private var genreHeadURL: URL { modelsDirectory.appendingPathComponent(TasteEngine.genreHeadAsset) }
+    /// Whether genre fit comes from the head trained on real covers.
+    var usesTrainedGenreHead: Bool { genreHead != nil }
     private var downloadsURL: URL { modelsDirectory.appendingPathComponent("Downloads", isDirectory: true) }
 
     private static func installed(in dir: URL) -> Bool {
@@ -204,12 +210,33 @@ final class TasteEngine {
             textModel = text
             tokenizer = tok
             aestheticHead = TasteEngine.loadHead(aestheticURL)
+            genreHead = TasteEngine.loadGenreHead(genreHeadURL)
             return true
         } catch {
             let message: String = TasteEngine.message(for: error)
             setStatus(.failed(message))
             return false
         }
+    }
+
+    /// The trained genre head: rows of 512 weights per genre, in the file's genre order.
+    private static func loadGenreHead(_ url: URL) -> (genres: [Genre], weight: [[Float]], bias: [Float])? {
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data, options: []),
+              let root = json as? [String: Any],
+              let names = root["genres"] as? [String],
+              let rows = root["weight"] as? [[NSNumber]],
+              let biases = root["bias"] as? [NSNumber], rows.count == names.count, biases.count == names.count else { return nil }
+        var genres: [Genre] = []
+        var weight: [[Float]] = []
+        var bias: [Float] = []
+        for (i, n) in names.enumerated() {
+            guard let g = Genre(rawValue: n), rows[i].count == 512 else { continue }
+            genres.append(g)
+            weight.append(rows[i].map { $0.floatValue })
+            bias.append(biases[i].floatValue)
+        }
+        return genres.count >= 6 ? (genres, weight, bias) : nil
     }
 
     private static func loadHead(_ url: URL) -> (weight: [Float], bias: Float)? {
@@ -367,6 +394,14 @@ final class TasteEngine {
         try replace(at: compiledText, with: compiledTextTemp)
         try replace(at: tokenizerDest, with: tokenizerFolder)
         try replace(at: aestheticDest, with: downloads.appendingPathComponent(aestheticAsset))
+        // The trained genre head is optional: absent from older releases, and nothing breaks without it.
+        if let headURL = url(for: genreHeadAsset) {
+            let headTemp: URL = downloads.appendingPathComponent(genreHeadAsset)
+            if (try? download(headURL, to: headTemp, progress: { _ in })) != nil, fm.fileExists(atPath: headTemp.path),
+               ((try? Data(contentsOf: headTemp))?.count ?? 0) > 1000 {
+                try? replace(at: dir.appendingPathComponent(genreHeadAsset), with: headTemp)
+            }
+        }
         let manifestSource: URL = downloads.appendingPathComponent(manifestAsset)
         if fm.fileExists(atPath: manifestSource.path) {
             try? replace(at: dir.appendingPathComponent(manifestAsset), with: manifestSource)
@@ -762,6 +797,22 @@ final class TasteEngine {
     private func genreFit(embedding img: [Float]) -> [(genre: Genre, score: Double)]? {
         var genres: [Genre] = []
         var logits: [Double] = []
+        if let head = genreHead {
+            // Learned from real covers: a straight linear read of the embedding.
+            for (i, g) in head.genres.enumerated() {
+                var z: Float = head.bias[i]
+                let w = head.weight[i]
+                for k in 0..<min(w.count, img.count) { z += w[k] * img[k] }
+                genres.append(g)
+                logits.append(Double(z))
+            }
+            for g in Genre.allCases where !genres.contains(g) { genres.append(g); logits.append((logits.min() ?? 0) - 2) }
+            let probs: [Double] = TasteEngine.softmax(logits)
+            var out: [(genre: Genre, score: Double)] = []
+            for (i, g) in genres.enumerated() { out.append((genre: g, score: probs[i])) }
+            out.sort { $0.score > $1.score }
+            return out
+        }
         for g in Genre.allCases {
             guard let t = genreEmbedding(g) else { return nil }
             genres.append(g)

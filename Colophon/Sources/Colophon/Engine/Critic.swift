@@ -4,7 +4,7 @@ import Foundation
 /// What the critic found wrong (or right) with one part of a cover.
 struct CriticIssue: Identifiable {
     enum Kind: String {
-        case legibility, busyGround, collision, margin, prominence, thumbnail, face, hierarchy, photoText, photo
+        case legibility, busyGround, collision, margin, prominence, thumbnail, face, hierarchy, photoText, photo, attention
     }
     let id = UUID()
     let kind: Kind
@@ -178,6 +178,32 @@ enum Critic {
             }
         }
 
+        // Where readers look first: the title should own a fair share of the attention, or at least the peak.
+        if let title = doc.textLayer(role: .title), title.isVisible, let full = renderedForAttention(doc),
+           let att = VisionServices.attention(for: full) {
+            var inside: Float = 0, total: Float = 0
+            var peakV: Float = -1, peakX = 0, peakY = 0
+            for y in 0..<att.height {
+                for x in 0..<att.width {
+                    let v = att.map[y * att.width + x]
+                    total += v
+                    let nx = (Double(x) + 0.5) / Double(att.width), ny = (Double(y) + 0.5) / Double(att.height)
+                    if title.frame.insetBy(dx: -0.04, dy: -0.04).contains(nx, ny) { inside += v }
+                    if v > peakV { peakV = v; peakX = x; peakY = y }
+                }
+            }
+            let share = total > 0 ? Double(inside / total) : 1
+            let px = (Double(peakX) + 0.5) / Double(att.width), py = (Double(peakY) + 0.5) / Double(att.height)
+            let peakOnTitle = title.frame.insetBy(dx: -0.04, dy: -0.04).contains(px, py)
+            if !peakOnTitle && share < 0.3 {
+                let row = py < 0.33 ? "top" : py < 0.66 ? "middle" : "bottom"
+                let col = px < 0.33 ? "left" : px < 0.66 ? "center" : "right"
+                issues.append(CriticIssue(kind: .attention, severity: .info, layerID: title.id,
+                                          message: "Readers' eyes land \(row) \(col), not on the title (it draws \(Int(share * 100))% of the attention).",
+                                          penalty: 4))
+            }
+        }
+
         // Hierarchy: the author outranking the title is a deliberate brand-name move, otherwise a flaw.
         if let title = doc.textLayer(role: .title), let author = doc.textLayer(role: .author),
            let tt = title.textContent, let at = author.textContent {
@@ -199,6 +225,12 @@ enum Critic {
         if t.style.isActive && TemplateLibrary.darkFaces.contains(t.style.surface) { return RGBA(0.24, 0.21, 0.18) }
         if t.texture.metalStops != nil || (t.style.isActive && t.style.surface != .none) { return t.color.mixed(with: RGBA(0.5, 0.5, 0.5), 0.3) }
         return t.color
+    }
+
+    /// The whole cover, small, for the attention model.
+    static func renderedForAttention(_ doc: CoverDocument) -> CGImage? {
+        let h: CGFloat = 384
+        return CoverRenderer.shared.render(doc, size: CGSize(width: (h / CGFloat(doc.canvas.aspect)).rounded(), height: h), quality: .preview)
     }
 
     private static func hasBacking(_ doc: CoverDocument, under text: Layer) -> Bool {
