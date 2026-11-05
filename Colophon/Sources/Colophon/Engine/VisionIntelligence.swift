@@ -26,7 +26,7 @@ enum VisionIntelligence {
 
     /// Bounding boxes of printed text, normalized with a top-left origin. Fast recognition, no
     /// language correction: we only need to know where the words are, not what they say.
-    static func textRegions(_ image: CGImage, minimumConfidence: Float = 0.3) -> [NRect] {
+    static func textRegions(_ image: CGImage, minimumConfidence: Float = 0.5) -> [NRect] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .fast
         request.usesLanguageCorrection = false
@@ -36,8 +36,12 @@ enum VisionIntelligence {
             guard let results = request.results else { return [] }
             var rects: [NRect] = []
             for obs in results where obs.confidence >= minimumConfidence {
+                // Fast recognition sees "words" in noise and gradients; real words have letters and some confidence.
+                guard let top = obs.topCandidates(1).first, top.confidence >= minimumConfidence else { continue }
+                let letters = top.string.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.count
+                guard letters >= 2 else { continue }
                 let b = obs.boundingBox
-                guard b.width > 0, b.height > 0 else { continue }
+                guard b.width > 0.02, b.height > 0.01 else { continue }
                 rects.append(NRect(Double(b.minX), Double(1 - b.maxY), Double(b.width), Double(b.height)))
             }
             return rects
