@@ -25,9 +25,40 @@ struct ImageInsight {
     var darkRegions: [Double] = Array(repeating: 0.5, count: 12)
     /// Luminance std-dev of each cell of the same grid.
     var quietRegions: [Double] = Array(repeating: 0, count: 12)
+    /// Vision's overall aesthetics score, −1 (poor) ... 1 (great). nil when unavailable (macOS < 15).
+    var aesthetic: Double? = nil
+    /// Vision thinks this is a screenshot, scan or document rather than a photograph.
+    var isUtility = false
+    /// Printed text found in the photo, normalized top-left.
+    var textRegions: [NRect] = []
+    /// Scene labels from Vision ("outdoor", "cat"), most confident first.
+    var labels: [String] = []
 
     /// A whole-image insight with nothing detected, for layers whose photo is missing.
     static let empty = ImageInsight()
+
+    /// One line a person would want to hear about the photo, or nil when it is fine.
+    var photoNote: String? {
+        if isUtility {
+            return "This picture looks like a screenshot or document, not a cover photo."
+        }
+        if let a = aesthetic, a < -0.35 {
+            let shown = String(format: "%.2f", a)
+            return "This photo is weak on its own (aesthetics score \(shown)); the design will have to carry it."
+        }
+        if !textRegions.isEmpty {
+            return "Words in the photo: keep the title off them."
+        }
+        return nil
+    }
+
+    /// Whether any detected text overlaps a normalized photo rect by more than `fraction` of the rect.
+    func textOverlaps(_ r: NRect, fraction: Double = 0.05) -> Bool {
+        guard r.area > 0 else { return false }
+        var covered = 0.0
+        for t in textRegions { covered += t.intersectionArea(r) }
+        return covered / r.area > fraction
+    }
 
     // MARK: Regions
 

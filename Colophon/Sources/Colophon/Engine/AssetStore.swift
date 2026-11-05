@@ -2,6 +2,7 @@ import AppKit
 import CoreImage
 import ImageIO
 import UniformTypeIdentifiers
+import Vision
 
 /// Decodes, caches and derives images (subject cutouts, saliency) for document assets.
 final class AssetStore {
@@ -19,6 +20,10 @@ final class AssetStore {
     private var palettes: [UUID: [RGBA]] = [:]
     private var faceRects: [UUID: [NRect]] = [:]
     private var insights: [UUID: ImageInsight] = [:]
+    private var aestheticScores: [UUID: (score: Double, isUtility: Bool)?] = [:]
+    private var textRects: [UUID: [NRect]] = [:]
+    private var featurePrints: [UUID: VNFeaturePrintObservation?] = [:]
+    private var labelSets: [UUID: [(label: String, confidence: Double)]] = [:]
     private let lock = NSLock()
 
     // MARK: Import / encode
@@ -121,13 +126,60 @@ final class AssetStore {
         return f
     }
 
+    /// Aesthetics score (−1...1) and utility flag from Vision (macOS 15+), computed once per asset.
+    /// nil when the OS or Vision cannot score the picture; the nil is cached too.
+    func aesthetics(_ id: UUID, data: Data?) -> (score: Double, isUtility: Bool)? {
+        lock.lock()
+        if let cached = aestheticScores[id] { lock.unlock(); return cached }
+        lock.unlock()
+        let a = image(id, data: data, resolution: .thumbnail).flatMap { VisionIntelligence.aesthetics($0) }
+        lock.lock(); aestheticScores.updateValue(a, forKey: id); lock.unlock()
+        return a
+    }
+
+    /// Printed text found in the photo, normalized top-left. Computed once per asset.
+    func textRegions(_ id: UUID, data: Data?) -> [NRect] {
+        lock.lock()
+        if let t = textRects[id] { lock.unlock(); return t }
+        lock.unlock()
+        let t = image(id, data: data, resolution: .thumbnail).map { VisionIntelligence.textRegions($0) } ?? []
+        lock.lock(); textRects[id] = t; lock.unlock()
+        return t
+    }
+
+    /// Vision feature print for similarity comparisons. Computed once per asset (nil is cached too).
+    func featurePrint(_ id: UUID, data: Data?) -> VNFeaturePrintObservation? {
+        lock.lock()
+        if let cached = featurePrints[id] { lock.unlock(); return cached }
+        lock.unlock()
+        let f = image(id, data: data, resolution: .thumbnail).flatMap { VisionIntelligence.featurePrint($0) }
+        lock.lock(); featurePrints.updateValue(f, forKey: id); lock.unlock()
+        return f
+    }
+
+    /// Scene labels ("outdoor", "cat"), most confident first. Computed once per asset.
+    func labels(_ id: UUID, data: Data?) -> [(label: String, confidence: Double)] {
+        lock.lock()
+        if let l = labelSets[id] { lock.unlock(); return l }
+        lock.unlock()
+        let l = image(id, data: data, resolution: .thumbnail).map { VisionIntelligence.classify($0) } ?? []
+        lock.lock(); labelSets[id] = l; lock.unlock()
+        return l
+    }
+
     /// Everything layout needs to know about a photo, computed once per asset.
     func insight(_ id: UUID, data: Data?) -> ImageInsight {
         lock.lock()
         if let i = insights[id] { lock.unlock(); return i }
         lock.unlock()
         guard let img = image(id, data: data, resolution: .thumbnail) else { return .empty }
-        let i = ImageInsight.analyze(img, faces: faces(id, data: data), focus: focus(id, data: data), palette: palette(id, data: data))
+        var i = ImageInsight.analyze(img, faces: faces(id, data: data), focus: focus(id, data: data), palette: palette(id, data: data))
+        if let a = aesthetics(id, data: data) {
+            i.aesthetic = a.score
+            i.isUtility = a.isUtility
+        }
+        i.textRegions = textRegions(id, data: data)
+        i.labels = labels(id, data: data).map(\.label)
         lock.lock(); insights[id] = i; lock.unlock()
         return i
     }
