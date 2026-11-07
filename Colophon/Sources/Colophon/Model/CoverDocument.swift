@@ -260,7 +260,7 @@ enum PaperType: String, Codable, CaseIterable, Identifiable {
         case .color: return "Premium color"
         }
     }
-    /// Inches of spine per page (KDP's published per-page thickness).
+    /// Inches of spine per page (KDP's published per-page thickness for paperbacks).
     var inchesPerPage: Double {
         switch self {
         case .white: return 0.002252
@@ -268,10 +268,54 @@ enum PaperType: String, Codable, CaseIterable, Identifiable {
         case .color: return 0.002347
         }
     }
+    /// IngramSpark pages per inch for its "Standard" papers (white 444, creme 426, standard color 410).
+    /// IngramSpark's premium stocks differ; check its cover template generator for those.
+    var ingramPagesPerInch: Double {
+        switch self {
+        case .white: return 444
+        case .cream: return 426
+        case .color: return 410
+        }
+    }
 }
 
-/// Settings for the printed paperback wraparound.
+/// Settings for the printed book wrap: paperback or case-laminate hardcover.
 struct PrintSettings: Codable, Hashable {
+    enum Printer: String, Codable, CaseIterable, Identifiable {
+        case kdp, ingramSpark
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .kdp: return "Amazon KDP"
+            case .ingramSpark: return "IngramSpark"
+            }
+        }
+    }
+
+    enum Binding: String, Codable, CaseIterable, Identifiable {
+        case paperback, hardcover
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .paperback: return "Paperback"
+            case .hardcover: return "Hardcover (case laminate)"
+            }
+        }
+    }
+
+    /// How the back cover is composed.
+    enum BackLayout: String, Codable, CaseIterable, Identifiable {
+        case classic, quoteFirst, minimal
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .classic: return "Classic"
+            case .quoteFirst: return "Quote First"
+            case .minimal: return "Minimal"
+            }
+        }
+    }
+
     var trimWidth: Double = 6
     var trimHeight: Double = 9
     var pageCount: Int = 300
@@ -279,20 +323,92 @@ struct PrintSettings: Codable, Hashable {
     var blurb: String = ""
     var quote: String = ""
     var keepBarcodeArea: Bool = true
+    var printer: Printer = .kdp
+    var binding: Binding = .paperback
+    /// ISBN-10 or ISBN-13, hyphens allowed. The barcode is drawn only when it validates.
+    var isbn: String = ""
+    /// 5-digit EAN add-on such as "51499" for $14.99, or empty for no price (90000 means "no price").
+    var priceCode: String = ""
+    var authorBio: String = ""
+    var authorPhotoAssetID: UUID? = nil
+    var publisher: String = ""
+    /// BISAC-style shelf line, e.g. "FICTION / THRILLER".
+    var category: String = ""
+    var backLayout: BackLayout = .classic
+    /// Convert the PDF's raster to CMYK (printers' native space) on export.
+    var cmykExport: Bool = true
 
     static let bleed = 0.125
     static let dpi = 300.0
+    /// KDP case laminate: the printed wrap folds 0.75 in over each edge of the boards.
+    static let hardcoverWrap = 0.75
+    /// Hardcover boards overhang the text block by 1/8 in on each side.
+    static let boardOverhang = 0.125
+    /// Hinge: the groove either side of the spine on a case-bound book.
+    static let hingeWidth = 0.5
 
-    var spineWidth: Double { Double(pageCount) * paper.inchesPerPage }
+    /// Spine width in inches.
+    ///
+    /// Paperback: KDP multiplies pages by its published per-page thickness; IngramSpark divides pages
+    /// by the paper's pages-per-inch ("Standard" papers). Hardcover: pages x thickness + 0.125 in for the
+    /// boards and case material. The hardcover figure is an APPROXIMATION: KDP and IngramSpark publish
+    /// their own hardcover calculators and template generators, and the exact value must be checked
+    /// there before upload. The UI repeats this caveat.
+    static func spineWidth(pages: Int, paper: PaperType, printer: Printer, binding: Binding) -> Double {
+        let n = Double(max(0, pages))
+        let block: Double
+        switch printer {
+        case .kdp: block = n * paper.inchesPerPage
+        case .ingramSpark: block = n / paper.ingramPagesPerInch
+        }
+        switch binding {
+        case .paperback: return block
+        case .hardcover: return block + 0.125
+        }
+    }
+
+    var spineWidth: Double { PrintSettings.spineWidth(pages: pageCount, paper: paper, printer: printer, binding: binding) }
     /// KDP allows spine text from 80 pages; thinner spines can't hold it reliably.
     var spineHasText: Bool { pageCount >= 80 }
-    var fullWidth: Double { 2 * trimWidth + spineWidth + 2 * PrintSettings.bleed }
-    var fullHeight: Double { trimHeight + 2 * PrintSettings.bleed }
+    /// Extra wrap beyond the boards: 0 for paperback, 0.75 in for a case-laminate hardcover.
+    var wrapMargin: Double { binding == .hardcover ? PrintSettings.hardcoverWrap : 0 }
+    /// Distance from the sheet edge to the trim (paperback: the bleed) or to the board edge (hardcover: the wrap).
+    var edgeMargin: Double { binding == .hardcover ? wrapMargin : PrintSettings.bleed }
+    /// One cover panel's width without the edge margin: the trim, or the board (trim + overhang) on a hardcover.
+    var panelWidth: Double { trimWidth + (binding == .hardcover ? PrintSettings.boardOverhang : 0) }
+    var panelHeight: Double { trimHeight + (binding == .hardcover ? 2 * PrintSettings.boardOverhang : 0) }
+    var fullWidth: Double { 2 * panelWidth + spineWidth + 2 * edgeMargin }
+    var fullHeight: Double { panelHeight + 2 * edgeMargin }
 
     static let trims: [(String, Double, Double)] = [
         ("5 x 8 in", 5, 8), ("5.25 x 8 in", 5.25, 8), ("5.5 x 8.5 in", 5.5, 8.5),
         ("6 x 9 in", 6, 9), ("7 x 10 in", 7, 10), ("8.5 x 11 in", 8.5, 11)
     ]
+}
+
+extension PrintSettings {
+    // Declared in an extension so the memberwise initializer stays available.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        trimWidth = try c.decodeIfPresent(Double.self, forKey: .trimWidth) ?? 6
+        trimHeight = try c.decodeIfPresent(Double.self, forKey: .trimHeight) ?? 9
+        pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount) ?? 300
+        paper = try c.decodeIfPresent(PaperType.self, forKey: .paper) ?? .cream
+        blurb = try c.decodeIfPresent(String.self, forKey: .blurb) ?? ""
+        quote = try c.decodeIfPresent(String.self, forKey: .quote) ?? ""
+        keepBarcodeArea = try c.decodeIfPresent(Bool.self, forKey: .keepBarcodeArea) ?? true
+        printer = try c.decodeIfPresent(Printer.self, forKey: .printer) ?? .kdp
+        binding = try c.decodeIfPresent(Binding.self, forKey: .binding) ?? .paperback
+        isbn = try c.decodeIfPresent(String.self, forKey: .isbn) ?? ""
+        priceCode = try c.decodeIfPresent(String.self, forKey: .priceCode) ?? ""
+        authorBio = try c.decodeIfPresent(String.self, forKey: .authorBio) ?? ""
+        authorPhotoAssetID = try c.decodeIfPresent(UUID.self, forKey: .authorPhotoAssetID)
+        publisher = try c.decodeIfPresent(String.self, forKey: .publisher) ?? ""
+        category = try c.decodeIfPresent(String.self, forKey: .category) ?? ""
+        backLayout = try c.decodeIfPresent(BackLayout.self, forKey: .backLayout) ?? .classic
+        cmykExport = try c.decodeIfPresent(Bool.self, forKey: .cmykExport) ?? true
+    }
 }
 
 enum FillStyle: String, Codable, CaseIterable, Identifiable {
