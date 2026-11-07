@@ -445,7 +445,14 @@ extension SampleRenderTests {
                 imgs.append(parts.back)
                 labels.append("Back cover, \(layout.label)")
             }
-            if let parts = MockupRenderer.wrapParts(doc, dpi: 100) { imgs.append(parts.spine); labels.append("Spine") }
+            if let parts = MockupRenderer.wrapParts(doc, dpi: 100), let ctx = Gfx.context(400, 600) {
+                // The spine is narrow: show it at its true proportion, centered.
+                ctx.setFillColor(RGBA(hex: "2A2A2E").cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 600))
+                let sw = CGFloat(parts.spine.width) * 580 / CGFloat(parts.spine.height)
+                ctx.draw(parts.spine, in: CGRect(x: (400 - sw) / 2, y: 10, width: sw, height: 580))
+                if let i = ctx.makeImage() { imgs.append(i); labels.append("Spine, true proportion") }
+            }
         }
         if !imgs.isEmpty {
             let cellB = CGSize(width: 400, height: 600)
