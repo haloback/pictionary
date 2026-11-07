@@ -390,6 +390,34 @@ extension SampleRenderTests {
         sheet(imgs, cols: 8, cell: CGSize(width: 225, height: 360), labels: labels, to: out.appendingPathComponent("11-attention.png"))
         manifest.append(["file": "11-attention.png", "name": "Where readers look first: Apple's attention model over the finished cover, and the critic's note", "family": "Critic"])
 
+        // 14. The physical book: the full wrap with guides, then the paperback mockups.
+        imgs = []; labels = []
+        if let design = SignatureLibrary.design("thriller-brand-name") {
+            var base = SignatureLibrary.sampleDocument(design)
+            if design.usesPhoto, let data = photos["portrait"] ?? portrait { _ = base.addAsset(data) }
+            var doc = SignatureLibrary.build(design, palette: 0, base: base)
+            doc.paperback.pageCount = 320
+            doc.paperback.quote = "“Impossible to put down.” — a reviewer"
+            doc.paperback.blurb = Array(repeating: "Nobody in Harrow Bay talks about the winter the ferry stopped running, least of all the man who sold the tickets.", count: 6).joined(separator: " ")
+            let square = CGSize(width: 600, height: 600)
+            if let wrap = PrintWrap.render(doc, dpi: 60, guides: true), let ctx = Gfx.context(600, 600) {
+                // Letterbox the wide wrap into the square cell.
+                ctx.setFillColor(RGBA(hex: "2A2A2E").cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+                let ww: CGFloat = 580, wh = ww * CGFloat(wrap.height) / CGFloat(wrap.width)
+                ctx.draw(wrap, in: CGRect(x: 10, y: (600 - wh) / 2, width: ww, height: wh))
+                if let i = ctx.makeImage() { imgs.append(i); labels.append("Full wrap, \(doc.paperback.pageCount) pages, with trim and bleed guides") }
+            }
+            if let i = MockupRenderer.physicalFront(doc, size: square) { imgs.append(i); labels.append("Paperback, front") }
+            if let i = MockupRenderer.physicalBack(doc, size: square) { imgs.append(i); labels.append("Paperback, back") }
+            if let i = MockupRenderer.physicalFlat(doc, size: square) { imgs.append(i); labels.append("Cover wrap, flat") }
+            if let i = MockupRenderer.physicalStack(doc, size: square) { imgs.append(i); labels.append("Stack of three") }
+        }
+        if !imgs.isEmpty {
+            sheet(imgs, cols: 5, cell: CGSize(width: 600, height: 600), labels: labels, to: out.appendingPathComponent("14-physical.png"))
+            manifest.append(["file": "14-physical.png", "name": "The physical book: the full wrap with guides, and the paperback mockups front, back, flat and stacked", "family": "Print"])
+        }
+
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
         try data.write(to: out.appendingPathComponent("engine.json"))
     }
