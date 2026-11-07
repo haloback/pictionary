@@ -2,12 +2,20 @@ import CoreGraphics
 import Foundation
 
 /// Object removal: exemplar-based inpainting (PatchMatch nearest-neighbor fields with weighted
-/// voting) over a coarse-to-fine pyramid. Works at ≤ 768 px and composites the fill back into the
+/// voting) over a coarse-to-fine pyramid. Works at ≤ 640 px and composites the fill back into the
 /// full-resolution picture with a 2 px feather.
+///
+/// The nearest-neighbor field is only solved for hole pixels and the half-patch ring around them;
+/// everything else is a fixed source. PatchMatch sweeps run in parallel over stripes of rows
+/// (even stripes, then odd), each row with its own seeded generator, so results are deterministic.
 enum Inpainter {
-    static let workSide = 768
+    static let workSide = 640
     static let patchHalf = 3
-    static let iterations = 5
+    static let levelCount = 4
+    /// PatchMatch iterations per pyramid level, finest first: the coarse levels do the hard work.
+    static let iterationsPerLevel = [2, 3, 5, 5]
+    /// Cost of a target patch pixel that falls outside the picture.
+    static let missingPenalty: Float = 3 * 255 * 255
 
     /// Removes everything under the mask (white = remove) and fills it from the surroundings.
     static func remove(from image: CGImage, mask: CGImage) -> CGImage? {
@@ -15,23 +23,50 @@ enum Inpainter {
         guard W > 8, H > 8 else { return nil }
         let opaque = [CGImageAlphaInfo.none, .noneSkipFirst, .noneSkipLast].contains(image.alphaInfo)
 
-        // Full-resolution pixels and the (dilated) removal mask.
+        // Full-resolution pixels and the removal mask's bounding box.
         guard let srcCtx = Gfx.context(W, H), let maskCtx = Gfx.grayContext(W, H) else { return nil }
         srcCtx.draw(image, in: CGRect(x: 0, y: 0, width: W, height: H))
         maskCtx.draw(mask, in: CGRect(x: 0, y: 0, width: W, height: H))
         guard let sp = srcCtx.data?.assumingMemoryBound(to: UInt8.self),
               let mp = maskCtx.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
         let sbpr = srcCtx.bytesPerRow, mbpr = maskCtx.bytesPerRow
-        var hole = [UInt8](repeating: 0, count: W * H)
-        var any = false
+        var bx0 = W, by0 = H, bx1 = -1, by1 = -1
         for y in 0..<H {
-            for x in 0..<W where mp[y * mbpr + x] > 127 {
-                hole[y * W + x] = 1
-                any = true
+            let row = mp + y * mbpr
+            var x = 0
+            while x < W {
+                if row[x] > 127 {
+                    if x < bx0 { bx0 = x }
+                    if x > bx1 { bx1 = x }
+                    if y < by0 { by0 = y }
+                    if y > by1 { by1 = y }
+                }
+                x += 1
             }
         }
-        guard any else { return image }
-        hole = dilate(hole, W, H, by: 3)
+        guard bx1 >= 0 else { return image }
+
+        // Everything at full resolution happens inside a crop around the mask: the 16 px margin
+        // is wider than the 3 px dilation plus the feather, so the crop sees exactly what the whole
+        // picture would.
+        let margin = 16
+        let cx0 = max(0, bx0 - margin), cy0 = max(0, by0 - margin)
+        let cx1 = min(W - 1, bx1 + margin), cy1 = min(H - 1, by1 + margin)
+        let cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1
+        var holeC = [UInt8](repeating: 0, count: cw * ch)
+        holeC.withUnsafeMutableBufferPointer { hb in
+            let hp = hb.baseAddress!
+            for y in 0..<ch {
+                let row = mp + (cy0 + y) * mbpr + cx0
+                let o = hp + y * cw
+                var x = 0
+                while x < cw {
+                    if row[x] > 127 { o[x] = 1 }
+                    x += 1
+                }
+            }
+        }
+        holeC = dilate(holeC, cw, ch, by: 3)
 
         // Working copy.
         let s = min(1, Double(workSide) / Double(max(W, H)))
@@ -39,81 +74,101 @@ enum Inpainter {
         guard let workCtx = Gfx.context(w0, h0), let wp = workCtx.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
         workCtx.draw(image, in: CGRect(x: 0, y: 0, width: w0, height: h0))
         let wbpr = workCtx.bytesPerRow
-        var rgb = [Float](repeating: 0, count: w0 * h0 * 3)
+        let rgb = Buf<Float>(count: w0 * h0 * 3, fill: 0)
+        let rp = rgb.p
         for y in 0..<h0 {
-            for x in 0..<w0 {
-                let p = wp + y * wbpr + x * 4
-                let i = (y * w0 + x) * 3
-                rgb[i] = Float(p[0]); rgb[i + 1] = Float(p[1]); rgb[i + 2] = Float(p[2])
+            let row = wp + y * wbpr
+            let o = rp + y * w0 * 3
+            var x = 0
+            while x < w0 {
+                let p = row + x * 4
+                let i = x * 3
+                o[i] = Float(p[0]); o[i + 1] = Float(p[1]); o[i + 2] = Float(p[2])
+                x += 1
             }
         }
+        // A work pixel is hole if any full-resolution pixel under it is.
         var holeW = [UInt8](repeating: 0, count: w0 * h0)
-        for y in 0..<h0 {
-            let y0 = Int(Double(y) / s), y1 = min(H - 1, Int(Double(y + 1) / s))
-            for x in 0..<w0 {
-                let x0 = Int(Double(x) / s), x1 = min(W - 1, Int(Double(x + 1) / s))
-                var hit = false
-                var yy = y0
-                while yy <= y1 && !hit {
-                    var xx = x0
-                    while xx <= x1 {
-                        if hole[yy * W + xx] != 0 { hit = true; break }
-                        xx += 1
+        let wx0 = max(0, Int(Double(cx0) * s) - 1), wx1 = min(w0 - 1, Int(Double(cx1 + 1) * s) + 1)
+        let wy0 = max(0, Int(Double(cy0) * s) - 1), wy1 = min(h0 - 1, Int(Double(cy1 + 1) * s) + 1)
+        holeC.withUnsafeBufferPointer { hb in
+            holeW.withUnsafeMutableBufferPointer { wb in
+                let hc = hb.baseAddress!, hw = wb.baseAddress!
+                guard wy0 <= wy1, wx0 <= wx1 else { return }
+                for y in wy0...wy1 {
+                    let y0 = max(cy0, Int(Double(y) / s)), y1 = min(cy1, Int(Double(y + 1) / s))
+                    guard y0 <= y1 else { continue }
+                    for x in wx0...wx1 {
+                        let x0 = max(cx0, Int(Double(x) / s)), x1 = min(cx1, Int(Double(x + 1) / s))
+                        guard x0 <= x1 else { continue }
+                        var hit = false
+                        var yy = y0
+                        while yy <= y1 && !hit {
+                            let row = hc + (yy - cy0) * cw - cx0
+                            var xx = x0
+                            while xx <= x1 {
+                                if row[xx] != 0 { hit = true; break }
+                                xx += 1
+                            }
+                            yy += 1
+                        }
+                        if hit { hw[y * w0 + x] = 1 }
                     }
-                    yy += 1
                 }
-                if hit { holeW[y * w0 + x] = 1 }
             }
         }
         if s < 1 { holeW = dilate(holeW, w0, h0, by: 1) }
 
         // Pyramid: level 0 is the working size; each level halves.
-        var levels: [Level] = [Level(w: w0, h: h0, rgb: rgb, hole: holeW)]
-        let long = max(w0, h0)
-        let count = long / 16 >= 48 ? 5 : 4
-        while levels.count < count {
+        var levels: [Level] = [Level(w: w0, h: h0, rgb: rgb, hole: Buf(holeW))]
+        while levels.count < levelCount {
             let prev = levels[levels.count - 1]
             guard prev.w >= 16, prev.h >= 16 else { break }
             levels.append(prev.halved())
         }
-        var rng = XorShift(seed: 0x9E37_79B9)
+        let seed: UInt32 = 0x9E37_79B9
         let coarsest = levels.count - 1
         levels[coarsest].seedHole()
         for li in stride(from: coarsest, through: 0, by: -1) {
-            if li < coarsest {
-                let coarse = levels[li + 1]
-                levels[li].inherit(from: coarse)
-            }
-            levels[li].solve(rng: &rng)
+            if li < coarsest { levels[li].inherit(from: levels[li + 1]) }
+            let iters = li < iterationsPerLevel.count ? iterationsPerLevel[li] : iterationsPerLevel[iterationsPerLevel.count - 1]
+            levels[li].solve(level: li, iterations: iters, seed: seed)
         }
         let filled = levels[0]
 
-        // Back to full resolution: the fill is upsampled and feathered into the original.
-        guard let fillImage = filled.makeImage(), let upCtx = Gfx.context(W, H),
+        // Back to full resolution: the fill is upsampled (only the crop is rendered) and feathered
+        // into the original.
+        guard let fillImage = filled.makeImage(), let upCtx = Gfx.context(cw, ch),
               let up = upCtx.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
-        upCtx.draw(fillImage, in: CGRect(x: 0, y: 0, width: W, height: H))
+        upCtx.draw(fillImage, in: CGRect(x: -cx0, y: cy1 + 1 - H, width: W, height: H))
         let ubpr = upCtx.bytesPerRow
-        let feather = featherMask(hole, W, H, radius: 2)
+        let feather = featherMask(holeC, cw, ch, radius: 2)
         let info = opaque ? CGImageAlphaInfo.noneSkipLast.rawValue : CGImageAlphaInfo.premultipliedLast.rawValue
         guard let outCtx = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0, space: Gfx.sRGB, bitmapInfo: info),
               let op = outCtx.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
         let obpr = outCtx.bytesPerRow
-        for y in 0..<H {
-            for x in 0..<W {
-                let i = y * W + x
-                let o = op + y * obpr + x * 4
-                let sPix = sp + y * sbpr + x * 4
-                let t = feather[i]
-                if t <= 0 {
-                    o[0] = sPix[0]; o[1] = sPix[1]; o[2] = sPix[2]; o[3] = sPix[3]
-                    continue
+        for y in 0..<H { memcpy(op + y * obpr, sp + y * sbpr, W * 4) }
+        feather.withUnsafeBufferPointer { fb in
+            let fp = fb.baseAddress!
+            for y in 0..<ch {
+                let Y = cy0 + y
+                let oRow = op + Y * obpr + cx0 * 4
+                let sRow = sp + Y * sbpr + cx0 * 4
+                let uRow = up + y * ubpr
+                let fRow = fp + y * cw
+                var x = 0
+                while x < cw {
+                    let t = fRow[x]
+                    if t > 0 {
+                        let o = oRow + x * 4, sPix = sRow + x * 4, u = uRow + x * 4
+                        let inv = 1 - t
+                        o[0] = UInt8(min(255, max(0, (Float(sPix[0]) * inv + Float(u[0]) * t).rounded())))
+                        o[1] = UInt8(min(255, max(0, (Float(sPix[1]) * inv + Float(u[1]) * t).rounded())))
+                        o[2] = UInt8(min(255, max(0, (Float(sPix[2]) * inv + Float(u[2]) * t).rounded())))
+                        o[3] = max(sPix[3], UInt8(min(255, (t * 255).rounded())))
+                    }
+                    x += 1
                 }
-                let u = up + y * ubpr + x * 4
-                let inv = 1 - t
-                o[0] = UInt8(min(255, max(0, (Float(sPix[0]) * inv + Float(u[0]) * t).rounded())))
-                o[1] = UInt8(min(255, max(0, (Float(sPix[1]) * inv + Float(u[1]) * t).rounded())))
-                o[2] = UInt8(min(255, max(0, (Float(sPix[2]) * inv + Float(u[2]) * t).rounded())))
-                o[3] = max(sPix[3], UInt8(min(255, (t * 255).rounded())))
             }
         }
         return outCtx.makeImage()
@@ -207,7 +262,7 @@ enum Inpainter {
         return f
     }
 
-    // MARK: Pyramid level
+    // MARK: Random numbers
 
     struct XorShift {
         var state: UInt32
@@ -224,32 +279,131 @@ enum Inpainter {
         mutating func signed(_ r: Int) -> Int { below(2 * r + 1) - r }
     }
 
+    /// A well-mixed seed for one row of one sweep, so rows can run in parallel yet deterministically.
+    static func rowSeed(_ base: UInt32, level: Int, iteration: Int, row: Int) -> UInt32 {
+        let a = UInt32(truncatingIfNeeded: level + 1) &* 0x9E37_79B9
+        let b = UInt32(truncatingIfNeeded: iteration + 2) &* 0x85EB_CA6B
+        let c = UInt32(truncatingIfNeeded: row + 1) &* 0xC2B2_AE35
+        var s = base &+ a
+        s = s &+ b
+        s = s &+ c
+        s ^= s >> 16
+        s = s &* 0x7FEB_352D
+        s ^= s >> 15
+        s = s &* 0x846C_A68B
+        s ^= s >> 16
+        return s
+    }
+
+    // MARK: Buffers
+
+    /// A fixed-size heap buffer addressed through a raw pointer: no bounds checks, no copy-on-write,
+    /// shared by reference between the pyramid levels that own it.
+    final class Buf<T> {
+        let p: UnsafeMutablePointer<T>
+        let count: Int
+
+        init(count: Int, fill: T) {
+            self.count = max(0, count)
+            p = UnsafeMutablePointer<T>.allocate(capacity: max(1, self.count))
+            p.initialize(repeating: fill, count: self.count)
+        }
+
+        init(_ array: [T]) {
+            count = array.count
+            p = UnsafeMutablePointer<T>.allocate(capacity: max(1, count))
+            let dst = p
+            array.withUnsafeBufferPointer { b in
+                if let base = b.baseAddress, b.count > 0 { dst.initialize(from: base, count: b.count) }
+            }
+        }
+
+        deinit {
+            p.deinitialize(count: count)
+            p.deallocate()
+        }
+
+        /// A copy as an array.
+        var array: [T] { Array(UnsafeBufferPointer(start: p, count: count)) }
+    }
+
+    // MARK: Patch distance
+
+    /// Sum of squared RGB differences between the patch at `a` and the source patch at `b`
+    /// (which is fully inside the picture), giving up early once it exceeds `limit`. Pixels of the
+    /// target patch outside the picture cost `missingPenalty` each.
+    @inline(__always)
+    static func patchDistance(_ p: UnsafePointer<Float>, _ w: Int, _ h: Int, _ half: Int, _ a: Int, _ b: Int, limit: Float) -> Float {
+        let ay = a / w, ax = a - ay * w
+        let by = b / w, bx = b - by * w
+        let dy0 = max(-half, -ay), dy1 = min(half, h - 1 - ay)
+        let dx0 = max(-half, -ax), dx1 = min(half, w - 1 - ax)
+        let cols = dx1 - dx0 + 1, rows = dy1 - dy0 + 1
+        let side = 2 * half + 1
+        var sum = Float(side * side - rows * cols) * missingPenalty
+        if sum > limit { return sum }
+        let n = cols * 3
+        var dy = dy0
+        while dy <= dy1 {
+            let pa = p + ((ay + dy) * w + ax + dx0) * 3
+            let pb = p + ((by + dy) * w + bx + dx0) * 3
+            var k = 0
+            while k < n {
+                let d = pa[k] - pb[k]
+                sum += d * d
+                k += 1
+            }
+            if sum > limit { return sum }
+            dy += 1
+        }
+        return sum
+    }
+
+    // MARK: Pyramid level
+
     /// One level of the pyramid: the picture (interleaved RGB floats), the hole, and the
     /// nearest-neighbor field for every pixel near the hole.
-    struct Level {
+    final class Level {
         let w: Int
         let h: Int
-        var rgb: [Float]
+        let rgb: Buf<Float>
         /// 1 where pixels must be invented.
-        var hole: [UInt8]
+        let hole: Buf<UInt8>
         /// 1 where a 7×7 source patch centered here is fully known and inside the picture.
-        var validCenter: [UInt8] = []
+        var validCenter: Buf<UInt8>
         /// 1 for hole pixels and the half-patch ring around them (where the field is defined).
-        var region: [UInt8] = []
+        var region: Buf<UInt8>
         /// Field: index of the source patch center for each region pixel (-1 elsewhere).
-        var nnf: [Int32] = []
-        var dist: [Float] = []
+        var nnf: Buf<Int32>
+        var dist: Buf<Float>
+        /// Vote weight per region pixel.
+        var weight: Buf<Float>
+        /// All valid source centers.
         var sources: [Int32] = []
+        /// Region pixels in raster order, and where each region row starts in that list
+        /// (`rowStart[r]..<rowStart[r + 1]` for row `ry0 + r`).
+        var regionIdx: [Int32] = []
+        var rowStart: [Int] = [0]
+        /// Bounding box of the region (inclusive; empty when ry1 < ry0).
+        var rx0 = 0, ry0 = 0, rx1 = -1, ry1 = -1
+        var prepared = false
 
-        init(w: Int, h: Int, rgb: [Float], hole: [UInt8]) {
+        init(w: Int, h: Int, rgb: Buf<Float>, hole: Buf<UInt8>) {
             self.w = w; self.h = h; self.rgb = rgb; self.hole = hole
+            validCenter = Buf<UInt8>(count: 1, fill: 0)
+            region = Buf<UInt8>(count: 1, fill: 0)
+            nnf = Buf<Int32>(count: 1, fill: -1)
+            dist = Buf<Float>(count: 1, fill: 0)
+            weight = Buf<Float>(count: 1, fill: 0)
         }
 
         /// The next coarser level: 2× box downsample; a coarse pixel is hole if any child is.
         func halved() -> Level {
             let nw = max(4, w / 2), nh = max(4, h / 2)
-            var nrgb = [Float](repeating: 0, count: nw * nh * 3)
-            var nhole = [UInt8](repeating: 0, count: nw * nh)
+            let nrgb = Buf<Float>(count: nw * nh * 3, fill: 0)
+            let nhole = Buf<UInt8>(count: nw * nh, fill: 0)
+            let src = UnsafePointer(rgb.p), hp = UnsafePointer(hole.p)
+            let dst = nrgb.p, dh = nhole.p
             for y in 0..<nh {
                 for x in 0..<nw {
                     var r: Float = 0, g: Float = 0, b: Float = 0, n: Float = 0
@@ -258,225 +412,327 @@ enum Inpainter {
                         let sy = min(h - 1, y * 2 + dy)
                         for dx in 0..<2 {
                             let sx = min(w - 1, x * 2 + dx)
-                            let i = (sy * w + sx) * 3
-                            r += rgb[i]; g += rgb[i + 1]; b += rgb[i + 2]; n += 1
-                            if hole[sy * w + sx] != 0 { anyHole = true }
+                            let i = sy * w + sx
+                            r += src[i * 3]; g += src[i * 3 + 1]; b += src[i * 3 + 2]; n += 1
+                            if hp[i] != 0 { anyHole = true }
                         }
                     }
                     let o = (y * nw + x) * 3
-                    nrgb[o] = r / n; nrgb[o + 1] = g / n; nrgb[o + 2] = b / n
-                    if anyHole { nhole[y * nw + x] = 1 }
+                    dst[o] = r / n; dst[o + 1] = g / n; dst[o + 2] = b / n
+                    if anyHole { dh[y * nw + x] = 1 }
                 }
             }
             return Level(w: nw, h: nh, rgb: nrgb, hole: nhole)
         }
 
-        mutating func prepare() {
+        /// Builds the region, the source list and the (empty) field. Idempotent.
+        func prepare() {
+            if prepared { return }
+            prepared = true
             let half = Inpainter.patchHalf
-            validCenter = [UInt8](repeating: 0, count: w * h)
+            let n = w * h
             // A patch centered within half a patch of the hole touches it; everything else is a source.
-            region = Inpainter.dilate(hole, w, h, by: half)
+            region = Buf(Inpainter.dilate(hole.array, w, h, by: half))
+            validCenter = Buf<UInt8>(count: n, fill: 0)
+            nnf = Buf<Int32>(count: n, fill: -1)
+            dist = Buf<Float>(count: n, fill: .greatestFiniteMagnitude)
+            weight = Buf<Float>(count: n, fill: 0)
+            let regP = UnsafePointer(region.p), validP = validCenter.p
             sources = []
-            for y in half..<(h - half) {
-                for x in half..<(w - half) where region[y * w + x] == 0 {
-                    validCenter[y * w + x] = 1
-                    sources.append(Int32(y * w + x))
+            sources.reserveCapacity(n)
+            regionIdx = []
+            rx0 = w; ry0 = h; rx1 = -1; ry1 = -1
+            for y in 0..<h {
+                let inY = y >= half && y < h - half
+                for x in 0..<w {
+                    let i = y * w + x
+                    if regP[i] != 0 {
+                        regionIdx.append(Int32(i))
+                        if x < rx0 { rx0 = x }
+                        if x > rx1 { rx1 = x }
+                        if y < ry0 { ry0 = y }
+                        if y > ry1 { ry1 = y }
+                    } else if inY && x >= half && x < w - half {
+                        validP[i] = 1
+                        sources.append(Int32(i))
+                    }
                 }
             }
-            if nnf.count != w * h {
-                nnf = [Int32](repeating: -1, count: w * h)
-                dist = [Float](repeating: .greatestFiniteMagnitude, count: w * h)
+            let rows = max(0, ry1 - ry0 + 1)
+            rowStart = [Int](repeating: regionIdx.count, count: rows + 1)
+            var r = 0
+            for (k, i) in regionIdx.enumerated() {
+                let y = Int(i) / w - ry0
+                while r <= y { rowStart[r] = k; r += 1 }
             }
         }
 
         /// Coarsest level only: start the hole from the average of its rim, then diffuse.
-        mutating func seedHole() {
-            let rim = Inpainter.dilate(hole, w, h, by: 2)
-            var r: Float = 0, g: Float = 0, b: Float = 0, n: Float = 0
-            for i in 0..<(w * h) where rim[i] != 0 && hole[i] == 0 {
-                r += rgb[i * 3]; g += rgb[i * 3 + 1]; b += rgb[i * 3 + 2]; n += 1
+        func seedHole() {
+            let n = w * h
+            let holeA = hole.array
+            let rim = Inpainter.dilate(holeA, w, h, by: 2)
+            var cur = rgb.array
+            var r: Float = 0, g: Float = 0, b: Float = 0, cnt: Float = 0
+            for i in 0..<n where rim[i] != 0 && holeA[i] == 0 {
+                r += cur[i * 3]; g += cur[i * 3 + 1]; b += cur[i * 3 + 2]; cnt += 1
             }
-            if n == 0 {
-                for i in 0..<(w * h) { r += rgb[i * 3]; g += rgb[i * 3 + 1]; b += rgb[i * 3 + 2]; n += 1 }
+            if cnt == 0 {
+                for i in 0..<n { r += cur[i * 3]; g += cur[i * 3 + 1]; b += cur[i * 3 + 2]; cnt += 1 }
             }
-            for i in 0..<(w * h) where hole[i] != 0 {
-                rgb[i * 3] = r / n; rgb[i * 3 + 1] = g / n; rgb[i * 3 + 2] = b / n
+            for i in 0..<n where holeA[i] != 0 {
+                cur[i * 3] = r / cnt; cur[i * 3 + 1] = g / cnt; cur[i * 3 + 2] = b / cnt
             }
+            guard w >= 3, h >= 3 else {
+                rgb.p.update(from: cur, count: n * 3)
+                return
+            }
+            var next = cur
             for _ in 0..<40 {
-                var next = rgb
                 for y in 1..<(h - 1) {
-                    for x in 1..<(w - 1) where hole[y * w + x] != 0 {
+                    for x in 1..<(w - 1) where holeA[y * w + x] != 0 {
                         let i = y * w + x
                         for c in 0..<3 {
-                            let sum = rgb[(i - 1) * 3 + c] + rgb[(i + 1) * 3 + c] + rgb[(i - w) * 3 + c] + rgb[(i + w) * 3 + c]
+                            let sum = cur[(i - 1) * 3 + c] + cur[(i + 1) * 3 + c] + cur[(i - w) * 3 + c] + cur[(i + w) * 3 + c]
                             next[i * 3 + c] = sum / 4
                         }
                     }
                 }
-                rgb = next
+                swap(&cur, &next)
             }
+            rgb.p.update(from: cur, count: n * 3)
         }
 
         /// Finer level: hole pixels take the coarse fill (bilinear) and the field is upsampled.
-        mutating func inherit(from coarse: Level) {
+        func inherit(from coarse: Level) {
             prepare()
-            for y in 0..<h {
-                let fy = min(Float(coarse.h - 1), max(0, (Float(y) + 0.5) / 2 - 0.5))
-                let y0 = Int(fy), y1 = min(coarse.h - 1, y0 + 1)
+            guard ry1 >= ry0, rx1 >= rx0 else { return }
+            let cw = coarse.w, chh = coarse.h
+            let crgb = UnsafePointer(coarse.rgb.p), cnnf = UnsafePointer(coarse.nnf.p)
+            let rp = rgb.p, holeP = UnsafePointer(hole.p), regP = UnsafePointer(region.p)
+            let validP = UnsafePointer(validCenter.p), nnfP = nnf.p
+            for y in ry0...ry1 {
+                let fy = min(Float(chh - 1), max(0, (Float(y) + 0.5) / 2 - 0.5))
+                let y0 = Int(fy), y1 = min(chh - 1, y0 + 1)
                 let ty = fy - Float(y0)
-                for x in 0..<w where hole[y * w + x] != 0 {
-                    let fx = min(Float(coarse.w - 1), max(0, (Float(x) + 0.5) / 2 - 0.5))
-                    let x0 = Int(fx), x1 = min(coarse.w - 1, x0 + 1)
+                for x in rx0...rx1 where holeP[y * w + x] != 0 {
+                    let fx = min(Float(cw - 1), max(0, (Float(x) + 0.5) / 2 - 0.5))
+                    let x0 = Int(fx), x1 = min(cw - 1, x0 + 1)
                     let tx = fx - Float(x0)
+                    let i00 = (y0 * cw + x0) * 3, i01 = (y0 * cw + x1) * 3
+                    let i10 = (y1 * cw + x0) * 3, i11 = (y1 * cw + x1) * 3
+                    let o = (y * w + x) * 3
                     for c in 0..<3 {
-                        let a = coarse.rgb[(y0 * coarse.w + x0) * 3 + c] * (1 - tx) + coarse.rgb[(y0 * coarse.w + x1) * 3 + c] * tx
-                        let b = coarse.rgb[(y1 * coarse.w + x0) * 3 + c] * (1 - tx) + coarse.rgb[(y1 * coarse.w + x1) * 3 + c] * tx
-                        rgb[(y * w + x) * 3 + c] = a * (1 - ty) + b * ty
+                        let a = crgb[i00 + c] * (1 - tx) + crgb[i01 + c] * tx
+                        let b = crgb[i10 + c] * (1 - tx) + crgb[i11 + c] * tx
+                        rp[o + c] = a * (1 - ty) + b * ty
                     }
                 }
             }
-            for y in 0..<h {
-                for x in 0..<w where region[y * w + x] != 0 {
-                    let cx = min(coarse.w - 1, x / 2), cy = min(coarse.h - 1, y / 2)
-                    let src = coarse.nnf[cy * coarse.w + cx]
+            for y in ry0...ry1 {
+                let cy = min(chh - 1, y / 2)
+                for x in rx0...rx1 where regP[y * w + x] != 0 {
+                    let cx = min(cw - 1, x / 2)
+                    let src = Int(cnnf[cy * cw + cx])
                     guard src >= 0 else { continue }
-                    let sx = Int(src) % coarse.w * 2 + (x - cx * 2)
-                    let sy = Int(src) / coarse.w * 2 + (y - cy * 2)
-                    if sx >= 0, sx < w, sy >= 0, sy < h, validCenter[sy * w + sx] != 0 {
-                        nnf[y * w + x] = Int32(sy * w + sx)
+                    let csy = src / cw, csx = src - csy * cw
+                    let sx = csx * 2 + (x - cx * 2)
+                    let sy = csy * 2 + (y - cy * 2)
+                    if sx >= 0, sx < w, sy >= 0, sy < h, validP[sy * w + sx] != 0 {
+                        nnfP[y * w + x] = Int32(sy * w + sx)
                     }
                 }
             }
         }
 
-        /// Alternating PatchMatch passes and votes until the fill settles.
-        mutating func solve(rng: inout XorShift) {
-            if validCenter.count != w * h { prepare() }
-            guard !sources.isEmpty else { return }
+        /// Alternating PatchMatch sweeps and votes until the fill settles.
+        func solve(level li: Int, iterations: Int, seed: UInt32) {
+            prepare()
+            guard !sources.isEmpty, !regionIdx.isEmpty, ry1 >= ry0 else { return }
             let half = Inpainter.patchHalf
             let W = w, H = h
             let n = W * H
-            // Random init for anything the coarser level didn't hand down.
-            for i in 0..<n where region[i] != 0 && nnf[i] < 0 {
-                nnf[i] = sources[rng.below(sources.count)]
-            }
-            for i in 0..<n where region[i] != 0 { dist[i] = patchDistance(i, Int(nnf[i]), limit: .greatestFiniteMagnitude) }
+            let rgbP = UnsafePointer(rgb.p)
+            let nnfP = nnf.p, distP = dist.p
+            let regP = UnsafePointer(region.p), validP = UnsafePointer(validCenter.p)
+            let rows = ry1 - ry0 + 1
+            let rowBase = ry0
+            let maxRadius = max(W, H)
+            let idx = regionIdx, starts = rowStart, srcs = sources
+            idx.withUnsafeBufferPointer { ib in
+                starts.withUnsafeBufferPointer { sb in
+                    srcs.withUnsafeBufferPointer { srcb in
+                        let ip = ib.baseAddress!, stp = sb.baseAddress!, srcp = srcb.baseAddress!
+                        let srcCount = srcb.count
 
-            for iter in 0..<Inpainter.iterations {
-                let forward = iter % 2 == 0
-                let maxRadius = max(W, H)
-                let ys = forward ? Array(0..<H) : Array((0..<H).reversed())
-                let xs = forward ? Array(0..<W) : Array((0..<W).reversed())
-                for y in ys {
-                    for x in xs {
-                        let i = y * W + x
-                        if region[i] == 0 { continue }
-                        var best = Int(nnf[i])
-                        var bestD = dist[i]
-                        // A perfect match cannot improve.
-                        if bestD <= 0 { continue }
-                        // Propagation from the neighbor just visited.
-                        let step = forward ? -1 : 1
-                        let nx = x + step, ny = y + step
-                        if nx >= 0, nx < W, region[y * W + nx] != 0 {
-                            let c = Int(nnf[y * W + nx]) - step
-                            if c >= 0, c < n, validCenter[c] != 0, c % W == (Int(nnf[y * W + nx]) % W) - step {
-                                let d = patchDistance(i, c, limit: bestD)
-                                if d < bestD { bestD = d; best = c }
+                        // Random init for anything the coarser level didn't hand down, then distances.
+                        DispatchQueue.concurrentPerform(iterations: rows) { r in
+                            var rng = XorShift(seed: Inpainter.rowSeed(seed, level: li, iteration: -1, row: r))
+                            var k = stp[r]
+                            let end = stp[r + 1]
+                            while k < end {
+                                let i = Int(ip[k])
+                                if nnfP[i] < 0 { nnfP[i] = srcp[rng.below(srcCount)] }
+                                distP[i] = Inpainter.patchDistance(rgbP, W, H, half, i, Int(nnfP[i]), limit: .greatestFiniteMagnitude)
+                                k += 1
                             }
                         }
-                        if ny >= 0, ny < H, region[ny * W + x] != 0 {
-                            let c = Int(nnf[ny * W + x]) - step * W
-                            if c >= 0, c < n, validCenter[c] != 0 {
-                                let d = patchDistance(i, c, limit: bestD)
-                                if d < bestD { bestD = d; best = c }
-                            }
-                        }
-                        // Random search around the current best, radius halving each try.
-                        var radius = maxRadius
-                        let bx = best % W, by = best / W
-                        while radius >= 1 {
-                            let cx = bx + rng.signed(radius), cy = by + rng.signed(radius)
-                            if cx >= half, cx < W - half, cy >= half, cy < H - half {
-                                let c = cy * W + cx
-                                if validCenter[c] != 0 {
-                                    let d = patchDistance(i, c, limit: bestD)
-                                    if d < bestD { bestD = d; best = c }
+
+                        // Rows are swept in stripes: even stripes in parallel, then odd ones, so the
+                        // neighbor row a stripe border reads is never being written at the same time.
+                        let band = max(4, rows / 32)
+                        let stripes = (rows + band - 1) / band
+                        for iter in 0..<iterations {
+                            let forward = iter % 2 == 0
+                            // Offset to the neighbor visited just before this pixel.
+                            let step = forward ? -1 : 1
+                            for parity in 0..<2 {
+                                let count = (stripes - parity + 1) / 2
+                                if count <= 0 { continue }
+                                DispatchQueue.concurrentPerform(iterations: count) { j in
+                                    let stripe = parity + 2 * j
+                                    let r0 = stripe * band, r1 = min(rows, r0 + band)
+                                    for t in 0..<(r1 - r0) {
+                                        let r = forward ? r0 + t : r1 - 1 - t
+                                        var rng = XorShift(seed: Inpainter.rowSeed(seed, level: li, iteration: iter, row: r))
+                                        let y = rowBase + r
+                                        let kStart = stp[r], kEnd = stp[r + 1]
+                                        for u in 0..<(kEnd - kStart) {
+                                            let k = forward ? kStart + u : kEnd - 1 - u
+                                            let i = Int(ip[k])
+                                            let x = i - y * W
+                                            var best = Int(nnfP[i])
+                                            var bestD = distP[i]
+                                            // A perfect match cannot improve.
+                                            if bestD <= 0 { continue }
+                                            // Propagation from the horizontal neighbor just visited.
+                                            let nx = x + step
+                                            if nx >= 0, nx < W, regP[i + step] != 0 {
+                                                let src = Int(nnfP[i + step])
+                                                let srcY = src / W, srcX = src - srcY * W
+                                                let cx = srcX - step
+                                                if cx >= half, cx < W - half {
+                                                    let c = src - step
+                                                    if validP[c] != 0 {
+                                                        let d = Inpainter.patchDistance(rgbP, W, H, half, i, c, limit: bestD)
+                                                        if d < bestD { bestD = d; best = c }
+                                                    }
+                                                }
+                                            }
+                                            // ... and from the vertical neighbor.
+                                            let ny = y + step
+                                            if ny >= 0, ny < H, regP[i + step * W] != 0 {
+                                                let c = Int(nnfP[i + step * W]) - step * W
+                                                if c >= 0, c < n, validP[c] != 0 {
+                                                    let d = Inpainter.patchDistance(rgbP, W, H, half, i, c, limit: bestD)
+                                                    if d < bestD { bestD = d; best = c }
+                                                }
+                                            }
+                                            // Random search around the current best, radius halving each try.
+                                            var radius = maxRadius
+                                            let by = best / W, bx = best - by * W
+                                            while radius >= 1 {
+                                                let cx = bx + rng.signed(radius), cy = by + rng.signed(radius)
+                                                if cx >= half, cx < W - half, cy >= half, cy < H - half {
+                                                    let c = cy * W + cx
+                                                    if validP[c] != 0 {
+                                                        let d = Inpainter.patchDistance(rgbP, W, H, half, i, c, limit: bestD)
+                                                        if d < bestD { bestD = d; best = c }
+                                                    }
+                                                }
+                                                radius /= 2
+                                            }
+                                            nnfP[i] = Int32(best)
+                                            distP[i] = bestD
+                                        }
+                                    }
                                 }
                             }
-                            radius /= 2
+                            vote(ip, stp, rows: rows)
+                            // Distances change once the hole is repainted (not needed after the last sweep).
+                            if iter + 1 < iterations {
+                                DispatchQueue.concurrentPerform(iterations: rows) { r in
+                                    var k = stp[r]
+                                    let end = stp[r + 1]
+                                    while k < end {
+                                        let i = Int(ip[k])
+                                        distP[i] = Inpainter.patchDistance(rgbP, W, H, half, i, Int(nnfP[i]), limit: .greatestFiniteMagnitude)
+                                        k += 1
+                                    }
+                                }
+                            }
                         }
-                        nnf[i] = Int32(best)
-                        dist[i] = bestD
                     }
                 }
-                vote()
-                // Distances change once the hole is repainted.
-                for i in 0..<n where region[i] != 0 { dist[i] = patchDistance(i, Int(nnf[i]), limit: .greatestFiniteMagnitude) }
-            }
-        }
-
-        /// Sum of squared RGB differences between the patch at `a` and the source patch at `b`,
-        /// giving up early once it exceeds `limit`.
-        func patchDistance(_ a: Int, _ b: Int, limit: Float) -> Float {
-            let half = Inpainter.patchHalf
-            let ax = a % w, ay = a / w, bx = b % w, by = b / w
-            var sum: Float = 0
-            return rgb.withUnsafeBufferPointer { p -> Float in
-                for dy in -half...half {
-                    let sy = ay + dy
-                    guard sy >= 0, sy < h else { sum += 3 * 255 * 255 * Float(2 * half + 1); continue }
-                    let ra = (sy * w) * 3, rb = ((by + dy) * w) * 3
-                    for dx in -half...half {
-                        let sx = ax + dx
-                        guard sx >= 0, sx < w else { sum += 3 * 255 * 255; continue }
-                        let ia = ra + (sx) * 3, ib = rb + (bx + dx) * 3
-                        let dr = p[ia] - p[ib], dg = p[ia + 1] - p[ib + 1], db = p[ia + 2] - p[ib + 2]
-                        sum += dr * dr + dg * dg + db * db
-                    }
-                    if sum > limit { return sum }
-                }
-                return sum
             }
         }
 
         /// Repaints every hole pixel as the weighted mean of what the patches covering it propose.
-        mutating func vote() {
+        /// Gathers per hole pixel, so rows run in parallel; sources never overlap the hole, so the
+        /// picture can be repainted in place.
+        func vote(_ ip: UnsafePointer<Int32>, _ stp: UnsafePointer<Int>, rows: Int) {
             let half = Inpainter.patchHalf
-            var acc = [Float](repeating: 0, count: w * h * 3)
-            var weight = [Float](repeating: 0, count: w * h)
-            var meanD: Float = 0, cnt: Float = 0
-            for i in 0..<(w * h) where region[i] != 0 { meanD += dist[i]; cnt += 1 }
-            let sigma = max(1, meanD / max(1, cnt))
-            for qy in 0..<h {
-                for qx in 0..<w {
-                    let q = qy * w + qx
-                    if region[q] == 0 { continue }
-                    let src = Int(nnf[q])
-                    guard src >= 0 else { continue }
-                    let sx = src % w, sy = src / w
-                    let wgt = expf(-dist[q] / sigma)
-                    for dy in -half...half {
-                        let py = qy + dy
-                        guard py >= 0, py < h else { continue }
-                        for dx in -half...half {
-                            let px = qx + dx
-                            guard px >= 0, px < w else { continue }
-                            let p = py * w + px
-                            if hole[p] == 0 { continue }
-                            let s = ((sy + dy) * w + (sx + dx)) * 3
-                            acc[p * 3] += rgb[s] * wgt
-                            acc[p * 3 + 1] += rgb[s + 1] * wgt
-                            acc[p * 3 + 2] += rgb[s + 2] * wgt
-                            weight[p] += wgt
-                        }
-                    }
+            let W = w, H = h
+            let rp = rgb.p
+            let rgbP = UnsafePointer(rp)
+            let nnfP = UnsafePointer(nnf.p), distP = UnsafePointer(dist.p)
+            let regP = UnsafePointer(region.p), holeP = UnsafePointer(hole.p)
+            let wgtP = weight.p
+            let rowBase = ry0
+            let total = stp[rows]
+            var meanD: Float = 0
+            var k = 0
+            while k < total {
+                meanD += distP[Int(ip[k])]
+                k += 1
+            }
+            let sigma = max(1, meanD / Float(max(1, total)))
+            DispatchQueue.concurrentPerform(iterations: rows) { r in
+                var k = stp[r]
+                let end = stp[r + 1]
+                while k < end {
+                    let i = Int(ip[k])
+                    wgtP[i] = expf(-distP[i] / sigma)
+                    k += 1
                 }
             }
-            for p in 0..<(w * h) where hole[p] != 0 && weight[p] > 0 {
-                rgb[p * 3] = acc[p * 3] / weight[p]
-                rgb[p * 3 + 1] = acc[p * 3 + 1] / weight[p]
-                rgb[p * 3 + 2] = acc[p * 3 + 2] / weight[p]
+            DispatchQueue.concurrentPerform(iterations: rows) { r in
+                let y = rowBase + r
+                let dy0 = max(-half, -y), dy1 = min(half, H - 1 - y)
+                var k = stp[r]
+                let end = stp[r + 1]
+                while k < end {
+                    let i = Int(ip[k])
+                    k += 1
+                    if holeP[i] == 0 { continue }
+                    let x = i - y * W
+                    let dx0 = max(-half, -x), dx1 = min(half, W - 1 - x)
+                    var sr: Float = 0, sg: Float = 0, sb: Float = 0, sw: Float = 0
+                    var dy = dy0
+                    while dy <= dy1 {
+                        let qRow = i + dy * W
+                        var dx = dx0
+                        while dx <= dx1 {
+                            let q = qRow + dx
+                            if regP[q] != 0 {
+                                let wq = wgtP[q]
+                                // The source patch at nnf[q] proposes its pixel at the same offset.
+                                let s = (Int(nnfP[q]) - dy * W - dx) * 3
+                                sr += rgbP[s] * wq
+                                sg += rgbP[s + 1] * wq
+                                sb += rgbP[s + 2] * wq
+                                sw += wq
+                            }
+                            dx += 1
+                        }
+                        dy += 1
+                    }
+                    if sw > 0 {
+                        rp[i * 3] = sr / sw
+                        rp[i * 3 + 1] = sg / sw
+                        rp[i * 3 + 2] = sb / sw
+                    }
+                }
             }
         }
 
@@ -484,14 +740,19 @@ enum Inpainter {
         func makeImage() -> CGImage? {
             guard let ctx = Gfx.context(w, h), let p = ctx.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
             let bpr = ctx.bytesPerRow
+            let src = UnsafePointer(rgb.p)
             for y in 0..<h {
-                for x in 0..<w {
-                    let i = (y * w + x) * 3
-                    let o = p + y * bpr + x * 4
-                    o[0] = UInt8(min(255, max(0, rgb[i].rounded())))
-                    o[1] = UInt8(min(255, max(0, rgb[i + 1].rounded())))
-                    o[2] = UInt8(min(255, max(0, rgb[i + 2].rounded())))
+                let row = p + y * bpr
+                let s = src + y * w * 3
+                var x = 0
+                while x < w {
+                    let i = x * 3
+                    let o = row + x * 4
+                    o[0] = UInt8(min(255, max(0, s[i].rounded())))
+                    o[1] = UInt8(min(255, max(0, s[i + 1].rounded())))
+                    o[2] = UInt8(min(255, max(0, s[i + 2].rounded())))
                     o[3] = 255
+                    x += 1
                 }
             }
             return ctx.makeImage()

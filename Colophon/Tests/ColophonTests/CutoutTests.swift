@@ -46,7 +46,7 @@ final class CutoutTests: XCTestCase {
         let start = Date()
         let out = try XCTUnwrap(Inpainter.remove(from: img, mask: mask))
         let elapsed = Date().timeIntervalSince(start)
-        XCTAssertLessThan(elapsed, 5, "inpainting a 400 px picture took \(elapsed) s")
+        XCTAssertLessThan(elapsed, 4, "inpainting a 400 px picture took \(elapsed) s")
         XCTAssertEqual(out.width, 400)
         XCTAssertEqual(out.height, 400)
         // The ground as it actually landed in the picture (CGColor(red:green:blue:) is generic RGB, not sRGB).
@@ -60,6 +60,43 @@ final class CutoutTests: XCTestCase {
         XCTAssertEqual(corner.r, ground.r)
         XCTAssertEqual(corner.g, ground.g)
         XCTAssertEqual(corner.b, ground.b)
+    }
+
+    /// A 1200×1500 "photo" (gradient plus soft noise) with a 200×300 rectangle removed: fast, and
+    /// nothing changes away from the hole.
+    func testInpaintLargePhotoIsFastAndLeavesCornersAlone() throws {
+        let w = 1200, h = 1500
+        let ctx = try XCTUnwrap(Gfx.context(w, h))
+        let full = CGRect(x: 0, y: 0, width: w, height: h)
+        Gfx.linearGradient(ctx, full, [RGBA(hex: "2E4A6B"), RGBA(hex: "D9B38C")], angle: 35)
+        if let noise = Gfx.valueNoise(300, 375, cells: 5, seed: 7) {
+            ctx.setAlpha(0.3)
+            ctx.draw(noise, in: full)
+            ctx.setAlpha(1)
+        }
+        let img = try XCTUnwrap(ctx.makeImage())
+        let hole = CGRect(x: 500, y: 600, width: 200, height: 300)
+        let mask = try rectMask(hole, w: w, h: h)
+        let start = Date()
+        let out = try XCTUnwrap(Inpainter.remove(from: img, mask: mask))
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 4, "inpainting a 1200×1500 picture took \(elapsed) s")
+        XCTAssertEqual(out.width, w)
+        XCTAssertEqual(out.height, h)
+        let before = PixelSampler.pixels(img, maxSide: max(w, h))
+        let after = PixelSampler.pixels(out, maxSide: max(w, h))
+        XCTAssertEqual(before.w, after.w)
+        XCTAssertEqual(before.h, after.h)
+        for (x, y) in [(20, 20), (w - 20, 20), (20, h - 20), (w - 20, h - 20), (480, 750), (720, 750), (600, 580), (600, 920)] {
+            let i = (y * before.w + x) * 4
+            XCTAssertEqual(Int(before.data[i]), Int(after.data[i]), "red at \(x),\(y)")
+            XCTAssertEqual(Int(before.data[i + 1]), Int(after.data[i + 1]), "green at \(x),\(y)")
+            XCTAssertEqual(Int(before.data[i + 2]), Int(after.data[i + 2]), "blue at \(x),\(y)")
+        }
+        // The fill is plausible: the center lands between the two gradient ends.
+        let c = rgb(out, 600, 750)
+        XCTAssertGreaterThan(c.r, 20)
+        XCTAssertLessThan(c.r, 235)
     }
 
     func testInpaintWithEmptyMaskReturnsPicture() throws {
