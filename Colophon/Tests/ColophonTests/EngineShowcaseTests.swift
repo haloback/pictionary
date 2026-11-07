@@ -399,6 +399,12 @@ extension SampleRenderTests {
             doc.paperback.pageCount = 320
             doc.paperback.quote = "“Impossible to put down.” — a reviewer"
             doc.paperback.blurb = Array(repeating: "Nobody in Harrow Bay talks about the winter the ferry stopped running, least of all the man who sold the tickets.", count: 6).joined(separator: " ")
+            doc.paperback.isbn = "978-0-306-40615-7"
+            doc.paperback.priceCode = "51499"
+            doc.paperback.category = "FICTION / THRILLER"
+            doc.paperback.publisher = "Harrow Bay Press"
+            doc.paperback.authorBio = "Mara Kellen grew up on the coast and worked the ferries for a decade before writing about them. She lives in Maine."
+            doc.paperback.authorPhotoAssetID = doc.assetOrder.first
             let square = CGSize(width: 600, height: 600)
             if let wrap = PrintWrap.render(doc, dpi: 60, guides: true), let ctx = Gfx.context(600, 600) {
                 // Letterbox the wide wrap into the square cell.
@@ -416,6 +422,35 @@ extension SampleRenderTests {
         if !imgs.isEmpty {
             sheet(imgs, cols: 5, cell: CGSize(width: 600, height: 600), labels: labels, to: out.appendingPathComponent("14-physical.png"))
             manifest.append(["file": "14-physical.png", "name": "The physical book: the full wrap with guides, and the paperback mockups front, back, flat and stacked", "family": "Print"])
+        }
+
+        // 15. The back cover up close, in its three layouts, with a real barcode.
+        imgs = []; labels = []
+        if let design = SignatureLibrary.design("thriller-brand-name") {
+            var base = SignatureLibrary.sampleDocument(design)
+            if design.usesPhoto, let data = photos["portrait"] ?? portrait { _ = base.addAsset(data) }
+            var doc = SignatureLibrary.build(design, palette: 0, base: base)
+            doc.paperback.pageCount = 320
+            doc.paperback.quote = "“Impossible to put down.” — a reviewer"
+            doc.paperback.blurb = Array(repeating: "Nobody in Harrow Bay talks about the winter the ferry stopped running, least of all the man who sold the tickets.", count: 6).joined(separator: " ")
+            doc.paperback.isbn = "978-0-306-40615-7"
+            doc.paperback.priceCode = "51499"
+            doc.paperback.category = "FICTION / THRILLER"
+            doc.paperback.publisher = "Harrow Bay Press"
+            doc.paperback.authorBio = "Mara Kellen grew up on the coast and worked the ferries for a decade before writing about them. She lives in Maine."
+            doc.paperback.authorPhotoAssetID = doc.assetOrder.first
+            for layout in PrintSettings.BackLayout.allCases {
+                doc.paperback.backLayout = layout
+                guard let parts = MockupRenderer.wrapParts(doc, dpi: 100) else { continue }
+                imgs.append(parts.back)
+                labels.append("Back cover, \(layout.label)")
+            }
+            if let parts = MockupRenderer.wrapParts(doc, dpi: 100) { imgs.append(parts.spine); labels.append("Spine") }
+        }
+        if !imgs.isEmpty {
+            let cellB = CGSize(width: 400, height: 600)
+            sheet(imgs, cols: 4, cell: cellB, labels: labels, to: out.appendingPathComponent("15-back-cover.png"))
+            manifest.append(["file": "15-back-cover.png", "name": "The back cover up close: classic, quote first and minimal layouts, with a real ISBN barcode, category, publisher and author photo", "family": "Print"])
         }
 
         let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted])
