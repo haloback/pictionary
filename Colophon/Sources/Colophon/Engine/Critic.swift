@@ -133,7 +133,7 @@ enum Critic {
             if role == .title && capFraction < 0.045 {
                 issues.append(CriticIssue(kind: .prominence, severity: capFraction < 0.03 ? .fail : .warning, layerID: l.id,
                                           message: "The title's capitals stand only \(Int(capFraction * 100))% of the cover height; bestsellers run 6–20%.",
-                                          penalty: min(22, (0.045 - capFraction) / 0.045 * 30)))
+                                          penalty: min(30, (0.045 - capFraction) / 0.045 * 45)))
             }
             if role != .title && role != .author && capFraction < 0.011 {
                 issues.append(CriticIssue(kind: .thumbnail, severity: .info, layerID: l.id,
