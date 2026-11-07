@@ -314,6 +314,60 @@ extension SampleRenderTests {
             manifest.append(["file": "10-cutouts.png", "name": "Subjects, precise cutouts, edge refinement and object removal", "family": "Image"])
         }
 
+        // 12. Shelf test: the cover among the genre's covers at Amazon thumbnail size.
+        imgs = []; labels = []
+        func shelfCover(_ title: String, author: String, genre: Genre, titleColor: RGBA, ground: RGBA, titleFrame: NRect, font: String) -> CoverDocument {
+            var d = CoverDocument()
+            d.book = BookInfo(title: title, author: author, genre: genre)
+            d.palette = [ground, titleColor, RGBA(hex: "E8562A")]
+            d.background = ground
+            d.layers = [Layer.fill(.solid, colors: [ground], frame: .full),
+                        Layer.text(title, role: .title, frame: titleFrame, font: font, color: titleColor),
+                        Layer.text(author, role: .author, frame: NRect(0.15, 0.88, 0.7, 0.035), font: "Montserrat-Black", color: titleColor)]
+            return d
+        }
+        let shelfCases: [(String, CoverDocument)] = [
+            ("Big warm title on a cold shelf", shelfCover("Ash Year", author: "Oren Halvorsen", genre: .thriller, titleColor: RGBA(hex: "F2ECDF"), ground: RGBA(hex: "C8553D"), titleFrame: NRect(0.06, 0.2, 0.88, 0.45), font: "Anton-Regular")),
+            ("Small gray title on gray", shelfCover("The Long Quiet Afternoon", author: "Ada Merrow", genre: .thriller, titleColor: RGBA(hex: "6A6A6A"), ground: RGBA(hex: "2A2A2E"), titleFrame: NRect(0.25, 0.45, 0.5, 0.06), font: "CormorantGaramond-SemiBold")),
+        ]
+        for (name, d) in shelfCases {
+            if let r = ShelfTest.run(d, seed: 3) {
+                imgs.append(r.grid)
+                labels.append("\(name): standout \(Int(r.standout)). " + (r.notes.first ?? ""))
+            }
+        }
+        if !imgs.isEmpty {
+            let gw = CGFloat(imgs[0].width), gh = CGFloat(imgs[0].height)
+            sheet(imgs, cols: 2, cell: CGSize(width: 640, height: 640 * gh / gw), labels: labels, to: out.appendingPathComponent("12-shelf.png"))
+            manifest.append(["file": "12-shelf.png", "name": "Shelf test: your cover among the genre's covers at Amazon thumbnail size, with a standout score", "family": "Critic"])
+        }
+
+        // 13. Make it a 90: weak covers, then what the improver makes of them, with the scores.
+        imgs = []; labels = []
+        func weakCover(_ title: String, author: String, genre: Genre, photo: Data?, titleColor: RGBA, ground: RGBA, titleFrame: NRect) -> CoverDocument {
+            var d = CoverDocument()
+            d.book = BookInfo(title: title, subtitle: "A Novel", author: author, tagline: "Nothing stays buried.", genre: genre)
+            d.palette = [ground, titleColor, RGBA(hex: "E8562A")]
+            d.background = ground
+            d.layers = [Layer.fill(.solid, colors: [ground], frame: .full)]
+            if let photo { let id = d.addAsset(photo); d.layers.append(Layer.image(id, frame: .full)) }
+            d.layers.append(Layer.text(title, role: .title, frame: titleFrame, font: "PlayfairDisplay-Black", color: titleColor))
+            d.layers.append(Layer.text(author, role: .author, frame: NRect(0.2, 0.9, 0.6, 0.03), font: "Montserrat-Black", color: titleColor))
+            return d
+        }
+        let weakCases: [(String, CoverDocument)] = [
+            ("Pale on pale, tiny title", weakCover("The Salt Orchard", author: "Ines Valcourt", genre: .literary, photo: nil, titleColor: RGBA(hex: "E6E0D2"), ground: RGBA(hex: "D9D4C7"), titleFrame: NRect(0.3, 0.42, 0.4, 0.05))),
+            ("Gray title over a busy photo", weakCover("No One Leaves", author: "Mara Kellen", genre: .thriller, photo: landscape, titleColor: RGBA(hex: "8A8A8A"), ground: RGBA(hex: "000000"), titleFrame: NRect(0.1, 0.4, 0.8, 0.14))),
+            ("Mid-gray on a mid-gray ground", weakCover("Grace Under Glass", author: "Julien Achterberg", genre: .literary, photo: nil, titleColor: RGBA(hex: "7A7A7A"), ground: RGBA(hex: "8C8C8C"), titleFrame: NRect(0.08, 0.3, 0.84, 0.2))),
+        ]
+        for (name, d) in weakCases {
+            let outcome = AutoImprover.run(d, target: 90, maxSteps: 12)
+            if let before = shot(d) { imgs.append(before); labels.append("\(name): \(Int(outcome.start.score))") }
+            if let after = shot(outcome.document) { imgs.append(after); labels.append("after \(outcome.steps) step\(outcome.steps == 1 ? "" : "s"): \(Int(outcome.report.score)) \(outcome.report.grade)") }
+        }
+        sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("13-improve.png"))
+        manifest.append(["file": "13-improve.png", "name": "Make it a 90: repairs, then targeted edits kept only when the score rises", "family": "Critic"])
+
         // 11. Where readers look first.
         imgs = []; labels = []
         for id in ["literary-the-grid", "thriller-brand-name", "memoir-close", "fantasy-the-gate"] {
