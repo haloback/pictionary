@@ -1,0 +1,2450 @@
+[
+  {
+    "idea" : "A massive, tightly stacked serif carries the cover; one orange sun is the only image.",
+    "id" : "literary-the-grid",
+    "name" : "The Grid",
+    "genre" : "Literary Fiction",
+    "palettes" : [
+      "Paper & Vermilion",
+      "Night & Gold",
+      "Sage & Plum"
+    ],
+    "files" : [
+      "000-literary-the-grid.jpg",
+      "000-literary-the-grid-p1.jpg",
+      "000-literary-the-grid-p2.jpg"
+    ],
+    "tags" : [
+      "typographic",
+      "minimal",
+      "light",
+      "modern"
+    ]
+  },
+  {
+    "files" : [
+      "001-thriller-brand-name.jpg",
+      "001-thriller-brand-name-p1.jpg",
+      "001-thriller-brand-name-nophoto.jpg"
+    ],
+    "idea" : "The author's name is the biggest thing on the cover, like an established bestseller; hard black-and-white photo.",
+    "genre" : "Thriller",
+    "id" : "thriller-brand-name",
+    "palettes" : [
+      "Black & Signal Red",
+      "Black & Acid"
+    ],
+    "name" : "Brand Name",
+    "tags" : [
+      "photo",
+      "dark",
+      "condensed",
+      "bold type"
+    ]
+  },
+  {
+    "files" : [
+      "002-literary-horizon-band.jpg",
+      "002-literary-horizon-band-p1.jpg",
+      "002-literary-horizon-band-p2.jpg",
+      "002-literary-horizon-band-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "minimal",
+      "elegant",
+      "atmospheric"
+    ],
+    "id" : "literary-horizon-band",
+    "genre" : "Literary Fiction",
+    "idea" : "The photo is cropped to a thin horizon strip across the middle; the rest is quiet paper and a calm serif.",
+    "palettes" : [
+      "Fog & Slate",
+      "Dusk",
+      "Sea Glass"
+    ],
+    "name" : "Horizon Band"
+  },
+  {
+    "id" : "literary-up-the-spine",
+    "name" : "Up the Spine",
+    "idea" : "The title runs vertically up the left edge in towering condensed caps; a narrow right column holds a red square and the author.",
+    "tags" : [
+      "typographic",
+      "dark",
+      "bold type",
+      "modern",
+      "minimal"
+    ],
+    "files" : [
+      "003-literary-up-the-spine.jpg",
+      "003-literary-up-the-spine-p1.jpg",
+      "003-literary-up-the-spine-p2.jpg"
+    ],
+    "genre" : "Literary Fiction",
+    "palettes" : [
+      "Ink & Ember",
+      "Cobalt & Saffron",
+      "Bone & Black"
+    ]
+  },
+  {
+    "name" : "Arch Window",
+    "genre" : "Literary Fiction",
+    "idea" : "A duotone portrait seen through a chapel-window arch with a hairline frame; an italic serif title sits below like a caption.",
+    "tags" : [
+      "photo",
+      "light",
+      "elegant",
+      "classic",
+      "romantic"
+    ],
+    "id" : "literary-arch-window",
+    "palettes" : [
+      "Plaster",
+      "Oxblood",
+      "Chapel Blue"
+    ],
+    "files" : [
+      "004-literary-arch-window.jpg",
+      "004-literary-arch-window-p1.jpg",
+      "004-literary-arch-window-p2.jpg",
+      "004-literary-arch-window-nophoto.jpg"
+    ]
+  },
+  {
+    "genre" : "Literary Fiction",
+    "name" : "Color Field",
+    "id" : "literary-color-field",
+    "idea" : "Two soft-edged painted fields stack like an abstract canvas; the title is set small and wide on the bare margin below.",
+    "palettes" : [
+      "Rust & Plum",
+      "Ochre & Teal",
+      "Rose & Slate"
+    ],
+    "files" : [
+      "005-literary-color-field.jpg",
+      "005-literary-color-field-p1.jpg",
+      "005-literary-color-field-p2.jpg"
+    ],
+    "tags" : [
+      "painted",
+      "light",
+      "minimal",
+      "artful",
+      "modern"
+    ]
+  },
+  {
+    "files" : [
+      "006-literary-the-band.jpg",
+      "006-literary-the-band-p1.jpg",
+      "006-literary-the-band-p2.jpg",
+      "006-literary-the-band-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "bold type",
+      "modern",
+      "moody"
+    ],
+    "name" : "The Band",
+    "id" : "literary-the-band",
+    "genre" : "Literary Fiction",
+    "palettes" : [
+      "Prussian",
+      "Oxide",
+      "Moss"
+    ],
+    "idea" : "A solid band of deep color slices across a toned landscape and carries the title in reversed Bodoni."
+  },
+  {
+    "palettes" : [
+      "Linen & Red Thread",
+      "Midnight & Gold",
+      "Celadon"
+    ],
+    "idea" : "A single red thread drops from the top edge to a tiny knot, and the title hangs from it in open space.",
+    "tags" : [
+      "graphic",
+      "light",
+      "minimal",
+      "elegant",
+      "quiet"
+    ],
+    "name" : "The Thread",
+    "genre" : "Literary Fiction",
+    "files" : [
+      "007-literary-the-thread.jpg",
+      "007-literary-the-thread-p1.jpg",
+      "007-literary-the-thread-p2.jpg"
+    ],
+    "id" : "literary-the-thread"
+  },
+  {
+    "genre" : "Literary Fiction",
+    "palettes" : [
+      "Chalk & Blue",
+      "Deep Water",
+      "Blush & Wine"
+    ],
+    "files" : [
+      "008-literary-echo.jpg",
+      "008-literary-echo-p1.jpg",
+      "008-literary-echo-p2.jpg"
+    ],
+    "idea" : "The title is struck once in full ink, then repeats down the cover in ever fainter impressions, like a sound dying away.",
+    "name" : "Echo",
+    "id" : "literary-echo",
+    "tags" : [
+      "typographic",
+      "light",
+      "modern",
+      "bold type",
+      "pattern"
+    ]
+  },
+  {
+    "name" : "Sliver",
+    "id" : "literary-sliver",
+    "tags" : [
+      "photo",
+      "light",
+      "minimal",
+      "elegant",
+      "modern"
+    ],
+    "palettes" : [
+      "Gallery White",
+      "Graphite",
+      "Pale Ochre"
+    ],
+    "genre" : "Literary Fiction",
+    "idea" : "The portrait survives only as a narrow vertical slice; a tall stacked Caslon title holds the open left side.",
+    "files" : [
+      "009-literary-sliver.jpg",
+      "009-literary-sliver-p1.jpg",
+      "009-literary-sliver-p2.jpg",
+      "009-literary-sliver-nophoto.jpg"
+    ]
+  },
+  {
+    "palettes" : [
+      "Kitchen Table",
+      "Blue Hour",
+      "Mint Linen"
+    ],
+    "genre" : "Memoir",
+    "id" : "memoir-snapshot",
+    "idea" : "A small bordered family print lies on linen like a photo found in a drawer; a long italic title reads as its caption.",
+    "tags" : [
+      "photo",
+      "light",
+      "intimate",
+      "nostalgic",
+      "elegant"
+    ],
+    "files" : [
+      "010-memoir-snapshot.jpg",
+      "010-memoir-snapshot-p1.jpg",
+      "010-memoir-snapshot-p2.jpg",
+      "010-memoir-snapshot-nophoto.jpg"
+    ],
+    "name" : "Snapshot"
+  },
+  {
+    "name" : "Close",
+    "files" : [
+      "011-memoir-close.jpg",
+      "011-memoir-close-p1.jpg",
+      "011-memoir-close-p2.jpg",
+      "011-memoir-close-nophoto.jpg"
+    ],
+    "genre" : "Memoir",
+    "idea" : "A full-bleed black-and-white face fills the cover; the title is one quiet serif line at its foot, with a single spot of color above it.",
+    "tags" : [
+      "photo",
+      "dark",
+      "intimate",
+      "elegant",
+      "moody"
+    ],
+    "id" : "memoir-close",
+    "palettes" : [
+      "Silver Print",
+      "Rose Print",
+      "Cold Blue"
+    ]
+  },
+  {
+    "id" : "memoir-top-half",
+    "genre" : "Memoir",
+    "palettes" : [
+      "Cream & Rust",
+      "Graphite",
+      "Seafoam"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "nostalgic",
+      "classic",
+      "warm"
+    ],
+    "idea" : "A sepia photograph fills the top half and a clean page the bottom, split by a single line of color, like an album leaf.",
+    "name" : "Top Half",
+    "files" : [
+      "012-memoir-top-half.jpg",
+      "012-memoir-top-half-p1.jpg",
+      "012-memoir-top-half-p2.jpg",
+      "012-memoir-top-half-nophoto.jpg"
+    ]
+  },
+  {
+    "id" : "memoir-eyes",
+    "idea" : "The portrait is cropped to a letterbox of the eyes alone, a gaze held between title and author.",
+    "tags" : [
+      "photo",
+      "light",
+      "intimate",
+      "modern",
+      "striking"
+    ],
+    "name" : "Eyes",
+    "genre" : "Memoir",
+    "palettes" : [
+      "Cream & Black",
+      "Indigo",
+      "Blush"
+    ],
+    "files" : [
+      "013-memoir-eyes.jpg",
+      "013-memoir-eyes-p1.jpg",
+      "013-memoir-eyes-p2.jpg",
+      "013-memoir-eyes-nophoto.jpg"
+    ]
+  },
+  {
+    "tags" : [
+      "typographic",
+      "light",
+      "minimal",
+      "quiet",
+      "elegant"
+    ],
+    "genre" : "Memoir",
+    "idea" : "A lowercase italic title rests at the optical center of warm paper, with one short hairline and nothing else: a whisper of a cover.",
+    "id" : "memoir-quiet",
+    "files" : [
+      "014-memoir-quiet.jpg",
+      "014-memoir-quiet-p1.jpg",
+      "014-memoir-quiet-p2.jpg"
+    ],
+    "name" : "Quiet",
+    "palettes" : [
+      "Warm Paper",
+      "Night Garden",
+      "Dove"
+    ]
+  },
+  {
+    "name" : "Typewritten",
+    "id" : "memoir-typewritten",
+    "palettes" : [
+      "Legal Pad",
+      "Carbon Copy",
+      "Night Shift"
+    ],
+    "tags" : [
+      "typographic",
+      "light",
+      "quiet",
+      "vintage",
+      "intimate"
+    ],
+    "idea" : "The cover is a typed manuscript page with a red margin line; the title sits where the first lines would be.",
+    "genre" : "Memoir",
+    "files" : [
+      "015-memoir-typewritten.jpg",
+      "015-memoir-typewritten-p1.jpg",
+      "015-memoir-typewritten-p2.jpg"
+    ]
+  },
+  {
+    "palettes" : [
+      "Velvet Green",
+      "Mourning Black",
+      "Oxblood"
+    ],
+    "id" : "memoir-locket",
+    "tags" : [
+      "photo",
+      "dark",
+      "elegant",
+      "intimate",
+      "vintage"
+    ],
+    "genre" : "Memoir",
+    "name" : "Locket",
+    "files" : [
+      "016-memoir-locket.jpg",
+      "016-memoir-locket-p1.jpg",
+      "016-memoir-locket-p2.jpg",
+      "016-memoir-locket-nophoto.jpg"
+    ],
+    "idea" : "A small oval portrait ringed in a gold hairline sits high on a deep ground, kept like a locket; classical capitals below."
+  },
+  {
+    "id" : "memoir-say-it-loud",
+    "name" : "Say It Loud",
+    "idea" : "A voice-driven memoir: the heavy serif title shouts across a saturated ground, and the author's name is stamped in a black band.",
+    "palettes" : [
+      "Marigold",
+      "Hot Pink",
+      "Cobalt"
+    ],
+    "tags" : [
+      "typographic",
+      "bold type",
+      "playful",
+      "modern",
+      "light"
+    ],
+    "genre" : "Memoir",
+    "files" : [
+      "017-memoir-say-it-loud.jpg",
+      "017-memoir-say-it-loud-p1.jpg",
+      "017-memoir-say-it-loud-p2.jpg"
+    ]
+  },
+  {
+    "genre" : "Nonfiction",
+    "id" : "nonfiction-one-word",
+    "name" : "One Word",
+    "idea" : "A big-idea book sold on one word: the title runs edge to edge in condensed black caps on a loud, flat ground.",
+    "tags" : [
+      "typographic",
+      "light",
+      "bold type",
+      "modern",
+      "business"
+    ],
+    "palettes" : [
+      "Safety Yellow",
+      "Black & Signal",
+      "Ice & Blue"
+    ],
+    "files" : [
+      "018-nonfiction-one-word.jpg",
+      "018-nonfiction-one-word-p1.jpg",
+      "018-nonfiction-one-word-p2.jpg"
+    ]
+  },
+  {
+    "name" : "Rising Line",
+    "files" : [
+      "019-nonfiction-rising-line.jpg",
+      "019-nonfiction-rising-line-p1.jpg",
+      "019-nonfiction-rising-line-p2.jpg"
+    ],
+    "id" : "nonfiction-rising-line",
+    "genre" : "Nonfiction",
+    "palettes" : [
+      "White & Orange",
+      "Navy & Lime",
+      "Cream & Green"
+    ],
+    "idea" : "One bold band of color climbs across the cover like a growth chart; heavy sans title stacked hard to the top left.",
+    "tags" : [
+      "graphic",
+      "light",
+      "bold type",
+      "modern",
+      "business"
+    ]
+  },
+  {
+    "files" : [
+      "020-nonfiction-divided-mind.jpg",
+      "020-nonfiction-divided-mind-p1.jpg",
+      "020-nonfiction-divided-mind-p2.jpg",
+      "020-nonfiction-divided-mind-nophoto.jpg"
+    ],
+    "id" : "nonfiction-divided-mind",
+    "idea" : "A hard black-and-white face is split down the middle by a solid column of color that carries the title: two selves, one cover.",
+    "name" : "Divided Mind",
+    "palettes" : [
+      "Red Room",
+      "Black Lab",
+      "Cobalt"
+    ],
+    "genre" : "Nonfiction",
+    "tags" : [
+      "photo",
+      "dark",
+      "bold type",
+      "modern",
+      "psychology"
+    ]
+  },
+  {
+    "name" : "Deep Field",
+    "id" : "nonfiction-deep-field",
+    "idea" : "The universe runs full bleed and a wide display title floats in its darkest sky, like a narrative science bestseller.",
+    "genre" : "Nonfiction",
+    "tags" : [
+      "photo",
+      "dark",
+      "epic",
+      "modern",
+      "science"
+    ],
+    "palettes" : [
+      "Deep Field",
+      "Ice Blue",
+      "Signal Red"
+    ],
+    "files" : [
+      "021-nonfiction-deep-field.jpg",
+      "021-nonfiction-deep-field-p1.jpg",
+      "021-nonfiction-deep-field-p2.jpg",
+      "021-nonfiction-deep-field-nophoto.jpg"
+    ]
+  },
+  {
+    "idea" : "The image hangs in a hairline frame like an archive print, with engraved capitals above and an italic caption below.",
+    "id" : "nonfiction-museum-plate",
+    "tags" : [
+      "photo",
+      "light",
+      "classic",
+      "vintage",
+      "history"
+    ],
+    "genre" : "Nonfiction",
+    "name" : "Museum Plate",
+    "palettes" : [
+      "Parchment",
+      "Archive Green",
+      "Admiralty"
+    ],
+    "files" : [
+      "022-nonfiction-museum-plate.jpg",
+      "022-nonfiction-museum-plate-p1.jpg",
+      "022-nonfiction-museum-plate-p2.jpg",
+      "022-nonfiction-museum-plate-nophoto.jpg"
+    ]
+  },
+  {
+    "genre" : "Nonfiction",
+    "idea" : "A field of survey contour lines with one small summit marker; the title is cut into a solid block like an expedition stamp.",
+    "palettes" : [
+      "Glacier",
+      "Desert Survey",
+      "Moss"
+    ],
+    "id" : "nonfiction-contour",
+    "name" : "Contour",
+    "tags" : [
+      "graphic",
+      "light",
+      "bold type",
+      "adventure",
+      "science"
+    ],
+    "files" : [
+      "023-nonfiction-contour.jpg",
+      "023-nonfiction-contour-p1.jpg",
+      "023-nonfiction-contour-p2.jpg"
+    ]
+  },
+  {
+    "name" : "The Card",
+    "idea" : "A self-help promise set huge and stacked on a white card, laid on a cheerful flat ground like a note to yourself.",
+    "id" : "nonfiction-the-card",
+    "genre" : "Nonfiction",
+    "files" : [
+      "024-nonfiction-the-card.jpg",
+      "024-nonfiction-the-card-p1.jpg",
+      "024-nonfiction-the-card-p2.jpg"
+    ],
+    "tags" : [
+      "typographic",
+      "light",
+      "bold type",
+      "playful",
+      "self-help"
+    ],
+    "palettes" : [
+      "Coral",
+      "Sky",
+      "Lilac"
+    ]
+  },
+  {
+    "genre" : "Nonfiction",
+    "palettes" : [
+      "Peach Dawn",
+      "Sage Morning",
+      "Lavender Dusk"
+    ],
+    "id" : "nonfiction-dawn",
+    "name" : "Dawn",
+    "tags" : [
+      "graphic",
+      "light",
+      "calm",
+      "minimal",
+      "self-help"
+    ],
+    "files" : [
+      "025-nonfiction-dawn.jpg",
+      "025-nonfiction-dawn-p1.jpg",
+      "025-nonfiction-dawn-p2.jpg"
+    ],
+    "idea" : "A half sun rises from the bottom edge into a soft morning gradient, beneath a calm lowercase serif title."
+  },
+  {
+    "idea" : "A calm landscape runs full bleed and the title sits on a plain paper card pinned to its lower left, like a note left on the view.",
+    "genre" : "Nonfiction",
+    "id" : "nonfiction-field-note",
+    "name" : "Field Note",
+    "files" : [
+      "026-nonfiction-field-note.jpg",
+      "026-nonfiction-field-note-p1.jpg",
+      "026-nonfiction-field-note-p2.jpg",
+      "026-nonfiction-field-note-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "calm",
+      "elegant",
+      "self-help"
+    ],
+    "palettes" : [
+      "Oat",
+      "Fog",
+      "Clay"
+    ]
+  },
+  {
+    "name" : "Redacted",
+    "genre" : "Thriller",
+    "id" : "thriller-redacted",
+    "palettes" : [
+      "Dossier & Stamp Red",
+      "Manila Folder",
+      "Carbon & White-Out"
+    ],
+    "tags" : [
+      "typographic",
+      "light",
+      "minimal",
+      "modern",
+      "bold type",
+      "graphic"
+    ],
+    "idea" : "A classified page where every line is blacked out except the title, with a red stamp struck across the bars.",
+    "files" : [
+      "027-thriller-redacted.jpg",
+      "027-thriller-redacted-p1.jpg",
+      "027-thriller-redacted-p2.jpg"
+    ]
+  },
+  {
+    "idea" : "The city glows through the mullions of a high-rise window; the title sits on the dark sill beneath.",
+    "tags" : [
+      "photo",
+      "dark",
+      "modern",
+      "urban",
+      "bold type",
+      "atmospheric"
+    ],
+    "files" : [
+      "028-thriller-window-grid.jpg",
+      "028-thriller-window-grid-p1.jpg",
+      "028-thriller-window-grid-p2.jpg",
+      "028-thriller-window-grid-nophoto.jpg"
+    ],
+    "name" : "Window Grid",
+    "id" : "thriller-window-grid",
+    "palettes" : [
+      "Amber City",
+      "Blue Hour",
+      "Daylight Cobalt"
+    ],
+    "genre" : "Thriller"
+  },
+  {
+    "idea" : "The photo is cut down to a single letterbox band across a dark field, like a view through a mail slot.",
+    "files" : [
+      "029-thriller-the-slit.jpg",
+      "029-thriller-the-slit-p1.jpg",
+      "029-thriller-the-slit-p2.jpg",
+      "029-thriller-the-slit-nophoto.jpg"
+    ],
+    "id" : "thriller-the-slit",
+    "tags" : [
+      "photo",
+      "dark",
+      "minimal",
+      "condensed",
+      "atmospheric",
+      "moody"
+    ],
+    "genre" : "Thriller",
+    "palettes" : [
+      "Ink & Cold Steel",
+      "Black & Sodium",
+      "Bone & Black"
+    ],
+    "name" : "The Slit"
+  },
+  {
+    "id" : "thriller-spine-line",
+    "idea" : "The title is set vertically up the left edge like a spine; the photo fills the rest behind one hard accent cut.",
+    "genre" : "Thriller",
+    "files" : [
+      "030-thriller-spine-line.jpg",
+      "030-thriller-spine-line-p1.jpg",
+      "030-thriller-spine-line-p2.jpg",
+      "030-thriller-spine-line-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Gunmetal & Blaze",
+      "Navy & Signal Yellow",
+      "Bone & Black"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "vertical",
+      "condensed",
+      "bold type",
+      "modern"
+    ],
+    "name" : "Spine Line"
+  },
+  {
+    "name" : "Echo",
+    "palettes" : [
+      "Black & Alarm Red",
+      "Midnight & Cyan",
+      "Paper & Cobalt"
+    ],
+    "tags" : [
+      "typographic",
+      "dark",
+      "pattern",
+      "condensed",
+      "bold type",
+      "modern"
+    ],
+    "files" : [
+      "031-thriller-echo.jpg",
+      "031-thriller-echo-p1.jpg",
+      "031-thriller-echo-p2.jpg"
+    ],
+    "id" : "thriller-echo",
+    "genre" : "Thriller",
+    "idea" : "The title repeats down the cover like an echo, fading in and out; only the middle line burns in full color."
+  },
+  {
+    "name" : "The Cut",
+    "palettes" : [
+      "Hazard Yellow",
+      "Signal Orange",
+      "Ice Blue"
+    ],
+    "id" : "thriller-the-cut",
+    "tags" : [
+      "photo",
+      "dark",
+      "bold type",
+      "condensed",
+      "energetic",
+      "modern"
+    ],
+    "files" : [
+      "032-thriller-the-cut.jpg",
+      "032-thriller-the-cut-p1.jpg",
+      "032-thriller-the-cut-p2.jpg",
+      "032-thriller-the-cut-nophoto.jpg"
+    ],
+    "genre" : "Thriller",
+    "idea" : "A slab of hazard color slices diagonally across a black-and-white photo; the title rides the cut."
+  },
+  {
+    "palettes" : [
+      "Concrete & Red",
+      "Black & Bone",
+      "Olive Drab & Brass"
+    ],
+    "tags" : [
+      "typographic",
+      "light",
+      "bold type",
+      "condensed",
+      "minimal",
+      "modern"
+    ],
+    "id" : "thriller-hard-border",
+    "genre" : "Thriller",
+    "idea" : "The stacked title is set so big it bleeds off the right edge of the cover; one accent bar is the only other mark.",
+    "name" : "Hard Border",
+    "files" : [
+      "033-thriller-hard-border.jpg",
+      "033-thriller-hard-border-p1.jpg",
+      "033-thriller-hard-border-p2.jpg"
+    ]
+  },
+  {
+    "palettes" : [
+      "CCTV Red",
+      "Night Vision",
+      "Infrared Amber"
+    ],
+    "genre" : "Thriller",
+    "id" : "thriller-surveillance",
+    "name" : "Surveillance",
+    "files" : [
+      "034-thriller-surveillance.jpg",
+      "034-thriller-surveillance-p1.jpg",
+      "034-thriller-surveillance-p2.jpg",
+      "034-thriller-surveillance-nophoto.jpg"
+    ],
+    "idea" : "The photo is framed as a CCTV feed: viewfinder brackets, a red recording dot, and the title as the evidence beneath.",
+    "tags" : [
+      "photo",
+      "dark",
+      "modern",
+      "tech",
+      "bold type",
+      "moody"
+    ]
+  },
+  {
+    "idea" : "A golden-age detective cover: warm light pours through a single keyhole in a dark lacquered door.",
+    "files" : [
+      "035-mystery-keyhole.jpg",
+      "035-mystery-keyhole-p1.jpg",
+      "035-mystery-keyhole-p2.jpg"
+    ],
+    "name" : "Keyhole",
+    "palettes" : [
+      "Crime Club Green",
+      "Oxblood Lacquer",
+      "Midnight Study"
+    ],
+    "genre" : "Mystery & Crime",
+    "id" : "mystery-keyhole",
+    "tags" : [
+      "graphic",
+      "dark",
+      "classic",
+      "vintage",
+      "elegant",
+      "minimal"
+    ]
+  },
+  {
+    "id" : "mystery-deco-arch",
+    "palettes" : [
+      "Riviera Cream",
+      "Seafoam & Rust",
+      "Deco Night"
+    ],
+    "name" : "Deco Arch",
+    "idea" : "A 1930s travel-poster arch frames a sepia photograph, as if the murder happened on holiday.",
+    "tags" : [
+      "photo",
+      "light",
+      "vintage",
+      "art deco",
+      "elegant",
+      "classic"
+    ],
+    "genre" : "Mystery & Crime",
+    "files" : [
+      "036-mystery-deco-arch.jpg",
+      "036-mystery-deco-arch-p1.jpg",
+      "036-mystery-deco-arch-p2.jpg",
+      "036-mystery-deco-arch-nophoto.jpg"
+    ]
+  },
+  {
+    "name" : "One Lit Window",
+    "tags" : [
+      "graphic",
+      "dark",
+      "domestic",
+      "suspense",
+      "moody",
+      "atmospheric",
+      "minimal"
+    ],
+    "files" : [
+      "037-mystery-one-lit-window.jpg",
+      "037-mystery-one-lit-window-p1.jpg",
+      "037-mystery-one-lit-window-p2.jpg"
+    ],
+    "genre" : "Mystery & Crime",
+    "idea" : "Domestic suspense: a black house against a dusk sky, and only one window is awake.",
+    "palettes" : [
+      "Dusk",
+      "Ember Night",
+      "Winter Pine"
+    ],
+    "id" : "mystery-one-lit-window"
+  },
+  {
+    "idea" : "Domestic suspense: a washed-out portrait and a calm serif title, with one red underline as the only wrong note.",
+    "genre" : "Mystery & Crime",
+    "palettes" : [
+      "Linen & Red",
+      "Sage & Garnet",
+      "Powder & Vermilion"
+    ],
+    "id" : "mystery-pale-portrait",
+    "tags" : [
+      "photo",
+      "light",
+      "domestic",
+      "suspense",
+      "elegant",
+      "modern"
+    ],
+    "files" : [
+      "038-mystery-pale-portrait.jpg",
+      "038-mystery-pale-portrait-p1.jpg",
+      "038-mystery-pale-portrait-p2.jpg",
+      "038-mystery-pale-portrait-nophoto.jpg"
+    ],
+    "name" : "Pale Portrait"
+  },
+  {
+    "idea" : "Noir: hard light falls through venetian blinds across a black-and-white photo; one lipstick-red name.",
+    "id" : "mystery-venetian-blinds",
+    "name" : "Venetian Blinds",
+    "tags" : [
+      "photo",
+      "dark",
+      "noir",
+      "vintage",
+      "moody",
+      "atmospheric"
+    ],
+    "palettes" : [
+      "Black & Lipstick",
+      "Brass Bar",
+      "Absinthe"
+    ],
+    "genre" : "Mystery & Crime",
+    "files" : [
+      "039-mystery-venetian-blinds.jpg",
+      "039-mystery-venetian-blinds-p1.jpg",
+      "039-mystery-venetian-blinds-p2.jpg",
+      "039-mystery-venetian-blinds-nophoto.jpg"
+    ]
+  },
+  {
+    "idea" : "Noir: a single streetlamp throws a cone of light into the dark, and the title stands inside it.",
+    "name" : "Under the Lamp",
+    "genre" : "Mystery & Crime",
+    "id" : "mystery-under-the-lamp",
+    "palettes" : [
+      "Sodium Night",
+      "Cold Moon",
+      "Neon Red"
+    ],
+    "tags" : [
+      "graphic",
+      "dark",
+      "noir",
+      "minimal",
+      "moody",
+      "bold type"
+    ],
+    "files" : [
+      "040-mystery-under-the-lamp.jpg",
+      "040-mystery-under-the-lamp-p1.jpg",
+      "040-mystery-under-the-lamp-p2.jpg"
+    ]
+  },
+  {
+    "files" : [
+      "041-mystery-floor-plan.jpg",
+      "041-mystery-floor-plan-p1.jpg",
+      "041-mystery-floor-plan-p2.jpg"
+    ],
+    "idea" : "A golden-age country-house mystery: a fine-line floor plan of the rooms, and a red X where the body lies.",
+    "genre" : "Mystery & Crime",
+    "tags" : [
+      "graphic",
+      "light",
+      "classic",
+      "vintage",
+      "minimal",
+      "puzzle"
+    ],
+    "name" : "Floor Plan",
+    "palettes" : [
+      "Foolscap",
+      "Blueprint",
+      "Racing Green"
+    ],
+    "id" : "mystery-floor-plan"
+  },
+  {
+    "palettes" : [
+      "Snowfield",
+      "Peat & Moss",
+      "Ash & Cobalt"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "nordic",
+      "minimal",
+      "modern",
+      "atmospheric"
+    ],
+    "files" : [
+      "042-mystery-white-horizon.jpg",
+      "042-mystery-white-horizon-p1.jpg",
+      "042-mystery-white-horizon-p2.jpg",
+      "042-mystery-white-horizon-nophoto.jpg"
+    ],
+    "id" : "mystery-white-horizon",
+    "name" : "White Horizon",
+    "genre" : "Mystery & Crime",
+    "idea" : "Nordic mystery: a cold photo whose highlights melt into a snow-white field, with one tiny red figure on the horizon."
+  },
+  {
+    "files" : [
+      "043-horror-ajar.jpg",
+      "043-horror-ajar-p1.jpg",
+      "043-horror-ajar-p2.jpg",
+      "043-horror-ajar-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Lamp Black",
+      "Cold Hall",
+      "The Red Room"
+    ],
+    "name" : "Ajar",
+    "tags" : [
+      "photo",
+      "dark",
+      "literary",
+      "minimal",
+      "atmospheric",
+      "quiet"
+    ],
+    "id" : "horror-ajar",
+    "genre" : "Horror",
+    "idea" : "A door stands open a crack in total darkness; the photo shows only through that sliver of light."
+  },
+  {
+    "id" : "horror-unblinking",
+    "name" : "Unblinking",
+    "idea" : "Two small eyes open in a vast, empty black; the restraint is the scare.",
+    "palettes" : [
+      "Pitch & Sulphur",
+      "Wolf Light",
+      "Ember"
+    ],
+    "files" : [
+      "044-horror-unblinking.jpg",
+      "044-horror-unblinking-p1.jpg",
+      "044-horror-unblinking-p2.jpg"
+    ],
+    "genre" : "Horror",
+    "tags" : [
+      "graphic",
+      "dark",
+      "minimal",
+      "literary",
+      "quiet",
+      "moody"
+    ]
+  },
+  {
+    "tags" : [
+      "graphic",
+      "light",
+      "folk",
+      "literary",
+      "minimal",
+      "elegant"
+    ],
+    "palettes" : [
+      "Bone & Black",
+      "Hayfield",
+      "Ash Rose"
+    ],
+    "name" : "Black Sun",
+    "genre" : "Horror",
+    "id" : "horror-black-sun",
+    "files" : [
+      "045-horror-black-sun.jpg",
+      "045-horror-black-sun-p1.jpg",
+      "045-horror-black-sun-p2.jpg"
+    ],
+    "idea" : "Folk horror: a midsummer eclipse, one black disc ringed in red on a bone-pale ground."
+  },
+  {
+    "id" : "horror-her-likeness",
+    "genre" : "Horror",
+    "name" : "Her Likeness",
+    "tags" : [
+      "photo",
+      "dark",
+      "literary",
+      "gothic",
+      "elegant",
+      "moody"
+    ],
+    "files" : [
+      "046-horror-her-likeness.jpg",
+      "046-horror-her-likeness-p1.jpg",
+      "046-horror-her-likeness-p2.jpg",
+      "046-horror-her-likeness-nophoto.jpg"
+    ],
+    "idea" : "A haunted portrait drowned in a single color; the title is a small italic whisper beneath it.",
+    "palettes" : [
+      "Oxblood",
+      "Bruise",
+      "Verdigris"
+    ]
+  },
+  {
+    "name" : "The Drip",
+    "genre" : "Horror",
+    "tags" : [
+      "typographic",
+      "light",
+      "minimal",
+      "visceral",
+      "bold type",
+      "modern"
+    ],
+    "files" : [
+      "047-horror-the-drip.jpg",
+      "047-horror-the-drip-p1.jpg",
+      "047-horror-the-drip-p2.jpg"
+    ],
+    "palettes" : [
+      "Clinic White",
+      "Black Gloss",
+      "Old Bone"
+    ],
+    "idea" : "Visceral with restraint: one thin red drip runs from the black title down an otherwise clean white cover.",
+    "id" : "horror-the-drip"
+  },
+  {
+    "tags" : [
+      "photo",
+      "dark",
+      "literary",
+      "atmospheric",
+      "minimal",
+      "quiet"
+    ],
+    "name" : "The Still Lake",
+    "palettes" : [
+      "Black Water",
+      "Peat Bog",
+      "Blood Moon"
+    ],
+    "id" : "horror-still-lake",
+    "idea" : "The title sits on a black waterline, and its reflection hangs upside down beneath it, wrong in a way you notice slowly.",
+    "files" : [
+      "048-horror-still-lake.jpg",
+      "048-horror-still-lake-p1.jpg",
+      "048-horror-still-lake-p2.jpg",
+      "048-horror-still-lake-nophoto.jpg"
+    ],
+    "genre" : "Horror"
+  },
+  {
+    "files" : [
+      "049-horror-claw-marks.jpg",
+      "049-horror-claw-marks-p1.jpg",
+      "049-horror-claw-marks-p2.jpg"
+    ],
+    "name" : "Claw Marks",
+    "id" : "horror-claw-marks",
+    "palettes" : [
+      "Black & Bone",
+      "Night Forest",
+      "Bone Ground"
+    ],
+    "genre" : "Horror",
+    "idea" : "Three clean cuts tear diagonally through a huge title like claw marks; violence implied, never shown.",
+    "tags" : [
+      "typographic",
+      "dark",
+      "visceral",
+      "bold type",
+      "condensed",
+      "minimal"
+    ]
+  },
+  {
+    "idea" : "One old snapshot hangs alone on a stained wall, with a handwritten caption no one should have written.",
+    "id" : "horror-found-photograph",
+    "genre" : "Horror",
+    "tags" : [
+      "photo",
+      "dark",
+      "vintage",
+      "found",
+      "atmospheric",
+      "moody"
+    ],
+    "files" : [
+      "050-horror-found-photograph.jpg",
+      "050-horror-found-photograph-p1.jpg",
+      "050-horror-found-photograph-p2.jpg",
+      "050-horror-found-photograph-nophoto.jpg"
+    ],
+    "name" : "Found Photograph",
+    "palettes" : [
+      "Basement",
+      "Darkroom",
+      "Mildew"
+    ]
+  },
+  {
+    "palettes" : [
+      "Obsidian & Gilt",
+      "Wine & Brass",
+      "Midnight & Frost"
+    ],
+    "tags" : [
+      "graphic",
+      "dark",
+      "romantasy",
+      "elegant",
+      "epic",
+      "minimal"
+    ],
+    "name" : "Blade & Ring",
+    "idea" : "A slender blade pierces a thin gold ring: love and violence in one romantasy emblem, floating in smoke.",
+    "files" : [
+      "051-romance-blade-and-ring.jpg",
+      "051-romance-blade-and-ring-p1.jpg",
+      "051-romance-blade-and-ring-p2.jpg"
+    ],
+    "id" : "romance-blade-and-ring",
+    "genre" : "Romance"
+  },
+  {
+    "id" : "romance-ember-arch",
+    "genre" : "Romance",
+    "tags" : [
+      "photo",
+      "dark",
+      "romantasy",
+      "elegant",
+      "atmospheric",
+      "romantic"
+    ],
+    "palettes" : [
+      "Ember & Ash",
+      "Fae Teal",
+      "Rose Night"
+    ],
+    "name" : "Ember Arch",
+    "idea" : "A duotone portrait glows through a tall arch window, its edge echoed by a hairline of gold, like a fae court's doorway.",
+    "files" : [
+      "052-romance-ember-arch.jpg",
+      "052-romance-ember-arch-p1.jpg",
+      "052-romance-ember-arch-p2.jpg",
+      "052-romance-ember-arch-nophoto.jpg"
+    ]
+  },
+  {
+    "id" : "romance-venn",
+    "genre" : "Romance",
+    "files" : [
+      "053-romance-venn.jpg",
+      "053-romance-venn-p1.jpg",
+      "053-romance-venn-p2.jpg"
+    ],
+    "palettes" : [
+      "Bubblegum & Tomato",
+      "Mint & Coral",
+      "Butter & Cobalt"
+    ],
+    "idea" : "Two flat circles drift into each other; where they overlap a third color appears, which is the whole rom-com in one diagram.",
+    "name" : "Venn",
+    "tags" : [
+      "graphic",
+      "light",
+      "rom-com",
+      "playful",
+      "modern",
+      "romantic"
+    ]
+  },
+  {
+    "name" : "Postcard",
+    "idea" : "The photo is a holiday postcard with rounded corners and a stamped postmark ring; a chunky soft serif title sits above like handwriting on the back.",
+    "tags" : [
+      "photo",
+      "light",
+      "rom-com",
+      "summer",
+      "playful",
+      "bold type"
+    ],
+    "id" : "romance-postcard",
+    "files" : [
+      "054-romance-postcard.jpg",
+      "054-romance-postcard-p1.jpg",
+      "054-romance-postcard-p2.jpg",
+      "054-romance-postcard-nophoto.jpg"
+    ],
+    "genre" : "Romance",
+    "palettes" : [
+      "Riviera",
+      "Lemon Grove",
+      "Coral Night"
+    ]
+  },
+  {
+    "tags" : [
+      "photo",
+      "light",
+      "regency",
+      "historical",
+      "elegant",
+      "vintage",
+      "romantic"
+    ],
+    "name" : "Cameo",
+    "genre" : "Romance",
+    "id" : "romance-cameo",
+    "idea" : "A portrait set like a Regency cameo: an oval crop in a hairline gold ring, with a swooning italic title beneath.",
+    "files" : [
+      "055-romance-cameo.jpg",
+      "055-romance-cameo-p1.jpg",
+      "055-romance-cameo-p2.jpg",
+      "055-romance-cameo-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Duck Egg & Gilt",
+      "Blush & Claret",
+      "Ivory & Ink"
+    ]
+  },
+  {
+    "idea" : "A painted portrait fills the top two-thirds; a solid band of jewel-toned silk, edged with a gold trim line, carries the type like a gown's hem.",
+    "genre" : "Romance",
+    "tags" : [
+      "photo",
+      "dark",
+      "historical",
+      "elegant",
+      "romantic",
+      "classic"
+    ],
+    "palettes" : [
+      "Sapphire Silk",
+      "Emerald",
+      "Claret"
+    ],
+    "name" : "Silk Hem",
+    "id" : "romance-silk-hem",
+    "files" : [
+      "056-romance-silk-hem.jpg",
+      "056-romance-silk-hem-p1.jpg",
+      "056-romance-silk-hem-p2.jpg",
+      "056-romance-silk-hem-nophoto.jpg"
+    ]
+  },
+  {
+    "idea" : "A single blood-red hairline slices diagonally across a stacked high-contrast serif title on near-black; nothing else.",
+    "palettes" : [
+      "Black & Blood",
+      "Black & Absinthe",
+      "Bone & Black"
+    ],
+    "genre" : "Romance",
+    "tags" : [
+      "typographic",
+      "dark",
+      "dark romance",
+      "minimal",
+      "moody",
+      "bold type"
+    ],
+    "files" : [
+      "057-romance-slash.jpg",
+      "057-romance-slash-p1.jpg",
+      "057-romance-slash-p2.jpg"
+    ],
+    "name" : "Slash",
+    "id" : "romance-slash"
+  },
+  {
+    "genre" : "Romance",
+    "palettes" : [
+      "Noir & Crimson",
+      "Noir & Violet",
+      "Smoke & Gold"
+    ],
+    "id" : "romance-slit",
+    "name" : "Slit",
+    "idea" : "The photo is only glimpsed through a narrow vertical slit in black, like a door left ajar; the title is laid across it in white.",
+    "files" : [
+      "058-romance-slit.jpg",
+      "058-romance-slit-p1.jpg",
+      "058-romance-slit-p2.jpg",
+      "058-romance-slit-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "dark romance",
+      "minimal",
+      "moody",
+      "cinematic"
+    ]
+  },
+  {
+    "name" : "Wildflower Wash",
+    "palettes" : [
+      "Lavender Field",
+      "Peach Orchard",
+      "Seaglass"
+    ],
+    "idea" : "A loose wet-in-wet wash of field colors blooms over the top half and fades into cream paper, where a soft serif title waits.",
+    "tags" : [
+      "painted",
+      "light",
+      "sweet",
+      "soft",
+      "romantic",
+      "gentle"
+    ],
+    "id" : "romance-wildflower-wash",
+    "genre" : "Romance",
+    "files" : [
+      "059-romance-wildflower-wash.jpg",
+      "059-romance-wildflower-wash-p1.jpg",
+      "059-romance-wildflower-wash-p2.jpg"
+    ]
+  },
+  {
+    "id" : "cozy-awning",
+    "idea" : "A striped shop awning with a scalloped edge crowns the cover, so the whole book becomes the shopfront; a warm soft serif title stacks below.",
+    "palettes" : [
+      "Mint Parlour",
+      "Raspberry",
+      "Butterscotch"
+    ],
+    "tags" : [
+      "graphic",
+      "light",
+      "cozy mystery",
+      "charming",
+      "playful",
+      "vintage"
+    ],
+    "name" : "Awning",
+    "files" : [
+      "060-cozy-awning.jpg",
+      "060-cozy-awning-p1.jpg",
+      "060-cozy-awning-p2.jpg"
+    ],
+    "genre" : "Cozy & Women's Fiction"
+  },
+  {
+    "genre" : "Cozy & Women's Fiction",
+    "idea" : "A round lens and a stout handle turn the photo into a view through a detective's magnifying glass, set on a quiet flat ground.",
+    "tags" : [
+      "photo",
+      "light",
+      "cozy mystery",
+      "charming",
+      "classic",
+      "playful"
+    ],
+    "files" : [
+      "061-cozy-magnifier.jpg",
+      "061-cozy-magnifier-p1.jpg",
+      "061-cozy-magnifier-p2.jpg",
+      "061-cozy-magnifier-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Hedgerow",
+      "Duck Blue",
+      "Plum Jam"
+    ],
+    "id" : "cozy-magnifier",
+    "name" : "Magnifier"
+  },
+  {
+    "name" : "Jam Label",
+    "tags" : [
+      "graphic",
+      "light",
+      "cozy mystery",
+      "charming",
+      "vintage",
+      "playful"
+    ],
+    "files" : [
+      "062-cozy-jam-label.jpg",
+      "062-cozy-jam-label-p1.jpg",
+      "062-cozy-jam-label-p2.jpg"
+    ],
+    "idea" : "The cover is a jar of preserves: a cream oval label with a fine inner line sits on gingham, and the title is lettered on it like a homemade label.",
+    "id" : "cozy-jam-label",
+    "genre" : "Cozy & Women's Fiction",
+    "palettes" : [
+      "Strawberry Gingham",
+      "Blueberry",
+      "Greengage"
+    ]
+  },
+  {
+    "files" : [
+      "063-cozy-garden-panel.jpg",
+      "063-cozy-garden-panel-p1.jpg",
+      "063-cozy-garden-panel-p2.jpg",
+      "063-cozy-garden-panel-nophoto.jpg"
+    ],
+    "idea" : "Split like a seed packet: a tall rounded panel of garden painting on the right, the title stacked down a quiet cream column on the left.",
+    "genre" : "Cozy & Women's Fiction",
+    "name" : "Garden Panel",
+    "id" : "cozy-garden-panel",
+    "tags" : [
+      "photo",
+      "light",
+      "cozy mystery",
+      "botanical",
+      "elegant",
+      "asymmetric"
+    ],
+    "palettes" : [
+      "Potting Shed",
+      "Foxglove",
+      "Night Garden"
+    ]
+  },
+  {
+    "genre" : "Cozy & Women's Fiction",
+    "tags" : [
+      "graphic",
+      "dark",
+      "cozy fantasy",
+      "warm",
+      "charming",
+      "minimal"
+    ],
+    "files" : [
+      "064-cozy-hearth.jpg",
+      "064-cozy-hearth-p1.jpg",
+      "064-cozy-hearth-p2.jpg"
+    ],
+    "id" : "cozy-hearth",
+    "name" : "Hearth",
+    "palettes" : [
+      "Hearthlight",
+      "Mossy Den",
+      "Dusk Plum"
+    ],
+    "idea" : "A hearth arch drawn in one warm line holds a tiny two-tone flame, its glow and a few drifting sparks the only light on a dark ground."
+  },
+  {
+    "name" : "Framed Print",
+    "files" : [
+      "065-cozy-framed-print.jpg",
+      "065-cozy-framed-print-p1.jpg",
+      "065-cozy-framed-print-p2.jpg",
+      "065-cozy-framed-print-nophoto.jpg"
+    ],
+    "genre" : "Cozy & Women's Fiction",
+    "tags" : [
+      "photo",
+      "light",
+      "cozy fantasy",
+      "gentle",
+      "elegant",
+      "vintage"
+    ],
+    "idea" : "A landscape in a soft two-color duotone is matted and hairline-framed like a print hung in a cottage, the title lettered on the mat above.",
+    "id" : "cozy-framed-print",
+    "palettes" : [
+      "Moss & Cream",
+      "Fog & Heather",
+      "Honey & Pine"
+    ]
+  },
+  {
+    "files" : [
+      "066-cozy-crescent.jpg",
+      "066-cozy-crescent-p1.jpg",
+      "066-cozy-crescent-p2.jpg"
+    ],
+    "genre" : "Cozy & Women's Fiction",
+    "palettes" : [
+      "Plum Night",
+      "Teal Night",
+      "Rose Dusk"
+    ],
+    "id" : "cozy-crescent",
+    "tags" : [
+      "graphic",
+      "dark",
+      "cozy fantasy",
+      "whimsical",
+      "charming",
+      "celestial"
+    ],
+    "idea" : "A crescent moon is cut from two overlapping circles above a soft, lowercase title, like a witch's shop sign at dusk.",
+    "name" : "Crescent"
+  },
+  {
+    "palettes" : [
+      "Walnut & Ivory",
+      "Painted Teal",
+      "Blackboard"
+    ],
+    "tags" : [
+      "graphic",
+      "dark",
+      "cozy mystery",
+      "charming",
+      "vintage",
+      "warm"
+    ],
+    "files" : [
+      "067-cozy-hanging-sign.jpg",
+      "067-cozy-hanging-sign-p1.jpg",
+      "067-cozy-hanging-sign-p2.jpg"
+    ],
+    "name" : "Hanging Sign",
+    "genre" : "Cozy & Women's Fiction",
+    "id" : "cozy-hanging-sign",
+    "idea" : "The title is painted on a cream shop sign hung by two chains against dark wood, with the author on a smaller sign swinging beneath it."
+  },
+  {
+    "files" : [
+      "068-youngadult-bleed.jpg",
+      "068-youngadult-bleed-p1.jpg",
+      "068-youngadult-bleed-p2.jpg",
+      "068-youngadult-bleed-nophoto.jpg"
+    ],
+    "genre" : "Young Adult",
+    "tags" : [
+      "photo",
+      "dark",
+      "bold type",
+      "neon",
+      "modern",
+      "condensed"
+    ],
+    "idea" : "A photo flooded with one neon duotone; the title is set so large it bleeds off both edges of the cover.",
+    "palettes" : [
+      "Ultraviolet",
+      "Acid",
+      "Arcade Blue"
+    ],
+    "id" : "youngadult-bleed",
+    "name" : "Bleed"
+  },
+  {
+    "name" : "Orbit",
+    "genre" : "Young Adult",
+    "files" : [
+      "069-youngadult-orbit.jpg",
+      "069-youngadult-orbit-p1.jpg",
+      "069-youngadult-orbit-p2.jpg",
+      "069-youngadult-orbit-nophoto.jpg"
+    ],
+    "id" : "youngadult-orbit",
+    "tags" : [
+      "photo",
+      "light",
+      "bold type",
+      "modern",
+      "cosmic",
+      "graphic"
+    ],
+    "palettes" : [
+      "Tangerine",
+      "Lilac",
+      "Lime"
+    ],
+    "idea" : "A huge circle of deep space is punched out of a loud flat color and circled by a single tilted orbit line; lowercase title below."
+  },
+  {
+    "id" : "youngadult-echo",
+    "name" : "Echo",
+    "idea" : "The title is set three times down the cover, fading up from a whisper to full volume, a typographic crescendo.",
+    "genre" : "Young Adult",
+    "palettes" : [
+      "Hot Pink",
+      "Electric",
+      "Mono Lime"
+    ],
+    "files" : [
+      "070-youngadult-echo.jpg",
+      "070-youngadult-echo-p1.jpg",
+      "070-youngadult-echo-p2.jpg"
+    ],
+    "tags" : [
+      "typographic",
+      "light",
+      "bold type",
+      "modern",
+      "loud",
+      "pattern"
+    ]
+  },
+  {
+    "name" : "Tilt",
+    "palettes" : [
+      "Signal Yellow",
+      "Ink Blue",
+      "Mint"
+    ],
+    "id" : "youngadult-tilt",
+    "idea" : "A tilted slab of flat color slices across a duotone photo, and the title rides its eight-degree angle, off balance and urgent.",
+    "genre" : "Young Adult",
+    "files" : [
+      "071-youngadult-tilt.jpg",
+      "071-youngadult-tilt-p1.jpg",
+      "071-youngadult-tilt-p2.jpg",
+      "071-youngadult-tilt-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "bold type",
+      "modern",
+      "dynamic",
+      "condensed"
+    ]
+  },
+  {
+    "name" : "Polaroid",
+    "idea" : "One instant photo taped to a flat color wall, with the title scrawled in marker across its bottom edge as if someone wrote on it.",
+    "tags" : [
+      "photo",
+      "light",
+      "contemporary",
+      "handwritten",
+      "playful",
+      "nostalgic"
+    ],
+    "id" : "youngadult-polaroid",
+    "files" : [
+      "072-youngadult-polaroid.jpg",
+      "072-youngadult-polaroid-p1.jpg",
+      "072-youngadult-polaroid-p2.jpg",
+      "072-youngadult-polaroid-nophoto.jpg"
+    ],
+    "genre" : "Young Adult",
+    "palettes" : [
+      "Bubblegum",
+      "Sky",
+      "Tangerine"
+    ]
+  },
+  {
+    "genre" : "Young Adult",
+    "id" : "youngadult-blood-moon",
+    "idea" : "A flat red moon rises behind one razor-sharp mountain silhouette; vast dark space, and a carved title on the ground below.",
+    "palettes" : [
+      "Blood Moon",
+      "Ice Moon",
+      "Gold Eclipse"
+    ],
+    "tags" : [
+      "graphic",
+      "dark",
+      "ya fantasy",
+      "epic",
+      "minimal",
+      "bold type"
+    ],
+    "name" : "Blood Moon",
+    "files" : [
+      "073-youngadult-blood-moon.jpg",
+      "073-youngadult-blood-moon-p1.jpg",
+      "073-youngadult-blood-moon-p2.jpg"
+    ]
+  },
+  {
+    "palettes" : [
+      "Red Alert",
+      "Toxic",
+      "Cold Case"
+    ],
+    "idea" : "The photo is cut down to a thin eye-line band across black, like a redacted file, with a towering condensed title below.",
+    "id" : "youngadult-sliver",
+    "name" : "Sliver",
+    "genre" : "Young Adult",
+    "files" : [
+      "074-youngadult-sliver.jpg",
+      "074-youngadult-sliver-p1.jpg",
+      "074-youngadult-sliver-p2.jpg",
+      "074-youngadult-sliver-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "ya thriller",
+      "bold type",
+      "minimal",
+      "condensed"
+    ]
+  },
+  {
+    "name" : "Horizon",
+    "files" : [
+      "075-youngadult-horizon.jpg",
+      "075-youngadult-horizon-p1.jpg",
+      "075-youngadult-horizon-p2.jpg"
+    ],
+    "id" : "youngadult-horizon",
+    "idea" : "A sunset gradient, a flat sun half-sunk below a hard horizon line, and three fading reflections on the water; the title hangs in the sky.",
+    "palettes" : [
+      "Golden Hour",
+      "Blue Hour",
+      "Citrus"
+    ],
+    "genre" : "Young Adult",
+    "tags" : [
+      "graphic",
+      "light",
+      "contemporary",
+      "summer",
+      "romantic",
+      "modern"
+    ]
+  },
+  {
+    "palettes" : [
+      "Midnight & Gilt",
+      "Oxblood & Brass",
+      "Forest & Silver"
+    ],
+    "name" : "Sword in the Ring",
+    "tags" : [
+      "graphic",
+      "dark",
+      "epic",
+      "emblem",
+      "serif",
+      "minimal"
+    ],
+    "genre" : "Fantasy",
+    "files" : [
+      "076-fantasy-sword-in-the-ring.jpg",
+      "076-fantasy-sword-in-the-ring-p1.jpg",
+      "076-fantasy-sword-in-the-ring-p2.jpg"
+    ],
+    "idea" : "A single gold emblem, a blade driven through a ring, glows in the dark like a sigil stamped on a war banner.",
+    "id" : "fantasy-sword-in-the-ring"
+  },
+  {
+    "id" : "fantasy-atlas-plate",
+    "name" : "Atlas Plate",
+    "tags" : [
+      "photo",
+      "light",
+      "epic",
+      "serif",
+      "classic",
+      "elegant"
+    ],
+    "files" : [
+      "077-fantasy-atlas-plate.jpg",
+      "077-fantasy-atlas-plate-p1.jpg",
+      "077-fantasy-atlas-plate-p2.jpg",
+      "077-fantasy-atlas-plate-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Vellum & Lapis",
+      "Slate & Ember",
+      "Bone & Moss"
+    ],
+    "genre" : "Fantasy",
+    "idea" : "A vellum band sits over the painted land like the title plate of an old atlas, split from the world by one hard line."
+  },
+  {
+    "name" : "The Gate",
+    "genre" : "Fantasy",
+    "files" : [
+      "078-fantasy-the-gate.jpg",
+      "078-fantasy-the-gate-p1.jpg",
+      "078-fantasy-the-gate-p2.jpg",
+      "078-fantasy-the-gate-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Basalt & Gold",
+      "Lapis Night",
+      "Ivory & Oxide"
+    ],
+    "idea" : "The world is glimpsed through a single gold-lined arch, a doorway the reader is invited to step through.",
+    "tags" : [
+      "photo",
+      "dark",
+      "epic",
+      "serif",
+      "arch",
+      "atmospheric"
+    ],
+    "id" : "fantasy-the-gate"
+  },
+  {
+    "id" : "fantasy-hand-mirror",
+    "idea" : "The heroine looks out of an enchanted hand mirror, the whole cover drawn as a single object on a pale ground.",
+    "tags" : [
+      "photo",
+      "light",
+      "fairytale",
+      "romantic",
+      "elegant",
+      "italic"
+    ],
+    "genre" : "Fantasy",
+    "name" : "Hand Mirror",
+    "palettes" : [
+      "Cream & Garnet",
+      "Frost & Silver",
+      "Night Glass"
+    ],
+    "files" : [
+      "079-fantasy-hand-mirror.jpg",
+      "079-fantasy-hand-mirror-p1.jpg",
+      "079-fantasy-hand-mirror-p2.jpg",
+      "079-fantasy-hand-mirror-nophoto.jpg"
+    ]
+  },
+  {
+    "tags" : [
+      "graphic",
+      "light",
+      "fairytale",
+      "playful",
+      "folk",
+      "modern"
+    ],
+    "genre" : "Fantasy",
+    "idea" : "A fairytale forest cut from two layers of paper triangles, with one red moon caught in the branches.",
+    "palettes" : [
+      "Cream & Pine",
+      "Snow & Ink",
+      "Dusk Rose"
+    ],
+    "id" : "fantasy-cut-paper-wood",
+    "files" : [
+      "080-fantasy-cut-paper-wood.jpg",
+      "080-fantasy-cut-paper-wood-p1.jpg",
+      "080-fantasy-cut-paper-wood-p2.jpg"
+    ],
+    "name" : "Cut-Paper Wood"
+  },
+  {
+    "name" : "Library Binding",
+    "tags" : [
+      "graphic",
+      "dark",
+      "literary",
+      "elegant",
+      "vintage",
+      "minimal"
+    ],
+    "palettes" : [
+      "Bottle Green & Gilt",
+      "Oxblood Cloth",
+      "Navy Buckram"
+    ],
+    "id" : "fantasy-library-binding",
+    "idea" : "A cloth-bound book with a tiny gilt key at its center: the smallest object promising the largest secret.",
+    "genre" : "Fantasy",
+    "files" : [
+      "081-fantasy-library-binding.jpg",
+      "081-fantasy-library-binding-p1.jpg",
+      "081-fantasy-library-binding-p2.jpg"
+    ]
+  },
+  {
+    "idea" : "Only the eyes survive: the portrait is cut to a blood-washed slit across a black cover.",
+    "genre" : "Fantasy",
+    "id" : "fantasy-the-slit",
+    "name" : "The Slit",
+    "files" : [
+      "082-fantasy-the-slit.jpg",
+      "082-fantasy-the-slit-p1.jpg",
+      "082-fantasy-the-slit-p2.jpg",
+      "082-fantasy-the-slit-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "grimdark",
+      "moody",
+      "serif",
+      "bold type"
+    ],
+    "palettes" : [
+      "Bone & Blood",
+      "Ash & Violet",
+      "Soot & Gold"
+    ]
+  },
+  {
+    "genre" : "Fantasy",
+    "tags" : [
+      "graphic",
+      "dark",
+      "grimdark",
+      "blackletter",
+      "bold type",
+      "gothic"
+    ],
+    "palettes" : [
+      "Char & Crimson",
+      "Moss & Bone",
+      "Midnight Ink"
+    ],
+    "files" : [
+      "083-fantasy-blood-diamond.jpg",
+      "083-fantasy-blood-diamond-p1.jpg",
+      "083-fantasy-blood-diamond-p2.jpg"
+    ],
+    "id" : "fantasy-blood-diamond",
+    "name" : "Blood Diamond",
+    "idea" : "A blackletter title sealed inside a red lozenge, like a warning painted on a plague door."
+  },
+  {
+    "name" : "Eclipse",
+    "id" : "fantasy-eclipse",
+    "palettes" : [
+      "Eclipse Gold",
+      "Blood Moon",
+      "Cold Corona"
+    ],
+    "files" : [
+      "084-fantasy-eclipse.jpg",
+      "084-fantasy-eclipse-p1.jpg",
+      "084-fantasy-eclipse-p2.jpg",
+      "084-fantasy-eclipse-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "moody",
+      "atmospheric",
+      "serif",
+      "minimal"
+    ],
+    "idea" : "A black sun ringed by a hairline corona hangs over a darkened land; nothing else is needed.",
+    "genre" : "Fantasy"
+  },
+  {
+    "id" : "sciencefiction-orbital-diagram",
+    "genre" : "Science Fiction",
+    "tags" : [
+      "graphic",
+      "light",
+      "hard sf",
+      "swiss",
+      "minimal",
+      "modern"
+    ],
+    "idea" : "The cover is a scientific figure: hairline orbits around a star, and one red world the story happens on.",
+    "palettes" : [
+      "Lab White & Signal",
+      "Blueprint",
+      "Graphite & Cyan"
+    ],
+    "name" : "Orbital Diagram",
+    "files" : [
+      "085-sciencefiction-orbital-diagram.jpg",
+      "085-sciencefiction-orbital-diagram-p1.jpg",
+      "085-sciencefiction-orbital-diagram-p2.jpg"
+    ]
+  },
+  {
+    "idea" : "Half the cover is pure vacuum; the other half is the curve of a world, with wide type floating in the silence between.",
+    "genre" : "Science Fiction",
+    "palettes" : [
+      "Vacuum",
+      "Mars Dawn",
+      "Ice Moon"
+    ],
+    "id" : "sciencefiction-planet-limb",
+    "tags" : [
+      "photo",
+      "dark",
+      "hard sf",
+      "minimal",
+      "wide type",
+      "atmospheric"
+    ],
+    "name" : "Planet Limb",
+    "files" : [
+      "086-sciencefiction-planet-limb.jpg",
+      "086-sciencefiction-planet-limb-p1.jpg",
+      "086-sciencefiction-planet-limb-p2.jpg",
+      "086-sciencefiction-planet-limb-nophoto.jpg"
+    ]
+  },
+  {
+    "name" : "Carrier Wave",
+    "tags" : [
+      "graphic",
+      "dark",
+      "hard sf",
+      "condensed",
+      "bold type",
+      "modern"
+    ],
+    "id" : "sciencefiction-carrier-wave",
+    "files" : [
+      "087-sciencefiction-carrier-wave.jpg",
+      "087-sciencefiction-carrier-wave-p1.jpg",
+      "087-sciencefiction-carrier-wave-p2.jpg"
+    ],
+    "idea" : "A single signal pulses up from the bottom edge in fading rings toward a giant condensed title.",
+    "genre" : "Science Fiction",
+    "palettes" : [
+      "Deep Field & Phosphor",
+      "Ink & Radar Orange",
+      "Paper & Cobalt"
+    ]
+  },
+  {
+    "tags" : [
+      "photo",
+      "dark",
+      "space opera",
+      "epic",
+      "bold type",
+      "military"
+    ],
+    "genre" : "Science Fiction",
+    "files" : [
+      "088-sciencefiction-rank-insignia.jpg",
+      "088-sciencefiction-rank-insignia-p1.jpg",
+      "088-sciencefiction-rank-insignia-p2.jpg",
+      "088-sciencefiction-rank-insignia-nophoto.jpg"
+    ],
+    "name" : "Rank Insignia",
+    "id" : "sciencefiction-rank-insignia",
+    "palettes" : [
+      "Admiralty",
+      "Red Giant",
+      "Teal Nebula"
+    ],
+    "idea" : "Three gold chevrons, the rank stripes of a fleet, stand alone against the galaxy like a uniform patch."
+  },
+  {
+    "id" : "sciencefiction-signal-block",
+    "idea" : "A hard duotone portrait is cut off at the chest by a slab of signal color, and the title is printed straight onto the slab.",
+    "files" : [
+      "089-sciencefiction-signal-block.jpg",
+      "089-sciencefiction-signal-block-p1.jpg",
+      "089-sciencefiction-signal-block-p2.jpg",
+      "089-sciencefiction-signal-block-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Navy & Amber",
+      "Oxide & Mint",
+      "Ink & Signal Yellow"
+    ],
+    "genre" : "Science Fiction",
+    "name" : "Signal Block",
+    "tags" : [
+      "photo",
+      "dark",
+      "space opera",
+      "bold type",
+      "condensed",
+      "modern"
+    ]
+  },
+  {
+    "name" : "Ringed Crescent",
+    "id" : "sciencefiction-ringed-crescent",
+    "tags" : [
+      "graphic",
+      "dark",
+      "space opera",
+      "epic",
+      "wide type",
+      "minimal"
+    ],
+    "palettes" : [
+      "Void & Solar",
+      "Violet Dusk",
+      "Ice Giant"
+    ],
+    "files" : [
+      "090-sciencefiction-ringed-crescent.jpg",
+      "090-sciencefiction-ringed-crescent-p1.jpg",
+      "090-sciencefiction-ringed-crescent-p2.jpg"
+    ],
+    "idea" : "A planet too big for the cover rises in the dark, lit on one thin edge and crossed by the hairline of its ring.",
+    "genre" : "Science Fiction"
+  },
+  {
+    "genre" : "Science Fiction",
+    "tags" : [
+      "typographic",
+      "light",
+      "near future",
+      "literary",
+      "serif",
+      "modern"
+    ],
+    "id" : "sciencefiction-misregistered",
+    "idea" : "The title is printed twice, a hair out of register, so the near future feels like a signal that won't quite hold still.",
+    "name" : "Misregistered",
+    "palettes" : [
+      "Newsprint & Cyan",
+      "Riso Pink",
+      "Night Mode"
+    ],
+    "files" : [
+      "091-sciencefiction-misregistered.jpg",
+      "091-sciencefiction-misregistered-p1.jpg",
+      "091-sciencefiction-misregistered-p2.jpg"
+    ]
+  },
+  {
+    "name" : "Lit Screen",
+    "files" : [
+      "092-sciencefiction-lit-screen.jpg",
+      "092-sciencefiction-lit-screen-p1.jpg",
+      "092-sciencefiction-lit-screen-p2.jpg",
+      "092-sciencefiction-lit-screen-nophoto.jpg"
+    ],
+    "palettes" : [
+      "Concrete & Glow",
+      "Midnight Scroll",
+      "Peach & Teal"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "near future",
+      "literary",
+      "minimal",
+      "serif"
+    ],
+    "genre" : "Science Fiction",
+    "idea" : "One small glowing screen in a vast quiet field: the only face left is the one inside the device.",
+    "id" : "sciencefiction-lit-screen"
+  },
+  {
+    "palettes" : [
+      "Kraft & Stamp Red",
+      "Field Grey",
+      "Navy Ledger"
+    ],
+    "id" : "historical-censored-print",
+    "name" : "Censored Print",
+    "idea" : "A sepia photograph mounted on worn paper, cleared for release by a crooked red censor's stamp.",
+    "genre" : "Historical",
+    "files" : [
+      "093-historical-censored-print.jpg",
+      "093-historical-censored-print-p1.jpg",
+      "093-historical-censored-print-p2.jpg",
+      "093-historical-censored-print-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "light",
+      "wartime",
+      "vintage",
+      "condensed",
+      "documentary"
+    ]
+  },
+  {
+    "idea" : "Two pale searchlight beams cross over a blacked-out city, sweeping straight through a towering title.",
+    "files" : [
+      "094-historical-searchlights.jpg",
+      "094-historical-searchlights-p1.jpg",
+      "094-historical-searchlights-p2.jpg"
+    ],
+    "id" : "historical-searchlights",
+    "name" : "Searchlights",
+    "genre" : "Historical",
+    "tags" : [
+      "graphic",
+      "dark",
+      "wartime",
+      "condensed",
+      "bold type",
+      "atmospheric"
+    ],
+    "palettes" : [
+      "Blitz Night",
+      "Ember Raid",
+      "Moonlit Steel"
+    ]
+  },
+  {
+    "files" : [
+      "095-historical-ribbon.jpg",
+      "095-historical-ribbon-p1.jpg",
+      "095-historical-ribbon-p2.jpg",
+      "095-historical-ribbon-nophoto.jpg"
+    ],
+    "genre" : "Historical",
+    "idea" : "A striped medal ribbon runs the full height, dividing a stacked title column from a soldier's quiet face.",
+    "tags" : [
+      "photo",
+      "light",
+      "wartime",
+      "asymmetric",
+      "condensed",
+      "moody"
+    ],
+    "id" : "historical-ribbon",
+    "palettes" : [
+      "Linen & Ribbon Red",
+      "Olive Drab",
+      "Night Ledger"
+    ],
+    "name" : "Ribbon"
+  },
+  {
+    "genre" : "Historical",
+    "id" : "historical-deco-window",
+    "idea" : "A black arched window set into a gilded sunburst, the title glowing inside it like a ballroom marquee.",
+    "name" : "Deco Window",
+    "palettes" : [
+      "Jet & Gilt",
+      "Emerald Salon",
+      "Champagne"
+    ],
+    "tags" : [
+      "graphic",
+      "dark",
+      "gilded age",
+      "art deco",
+      "elegant",
+      "glamorous"
+    ],
+    "files" : [
+      "096-historical-deco-window.jpg",
+      "096-historical-deco-window-p1.jpg",
+      "096-historical-deco-window-p2.jpg"
+    ]
+  },
+  {
+    "genre" : "Historical",
+    "palettes" : [
+      "Laid Paper & Sealing Wax",
+      "Dove & Ink Blue",
+      "Tea & Black Wax"
+    ],
+    "name" : "Sealing Wax",
+    "idea" : "The cover is a private letter: an italic title written on cream paper, closed with one red wax seal.",
+    "id" : "historical-sealing-wax",
+    "tags" : [
+      "typographic",
+      "light",
+      "period",
+      "regency",
+      "elegant",
+      "romantic"
+    ],
+    "files" : [
+      "097-historical-sealing-wax.jpg",
+      "097-historical-sealing-wax-p1.jpg",
+      "097-historical-sealing-wax-p2.jpg"
+    ]
+  },
+  {
+    "name" : "Gallery Plaque",
+    "palettes" : [
+      "Walnut & Gilt",
+      "Black Lacquer",
+      "Ivory Plaque"
+    ],
+    "files" : [
+      "098-historical-gallery-plaque.jpg",
+      "098-historical-gallery-plaque-p1.jpg",
+      "098-historical-gallery-plaque-p2.jpg",
+      "098-historical-gallery-plaque-nophoto.jpg"
+    ],
+    "tags" : [
+      "photo",
+      "dark",
+      "gilded age",
+      "period",
+      "elegant",
+      "serif"
+    ],
+    "id" : "historical-gallery-plaque",
+    "genre" : "Historical",
+    "idea" : "The heroine hangs in a gilt frame like a museum portrait, named on a small engraved plaque."
+  },
+  {
+    "palettes" : [
+      "Oxblood & Ivory",
+      "Prussian",
+      "Moss Saga"
+    ],
+    "idea" : "One enormous word spans the sky like a carved lintel over generations of land; a deep band below carries the family name.",
+    "tags" : [
+      "photo",
+      "dark",
+      "saga",
+      "epic",
+      "serif",
+      "bold type"
+    ],
+    "name" : "Saga Lintel",
+    "id" : "historical-saga-lintel",
+    "genre" : "Historical",
+    "files" : [
+      "099-historical-saga-lintel.jpg",
+      "099-historical-saga-lintel-p1.jpg",
+      "099-historical-saga-lintel-p2.jpg",
+      "099-historical-saga-lintel-nophoto.jpg"
+    ]
+  },
+  {
+    "tags" : [
+      "graphic",
+      "light",
+      "saga",
+      "minimal",
+      "serif",
+      "atmospheric"
+    ],
+    "genre" : "Historical",
+    "palettes" : [
+      "Linen Sky & Atlantic",
+      "Dusk Harbour",
+      "Green Water"
+    ],
+    "name" : "The Crossing",
+    "idea" : "A pale sky over a deep sea with one tiny ship on the horizon: a generation's voyage reduced to a single line.",
+    "id" : "historical-the-crossing",
+    "files" : [
+      "100-historical-the-crossing.jpg",
+      "100-historical-the-crossing-p1.jpg",
+      "100-historical-the-crossing-p2.jpg"
+    ]
+  }
+]

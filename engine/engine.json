@@ -1,0 +1,77 @@
+[
+  {
+    "name" : "The critic: measured legibility, collisions, trim and faces; then its repairs",
+    "family" : "Critic",
+    "file" : "01-critic.png"
+  },
+  {
+    "family" : "Critic",
+    "file" : "02-randomize.png",
+    "name" : "Smart randomize: three directions sketched per roll, the best-scoring kept"
+  },
+  {
+    "file" : "03-recommended.png",
+    "name" : "Recommended for your book: templates judged with the author's own title and photo",
+    "family" : "Critic"
+  },
+  {
+    "file" : "04-typesetting.png",
+    "name" : "Typesetting: measured breaks, block fit, hanging punctuation, small caps, optical tracking",
+    "family" : "Typography"
+  },
+  {
+    "file" : "05-grades.png",
+    "name" : "Color grades: lift, gamma, gain, split toning, vibrance, fade, grain and vignette as one-click looks",
+    "family" : "Image"
+  },
+  {
+    "file" : "06-compositing.png",
+    "name" : "Compositing: knockout, gradient map, inner shadow, feather, linear-light blend, palette harmony",
+    "family" : "Blending"
+  },
+  {
+    "name" : "Taste model (CLIP, local): what genre each cover reads as, how professional it looks, its mood",
+    "family" : "Taste",
+    "file" : "07-taste.png"
+  },
+  {
+    "family" : "Taste",
+    "name" : "Search by description: “a quiet, foggy literary novel” across the Signature designs",
+    "file" : "08-describe.png"
+  },
+  {
+    "file" : "09-type-paths.png",
+    "name" : "Type on a path and warped type: circle, wave, flag, bulge, pinch, rise, fall, perspective",
+    "family" : "Typography"
+  },
+  {
+    "file" : "10-cutouts.png",
+    "name" : "Subjects, precise cutouts, edge refinement and object removal",
+    "family" : "Image"
+  },
+  {
+    "name" : "Shelf test: your cover among the genre's covers at Amazon thumbnail size, with a standout score",
+    "family" : "Critic",
+    "file" : "12-shelf.png"
+  },
+  {
+    "file" : "13-improve.png",
+    "family" : "Critic",
+    "name" : "Make it a 90: repairs, then targeted edits kept only when the score rises"
+  },
+  {
+    "file" : "11-attention.png",
+    "name" : "Where readers look first: Apple's attention model over the finished cover, and the critic's note",
+    "family" : "Critic"
+  },
+  {
+    "family" : "Print",
+    "file" : "14-physical.png",
+    "name" : "The physical book: the full wrap with guides, and the paperback mockups front, back, flat and stacked"
+  },
+  {
+    "family" : "Print",
+    "file" : "15-back-cover.png",
+    "name" : "The back cover up close: classic, quote first and minimal layouts, with a real ISBN barcode, category, publisher and author photo"
+  }
+]
