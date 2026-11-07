@@ -22,6 +22,12 @@ struct EditorView: View {
         .sheet(isPresented: $model.showIllustrations) {
             IllustrationBrowserSheet(ink: model.inkColor) { model.addIllustration($0) }
         }
+        .sheet(isPresented: $model.showShelfTest) {
+            ShelfTestSheet()
+        }
+        .sheet(isPresented: $model.showStockPhotos) {
+            StockPhotoBrowserSheet()
+        }
         .onAppear {
             model.scheduleRender()
             model.scheduleInsights()

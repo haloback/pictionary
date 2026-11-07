@@ -126,6 +126,11 @@ final class EditorModel {
     var isRemoving = false
     var isRemix = false
 
+    var showShelfTest = false
+    /// True while "Make it a 90" runs off the main thread.
+    var isImproving = false
+    /// The step just accepted and the best score so far, for the progress line.
+    var improveProgress: (step: Int, score: Double)?
     var showCompare = false
     var showShortcuts = false
     var compareRefs: [CompareRef] = []
@@ -151,6 +156,7 @@ final class EditorModel {
     var paintWetness = 0.4
     var showDecor: DecorLibrary.Kind?
     var showIllustrations = false
+    var showStockPhotos = false
     var showTemplates = false
     var showFonts = false
     var copiedTextStyle: TextContent?
@@ -716,6 +722,14 @@ final class EditorModel {
         selection = l.id
     }
 
+    /// Downloads a stock photo, imports it as an asset and a full-bleed photo layer, and remembers the credit.
+    func importStockPhoto(_ photo: StockPhoto) async throws {
+        let data = try await StockPhotoService.shared.download(photo)
+        addAsset(data)
+        if let id = document.assetOrder.last { StockPhotoService.shared.record(photo, assetID: id) }
+        toast = photo.attribution
+    }
+
     func chooseImages() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
@@ -847,6 +861,39 @@ final class EditorModel {
         critique = report
         snapshot(reason: "Repair")
         toast = "Design score \(Int(report.score)) (\(report.grade))"
+    }
+
+    /// "Make it a 90": repairs, then tries small edits (title size and place, palette, grade, author tracking,
+    /// title shadow) and keeps whatever raises the design score, off the main thread.
+    func improveToTarget(_ target: Double = 90) {
+        guard !isImproving else { return }
+        let doc = document
+        isImproving = true
+        improveProgress = nil
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let outcome = AutoImprover.run(doc, target: target) { step, score in
+                Task { @MainActor in self?.improveProgress = (step, score) }
+            }
+            await self?.finishImprove(outcome, base: doc, target: target)
+        }
+    }
+
+    private func finishImprove(_ o: AutoImprover.Outcome, base: CoverDocument, target: Double) {
+        isImproving = false
+        improveProgress = nil
+        guard document.layers == base.layers else {
+            toast = "The cover changed while improving; nothing applied"
+            return
+        }
+        if o.steps == 0 && o.report.score <= o.start.score {
+            toast = o.start.score >= target ? "Already at \(Int(o.start.score)): nothing to improve" : "Couldn't find an edit that raises the score (\(Int(o.start.score)))"
+            return
+        }
+        let out = o.document
+        mutate { d in d = out }
+        critique = o.report
+        snapshot(reason: "Make it a 90")
+        toast = "Design score \(Int(o.start.score)) → \(Int(o.report.score)) (\(o.report.grade))"
     }
 
     func reextractPalette() {

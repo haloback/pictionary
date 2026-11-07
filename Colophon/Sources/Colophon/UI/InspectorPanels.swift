@@ -387,6 +387,20 @@ struct CheckInspector: View {
                             .font(.system(size: 10.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Toggle("Show where readers look first", isOn: Binding(get: { model.showAttention }, set: { on in model.showAttention = on; model.scheduleInsights() }))
                             .controlSize(.small).font(.system(size: 11))
+                        HStack(spacing: 8) {
+                            Button("Shelf Test…") { model.showShelfTest = true }.controlSize(.small)
+                                .help("See the cover among other books of its genre at search-result size")
+                            Button(model.isImproving ? "Improving…" : "Make it a 90") { model.improveToTarget(90) }
+                                .controlSize(.small).disabled(model.isImproving)
+                                .help("Repair, then try small edits and keep whatever raises the score")
+                        }
+                        if model.isImproving {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(model.improveProgress.map { "Step \($0.step): best so far \(Int($0.score))" } ?? "Repairing, then trying edits…")
+                                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                            }
+                        }
                         ForEach(c.issues) { issue in
                             HStack(alignment: .top, spacing: 9) {
                                 icon(issue.severity)
@@ -569,6 +583,8 @@ struct BookInspector: View {
                 PanelSection("Pictures") {
                     Text("\(model.document.assetOrder.count) imported").font(.system(size: 12))
                     Button { model.chooseImages() } label: { Label("Add Photo or Artwork…", systemImage: "photo.badge.plus") }
+                        .controlSize(.small)
+                    Button { model.showStockPhotos = true } label: { Label("Find Stock Photo…", systemImage: "magnifyingglass") }
                         .controlSize(.small)
                 }
                 PanelSection("Series") {
