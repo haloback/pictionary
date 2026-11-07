@@ -277,6 +277,13 @@ enum Exporter {
         if !credits.isEmpty {
             try? credits.write(to: folder.appendingPathComponent("Credits.txt"), atomically: true, encoding: .utf8)
         }
+        // Stock photos (Unsplash / Pexels) are credited to their photographers too.
+        let stockLines = StockPhotoService.shared.credits(for: doc)
+        if !stockLines.isEmpty {
+            var text = credits.isEmpty ? "" : credits + "\n\n"
+            text += "Photo credits\n\n" + stockLines.joined(separator: "\n")
+            try? text.write(to: folder.appendingPathComponent("Credits.txt"), atomically: true, encoding: .utf8)
+        }
         return urls
     }
 }
