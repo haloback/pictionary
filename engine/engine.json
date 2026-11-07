@@ -1,0 +1,57 @@
+[
+  {
+    "file" : "01-critic.png",
+    "name" : "The critic: measured legibility, collisions, trim and faces; then its repairs",
+    "family" : "Critic"
+  },
+  {
+    "file" : "02-randomize.png",
+    "name" : "Smart randomize: three directions sketched per roll, the best-scoring kept",
+    "family" : "Critic"
+  },
+  {
+    "file" : "03-recommended.png",
+    "name" : "Recommended for your book: templates judged with the author's own title and photo",
+    "family" : "Critic"
+  },
+  {
+    "name" : "Typesetting: measured breaks, block fit, hanging punctuation, small caps, optical tracking",
+    "file" : "04-typesetting.png",
+    "family" : "Typography"
+  },
+  {
+    "name" : "Color grades: lift, gamma, gain, split toning, vibrance, fade, grain and vignette as one-click looks",
+    "family" : "Image",
+    "file" : "05-grades.png"
+  },
+  {
+    "family" : "Blending",
+    "file" : "06-compositing.png",
+    "name" : "Compositing: knockout, gradient map, inner shadow, feather, linear-light blend, palette harmony"
+  },
+  {
+    "name" : "Taste model (CLIP, local): what genre each cover reads as, how professional it looks, its mood",
+    "file" : "07-taste.png",
+    "family" : "Taste"
+  },
+  {
+    "name" : "Search by description: “a quiet, foggy literary novel” across the Signature designs",
+    "family" : "Taste",
+    "file" : "08-describe.png"
+  },
+  {
+    "name" : "Type on a path and warped type: circle, wave, flag, bulge, pinch, rise, fall, perspective",
+    "file" : "09-type-paths.png",
+    "family" : "Typography"
+  },
+  {
+    "name" : "Subjects, precise cutouts, edge refinement and object removal",
+    "file" : "10-cutouts.png",
+    "family" : "Image"
+  },
+  {
+    "name" : "Where readers look first: Apple's attention model over the finished cover, and the critic's note",
+    "family" : "Critic",
+    "file" : "11-attention.png"
+  }
+]

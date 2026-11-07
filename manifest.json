@@ -1,0 +1,944 @@
+[
+  {
+    "name" : "Gilded Bevel",
+    "family" : "Metal",
+    "font" : "Cinzel Bold",
+    "file" : "00-gilded.png"
+  },
+  {
+    "name" : "Epic Fantasy",
+    "file" : "01-epic.png",
+    "family" : "Genre",
+    "font" : "Cinzel Decorative Black"
+  },
+  {
+    "family" : "Metal",
+    "font" : "Audiowide Regular",
+    "name" : "80s Chrome",
+    "file" : "02-chrome.png"
+  },
+  {
+    "file" : "03-carved.png",
+    "font" : "Cinzel Bold",
+    "name" : "Carved Stone",
+    "family" : "Stone & Earth"
+  },
+  {
+    "family" : "Stone & Earth",
+    "font" : "Anton Regular",
+    "file" : "04-rusted.png",
+    "name" : "Rusted Iron"
+  },
+  {
+    "file" : "05-frozen.png",
+    "family" : "Elements",
+    "name" : "Frozen",
+    "font" : "Cinzel Bold"
+  },
+  {
+    "name" : "Molten",
+    "font" : "Anton Regular",
+    "family" : "Elements",
+    "file" : "06-molten.png"
+  },
+  {
+    "font" : "Monoton",
+    "name" : "Neon Tube",
+    "family" : "Light",
+    "file" : "07-neon.png"
+  },
+  {
+    "file" : "08-letterpress.png",
+    "name" : "Letterpress",
+    "family" : "Print & Paper",
+    "font" : "Libre Caslon Display Regular"
+  },
+  {
+    "family" : "Into the Photo",
+    "file" : "09-window.png",
+    "font" : "Anton Regular",
+    "name" : "Window to the Photo"
+  },
+  {
+    "file" : "10-fog.png",
+    "font" : "Cormorant Garamond SemiBold",
+    "name" : "In the Fog",
+    "family" : "Into the Photo"
+  },
+  {
+    "family" : "Genre",
+    "file" : "11-bloodrust.png",
+    "name" : "Blood Rust",
+    "font" : "Creepster"
+  },
+  {
+    "file" : "12-haunted.png",
+    "family" : "Genre",
+    "font" : "IM FELL English SC",
+    "name" : "Haunted"
+  },
+  {
+    "name" : "Romance Satin",
+    "font" : "Pinyon Script Regular",
+    "family" : "Genre",
+    "file" : "13-romance.png"
+  },
+  {
+    "family" : "Genre",
+    "font" : "Orbitron Black",
+    "name" : "Sci-Fi Plate",
+    "file" : "14-scifiplate.png"
+  },
+  {
+    "name" : "YA Pop",
+    "family" : "Genre",
+    "file" : "15-yapop.png",
+    "font" : "Montserrat Black"
+  },
+  {
+    "family" : "Dimension",
+    "name" : "3D Block",
+    "font" : "Bungee Regular",
+    "file" : "16-block3d.png"
+  },
+  {
+    "family" : "Dimension",
+    "file" : "17-deco.png",
+    "font" : "Limelight Regular",
+    "name" : "Art Deco Inline"
+  },
+  {
+    "font" : "Cormorant Garamond Bold",
+    "file" : "18-goldleaf.png",
+    "name" : "Gold Leaf",
+    "family" : "Metal"
+  },
+  {
+    "file" : "19-galaxy.png",
+    "name" : "Galaxy",
+    "font" : "Orbitron Black",
+    "family" : "Elements"
+  },
+  {
+    "family" : "Drips",
+    "file" : "20-gen-drips-blood-long.png",
+    "font" : "Permanent Marker Regular",
+    "name" : "Blood Drips, Long"
+  },
+  {
+    "name" : "Molten Gold Drips, Short",
+    "font" : "Creepster",
+    "file" : "21-gen-drips-molten-gold-short.png",
+    "family" : "Drips"
+  },
+  {
+    "file" : "22-gen-stitch-vermilion-puffy.png",
+    "family" : "Embroidery",
+    "name" : "Vermilion Embroidery, Puffy",
+    "font" : "Righteous"
+  },
+  {
+    "family" : "Balloon",
+    "name" : "Vermilion Balloon, Satin",
+    "file" : "23-gen-balloon-vermilion-satin.png",
+    "font" : "Bungee Regular"
+  },
+  {
+    "file" : "24-gen-sticker-white-soft-shadow-glitter.png",
+    "font" : "Righteous",
+    "name" : "White Sticker, Glitter, Soft Shadow",
+    "family" : "Sticker & Cutout"
+  },
+  {
+    "font" : "Limelight Regular",
+    "file" : "25-gen-retro-triple-vermilion-lemon-down-right.png",
+    "family" : "Retro Stacked",
+    "name" : "Triple Stack, Vermilion & Lemon, Down Right"
+  },
+  {
+    "font" : "Anton Regular",
+    "file" : "26-gen-shattered-vermilion-exploded.png",
+    "name" : "Exploded Glass, Vermilion",
+    "family" : "Shattered Glass"
+  },
+  {
+    "font" : "Cormorant Garamond Bold",
+    "family" : "Smoke Trails",
+    "name" : "Vermilion Smoke, Column",
+    "file" : "27-gen-smoke-vermilion-column.png"
+  },
+  {
+    "file" : "28-gen-pattern-polka-dots-vermilion-turquoise-sticker.png",
+    "family" : "Pattern Fill",
+    "font" : "Righteous",
+    "name" : "Vermilion & Turquoise Polka Dots, Sticker"
+  },
+  {
+    "family" : "Pattern Fill",
+    "name" : "Vermilion & Turquoise Plaid, Outlined",
+    "file" : "29-gen-pattern-plaid-vermilion-turquoise-outlined.png",
+    "font" : "Anton Regular"
+  },
+  {
+    "name" : "Broken Glitch, Vermilion, Halftone",
+    "font" : "Orbitron Black",
+    "file" : "30-gen-glitch-broken-vermilion-halftone.png",
+    "family" : "Glitch & Digital"
+  },
+  {
+    "family" : "Wood Burn & Chalk",
+    "font" : "Rye Regular",
+    "file" : "31-gen-burn-burn-scorched.png",
+    "name" : "Wood Burn, Scorched"
+  },
+  {
+    "family" : "Wood Burn & Chalk",
+    "font" : "Permanent Marker Regular",
+    "file" : "32-gen-burn-chalk-white-smudged.png",
+    "name" : "White Chalk, Smudged"
+  },
+  {
+    "font" : "Playfair Display Black",
+    "family" : "Metal",
+    "file" : "33-gen-metal-gold-soft-glow.png",
+    "name" : "Gold, Soft, Glow"
+  },
+  {
+    "name" : "Vermilion Neon, Outline, Wide",
+    "family" : "Neon & Light",
+    "file" : "34-gen-neon-vermilion-outline-tube-wide.png",
+    "font" : "Poiret One"
+  },
+  {
+    "name" : "Vermilion Backlit, Eclipse",
+    "font" : "Anton Regular",
+    "family" : "Neon & Light",
+    "file" : "35-gen-neon-backlit-vermilion-eclipse.png"
+  },
+  {
+    "family" : "Stone & Earth",
+    "file" : "36-gen-earth-marble-carved.png",
+    "font" : "Cinzel Bold",
+    "name" : "Marble, Carved"
+  },
+  {
+    "family" : "3D & Depth",
+    "file" : "37-gen-3d-towering-chrome-down-right.png",
+    "font" : "Anton Regular",
+    "name" : "Towering 3D, Chrome, Down Right"
+  },
+  {
+    "family" : "Metal",
+    "file" : "38-gen-metal-gold-leaf-inflated-clean.png",
+    "font" : "Marcellus SC",
+    "name" : "Gold Leaf, Inflated"
+  },
+  {
+    "file" : "39-gen-earth-rust-carved-eroded.png",
+    "family" : "Stone & Earth",
+    "name" : "Rust, Carved, Eroded",
+    "font" : "Marcellus SC"
+  },
+  {
+    "family" : "Elements",
+    "file" : "40-gen-elements-ice-blazing.png",
+    "name" : "Ice, Blazing",
+    "font" : "Unbounded ExtraBold"
+  },
+  {
+    "family" : "Metal",
+    "name" : "Copper, Chiseled, Raised",
+    "font" : "Anton Regular",
+    "file" : "41-gen-metal-copper-chiseled-raised.png"
+  },
+  {
+    "family" : "Print & Paper",
+    "file" : "42-gen-print-letterpress-heavy.png",
+    "font" : "Syne ExtraBold",
+    "name" : "Letterpress, Heavy"
+  },
+  {
+    "name" : "Painted On, Full",
+    "family" : "Into the Photo",
+    "font" : "Playfair Display Bold",
+    "file" : "43-gen-photo-painted-on-full.png"
+  },
+  {
+    "name" : "Raw material: Polished Gold",
+    "family" : "Diagnostic",
+    "file" : "44-material-gold.png",
+    "font" : ""
+  },
+  {
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "45-material-goldLeaf.png",
+    "name" : "Raw material: Gold Leaf"
+  },
+  {
+    "name" : "Raw material: Brushed Silver",
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "46-material-silver.png"
+  },
+  {
+    "font" : "",
+    "name" : "Raw material: 80s Chrome",
+    "family" : "Diagnostic",
+    "file" : "47-material-chrome.png"
+  },
+  {
+    "name" : "Raw material: Copper",
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "48-material-copper.png"
+  },
+  {
+    "file" : "49-material-bronze.png",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Oxidized Bronze",
+    "font" : ""
+  },
+  {
+    "family" : "Diagnostic",
+    "name" : "Raw material: Rusted Iron",
+    "file" : "50-material-rust.png",
+    "font" : ""
+  },
+  {
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "51-material-stone.png",
+    "name" : "Raw material: Stone"
+  },
+  {
+    "name" : "Raw material: Marble",
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "52-material-marble.png"
+  },
+  {
+    "font" : "",
+    "file" : "53-material-wood.png",
+    "name" : "Raw material: Wood",
+    "family" : "Diagnostic"
+  },
+  {
+    "font" : "",
+    "file" : "54-material-leather.png",
+    "name" : "Raw material: Leather",
+    "family" : "Diagnostic"
+  },
+  {
+    "family" : "Diagnostic",
+    "name" : "Raw material: Ice",
+    "font" : "",
+    "file" : "55-material-ice.png"
+  },
+  {
+    "font" : "",
+    "file" : "56-material-fire.png",
+    "name" : "Raw material: Fire",
+    "family" : "Diagnostic"
+  },
+  {
+    "file" : "57-material-concrete.png",
+    "name" : "Raw material: Concrete",
+    "font" : "",
+    "family" : "Diagnostic"
+  },
+  {
+    "name" : "Raw material: Paper",
+    "font" : "",
+    "file" : "58-material-paper.png",
+    "family" : "Diagnostic"
+  },
+  {
+    "font" : "",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Galaxy",
+    "file" : "59-material-galaxy.png"
+  },
+  {
+    "font" : "",
+    "family" : "Diagnostic",
+    "file" : "60-material-smoke.png",
+    "name" : "Raw material: Smoke"
+  },
+  {
+    "font" : "",
+    "file" : "61-material-glitter.png",
+    "name" : "Raw material: Glitter",
+    "family" : "Diagnostic"
+  },
+  {
+    "font" : "",
+    "file" : "62-material-thread.png",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Embroidery Thread"
+  },
+  {
+    "file" : "63-material-charred.png",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Burnt Wood",
+    "font" : ""
+  },
+  {
+    "family" : "Diagnostic",
+    "font" : "",
+    "file" : "64-material-chalk.png",
+    "name" : "Raw material: Chalk"
+  },
+  {
+    "file" : "65-material-stripes.png",
+    "name" : "Raw material: Stripes",
+    "family" : "Diagnostic",
+    "font" : ""
+  },
+  {
+    "file" : "66-material-polkaDots.png",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Polka Dots",
+    "font" : ""
+  },
+  {
+    "family" : "Diagnostic",
+    "file" : "67-material-checker.png",
+    "font" : "",
+    "name" : "Raw material: Checkerboard"
+  },
+  {
+    "file" : "68-material-plaid.png",
+    "font" : "",
+    "family" : "Diagnostic",
+    "name" : "Raw material: Plaid"
+  },
+  {
+    "file" : "69-material-gradient.png",
+    "name" : "Raw material: Two-Tone Gradient",
+    "font" : "",
+    "family" : "Diagnostic"
+  },
+  {
+    "name" : "Raw material: Watercolor (two paints)",
+    "font" : "",
+    "file" : "70-material-watercolor.png",
+    "family" : "Diagnostic"
+  },
+  {
+    "name" : "Raw material: Paint-Mixed Gradient",
+    "file" : "71-material-paintGradient.png",
+    "family" : "Diagnostic",
+    "font" : ""
+  },
+  {
+    "family" : "Ink & Line Art (photo effect)",
+    "name" : "Ink Drawing, Black Ink, Medium",
+    "file" : "72-ink-ink-drawing-black-1.png",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "file" : "73-ink-engraving-sepia-1.png",
+    "name" : "Engraving, Sepia Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "name" : "Pencil Sketch, Black Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)",
+    "file" : "74-ink-pencil-sketch-black-1.png",
+    "font" : ""
+  },
+  {
+    "file" : "75-ink-crosshatch-navy-1.png",
+    "family" : "Ink & Line Art (photo effect)",
+    "name" : "Crosshatch, Navy Ink, Medium",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "file" : "76-ink-linocut-black-2.png",
+    "name" : "Linocut, Black Ink, Bold",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "name" : "Ink Wash, Black Ink, Medium",
+    "file" : "77-ink-ink-wash-black-1.png",
+    "font" : "",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "family" : "Ink & Line Art (photo effect)",
+    "name" : "Graphic Novel, Black Ink, Medium",
+    "file" : "78-ink-graphic-novel-black-1.png",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "file" : "79-ink-screen-print-palette-1.png",
+    "name" : "Screen Print, Palette Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "file" : "80-ink-stipple-black-1.png",
+    "name" : "Stipple, Black Ink, Medium",
+    "font" : "",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "font" : "",
+    "file" : "81-ink-blueprint-black-1.png",
+    "name" : "Blueprint, Black Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "file" : "82-ink-cyanotype-black-1.png",
+    "name" : "Cyanotype, Black Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "file" : "83-ink-vector-poster-black-1.png",
+    "name" : "Vector Poster, Black Ink, Medium",
+    "family" : "Ink & Line Art (photo effect)"
+  },
+  {
+    "name" : "Materials: Marble Veins, Granite, Terrazzo, Layered Slate, Cracked Earth, Concrete, Agate Bands, Wood Grain, Wood Planks, Crumpled Paper, Paper Fibers, Linen Weave",
+    "font" : "",
+    "family" : "Material library",
+    "file" : "84-materials-00.png"
+  },
+  {
+    "font" : "",
+    "file" : "85-materials-01.png",
+    "name" : "Materials: Canvas, Denim Twill, Leather Grain, Felt, Watercolor Wash, Paint Smear, Brush Strokes, Ink Splatter, Spray Paint, Acrylic Pour, Ink Wash, Grunge",
+    "family" : "Material library"
+  },
+  {
+    "family" : "Material library",
+    "font" : "",
+    "name" : "Materials: Scratches, Dust & Specks, Rust Pitting, Distressed Print, Burned Edges, Clouds, Smoke, Nebula, Starfield, Bokeh Lights, Aurora, Flames",
+    "file" : "86-materials-02.png"
+  },
+  {
+    "font" : "",
+    "file" : "87-materials-03.png",
+    "family" : "Material library",
+    "name" : "Materials: Water Ripples, Sand Dunes, Frost, Light Leaks, Brushed Metal, Hammered Metal, Diamond Plate, Diagonal Stripes, Polka Dots, Checkerboard, Plaid, Chevron"
+  },
+  {
+    "name" : "Materials: Hex Grid, Triangle Mosaic, Herringbone, Wave Lines, Topographic Lines, Halftone Fade, Sunburst, Golden Blocks, Bauhaus",
+    "font" : "",
+    "file" : "88-materials-04.png",
+    "family" : "Material library"
+  },
+  {
+    "file" : "89-materials-colorways.png",
+    "name" : "Marble in every colorway",
+    "family" : "Material library",
+    "font" : ""
+  },
+  {
+    "file" : "90-materials-masks.png",
+    "font" : "",
+    "name" : "Texture masks (soft and hard)",
+    "family" : "Material library"
+  },
+  {
+    "font" : "",
+    "name" : "Templates: Royal Framed Window, Cinzel Decorative Black; Desert Arch Window, Cinzel Decorative Black; Bronze Age Golden Split, Uncial Antiqua; Bronze Age Typographic, UnifrakturMaguntia; Cherry Blossom Framed Window, Bodoni Moda Black; Romance Classic 1 Arch Window, Abril Fatface; Plum Gold Golden Split, DM Serif Display Italic; Romance Classic 3 Typographic, Playfair Display Black; Copper Smoke Framed Window, Anton Regular; Ember Arch Window, Permanent Marker Regular; Blood Moon Golden Split, Bebas Neue Regular; Noir Red Typographic, Bebas Neue Regular; Dusk Teal Framed Window, Libre Caslon Display Regular; Noir Red Arch Window, Playfair Display Black; Wine Golden Split, Anton Regular; Copper Smoke Typographic, Libre Caslon Display Regular",
+    "family" : "Templates",
+    "file" : "90-templates-00.png"
+  },
+  {
+    "font" : "",
+    "file" : "91-templates-01.png",
+    "name" : "Templates: Desert Framed Window, Bodoni Moda Black; Terracotta Arch Window, Avenir Next Ultra Light; Teal Amber Golden Split, Abril Fatface; Wine Typographic, Playfair Display Bold Italic; Graphite Framed Window, Big Shoulders Display Black; Teal Amber Arch Window, Avenir Next Ultra Light; Electric Golden Split, Syne ExtraBold; Copper Smoke Typographic, Bebas Neue Regular; Blood Moon Framed Window, League Gothic Regular; Harvest Arch Window, Creepster; Noir Red Golden Split, Creepster; Horror Classic 1 Typographic, Creepster; Plum Gold Framed Window, Cormorant Garamond Bold; Plum Gold Arch Window, Pinyon Script Regular; Crimson Ivory Golden Split, Libre Caslon Display Regular; Honey Typographic, Bodoni Moda Bold",
+    "family" : "Templates"
+  },
+  {
+    "file" : "92-templates-02.png",
+    "family" : "Templates",
+    "name" : "Templates: Young Adult Classic 2 Framed Window, Fraunces Black; Cherry Blossom Arch Window, Kaushan Script; Young Adult Classic 1 Golden Split, Anton Regular; Electric Typographic, Montserrat Black; Honey Framed Window, Fraunces Black; Cozy & Women's Fiction Classic 1 Arch Window, Libre Caslon Display Regular; Terracotta Golden Split, Monoton; Cozy & Women's Fiction Classic 3 Typographic, Abril Fatface; Ink and Paper Framed Window, Libre Caslon Display Regular; Mint Cream Arch Window, Syncopate Bold; Sage Linen Golden Split, Fraunces Black; Sage Linen Typographic, Gill Sans Bold; Terracotta Framed Window, DM Serif Display Italic; Memoir Classic 1 Arch Window, Playfair Display Black; Slate Blue Golden Split, Cormorant Garamond Bold; Memoir Classic 3 Typographic, DM Serif Display Italic",
+    "font" : ""
+  },
+  {
+    "name" : "Border: Single Line, Square, Fine, Edge, Light; Double Line, Chamfered, Heavy, Inset, Light; Thick & Thin, Square, Regular, Deep, Light; Thin-Thick-Thin, Notched, Regular, Edge, Light; Dotted, Rounded, Fine, Inset, Light; Dash-Dot, Notched, Heavy, Deep, Light; Diamond Chain, Rounded, Heavy, Edge, Light; Square Chain, Ticket, Regular, Inset, Light; Double Line with Dots, Chamfered, Fine, Deep, Light; Zigzag, Square, Fine, Edge, Light; Wave, Chamfered, Heavy, Inset, Light; Greek Key, Square, Regular, Deep, Light; Chevron Band, Notched, Regular, Edge, Light; Film Strip, Rounded, Fine, Inset, Light; Postage Perforation, Notched, Heavy, Deep, Light; Art Deco Fans, Heavy, Edge, Light",
+    "file" : "93-decor-border.png",
+    "font" : "",
+    "family" : "Borders & ornaments"
+  },
+  {
+    "name" : "Corners: Nouveau Flourish Corners, Small, Edge, Regular, Light; Nouveau Flourish Corners, Large, Edge, Heavy, Light; Deco Fan Corners, Medium, Inset, Regular, Light; Deco Steps Corners, Small, Inset, Heavy, Light; Filigree Spiral Corners, Small, Edge, Regular, Light; Filigree Spiral Corners, Large, Edge, Heavy, Light; Viewfinder Corners, Medium, Inset, Regular, Light; Victorian Bracket Corners, Small, Inset, Heavy, Light; Dot Cluster Corners, Small, Edge, Regular, Light; Dot Cluster Corners, Large, Edge, Heavy, Light; Leaf Sprig Corners, Medium, Inset, Regular, Light; Photo Mount Corners, Small, Inset, Heavy, Light; Double Bracket Corners, Small, Edge, Regular, Light; Double Bracket Corners, Large, Edge, Heavy, Light; Star Corners, Medium, Inset, Regular, Light; Baroque Scroll Corners, Small, Inset, Heavy, Light",
+    "font" : "",
+    "file" : "94-decor-corners.png",
+    "family" : "Borders & ornaments"
+  },
+  {
+    "font" : "",
+    "family" : "Borders & ornaments",
+    "file" : "95-decor-divider.png",
+    "name" : "Divider: Single Divider, Plain, Plain Ends, Light; Single Divider, Three Dots, Plain Ends, Accent; Single Divider, Fleuron Scroll, Plain Ends, Gold; Single Divider, Chevrons, Dot Ends, Light; Double Divider, Dot, Dot Ends, Accent; Double Divider, Asterism, Dot Ends, Gold; Double Divider, Leaves, Diamond Ends, Light; Dotted Divider, Diamond, Diamond Ends, Accent; Dotted Divider, Star, Diamond Ends, Gold; Dotted Divider, Circle, Curled Ends, Light; Fading Divider, Plain, Curled Ends, Accent; Fading Divider, Three Dots, Curled Ends, Gold; Fading Divider, Circle, Plain Ends, Light; Tapered Divider, Plain, Plain Ends, Accent; Tapered Divider, Three Dots, Plain Ends, Gold; Tapered Divider, Fleuron Scroll, Dot Ends, Light"
+  },
+  {
+    "font" : "",
+    "family" : "Borders & ornaments",
+    "name" : "Badge: Circle Seal, Single Ring, Solid, A Novel; Circle Seal, Dotted Ring, Solid, A Novel; Starburst 12, Single Ring, Solid, A Novel; Starburst 12, Dotted Ring, Solid, A Novel; Starburst 16, Single Ring, Solid, A Novel; Starburst 16, Dotted Ring, Solid, A Novel; Starburst 24, Single Ring, Solid, A Novel; Starburst 24, Dotted Ring, Solid, A Novel; Scalloped Seal, Single Ring, Solid, A Novel; Scalloped Seal, Dotted Ring, Solid, A Novel; Shield, Single Ring, Solid, A Novel; Shield, Dotted Ring, Solid, A Novel; Hexagon, Single Ring, Solid, A Novel; Hexagon, Dotted Ring, Solid, A Novel; Rosette, Single Ring, Solid, A Novel; Rosette, Dotted Ring, Solid, A Novel",
+    "file" : "96-decor-badge.png"
+  },
+  {
+    "family" : "Borders & ornaments",
+    "name" : "Banner: Forked Ribbon, Flat Ends, Solid, A Novel; Forked Ribbon, Pointed Ends, Outline, Book One; Forked Ribbon, Rounded Ends, Solid, Book Two; Forked Ribbon, Concave Ends, Outline, Book Three; Straight Band, Pointed Ends, Solid, Book Four; Straight Band, Notched Ends, Outline, Book Five; Straight Band, Concave Ends, Solid, Book Six; Curved Ribbon, Flat Ends, Outline, Part One; Curved Ribbon, Notched Ends, Solid, New; Curved Ribbon, Rounded Ends, Outline, First Edition; Tab Label, Flat Ends, Solid, Special Edition; Tab Label, Pointed Ends, Outline, Collector's Edition; Tab Label, Rounded Ends, Solid, A Memoir; Tab Label, Concave Ends, Outline, Short Stories; Bracket Label, Pointed Ends, Solid, Poems; Bracket Label, Rounded Ends, Solid, A Novel",
+    "file" : "97-decor-banner.png",
+    "font" : ""
+  },
+  {
+    "name" : "Outlines: Hollow, Fine, Vermilion; Hollow, Bold, Vermilion; Double Outline, Vermilion; Triple Outline, Vermilion; Inner Line, Vermilion; Dashed Outline, Vermilion; Hollow, Shadowed, Vermilion; Thick Sticker Outline, Vermilion; Offset Outline, Vermilion",
+    "file" : "98-outlines.png",
+    "font" : "",
+    "family" : "Outlines"
+  },
+  {
+    "font" : "",
+    "file" : "99-flourishes.png",
+    "name" : "Line decorations: None; Flanking Rules; Dots; Diamonds & Rules; Box; Band Behind; Underline; Corner Brackets",
+    "family" : "Subtitles & taglines"
+  },
+  {
+    "name" : "Light mixing (top of each pair) vs paint mixing (bottom): blue+yellow, red+blue, red+yellow, phthalo green+rose, cerulean+orange, violet+yellow",
+    "family" : "Color mixing",
+    "file" : "100-paint-mixing.png",
+    "font" : ""
+  },
+  {
+    "file" : "101-watercolor-fills.png",
+    "font" : "",
+    "family" : "Color mixing",
+    "name" : "Wet-in-wet watercolor backgrounds: ultramarine+hansa yellow, rose+orange, phthalo green+cerulean+yellow, violet+rose, burnt sienna+ultramarine, indigo+ochre"
+  },
+  {
+    "name" : "Styles: Blind Emboss, Medium; Blind Deboss, Deep; Gold Foil Emboss, Medium; Gold Foil Deboss, Medium; Hansa Yellow into Ultramarine Blue; Pyrrole Orange into Permanent Rose; Cerulean Blue into Phthalo Green; Cadmium Yellow to Ultramarine Blue; Fluorescent Pink over Medium Blue, Loose; Yellow over Teal, Tight; Blind Emboss, Subtle; Indigo into Burnt Sienna",
+    "family" : "Emboss, watercolor, overprint",
+    "file" : "102-emboss-watercolor-overprint.png",
+    "font" : ""
+  },
+  {
+    "family" : "Templates",
+    "file" : "103-randomize.png",
+    "font" : "",
+    "name" : "Smart randomize: top row with colors locked (genre classics), bottom row fully free (wild)"
+  },
+  {
+    "font" : "",
+    "family" : "Color mixing",
+    "file" : "104-paint-engine.png",
+    "name" : "Paint engine: yellow glazed with blue and red (greens and oranges where they cross); rose, orange and blue smudged together; wet green and yellow melted with the blend brush"
+  },
+  {
+    "file" : "105-photo-a-aldrin-original.png",
+    "name" : "Original photo",
+    "family" : "Real photo: a-aldrin",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "name" : "Ink Drawing, Black Ink, Medium",
+    "family" : "Real photo: a-aldrin",
+    "file" : "106-photo-a-aldrin-ink-ink-drawing-black-1.png"
+  },
+  {
+    "file" : "107-photo-a-aldrin-ink-engraving-sepia-1.png",
+    "font" : "",
+    "name" : "Engraving, Sepia Ink, Medium",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "font" : "",
+    "family" : "Real photo: a-aldrin",
+    "file" : "108-photo-a-aldrin-ink-pencil-sketch-black-1.png",
+    "name" : "Pencil Sketch, Black Ink, Medium"
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "name" : "Crosshatch, Navy Ink, Medium",
+    "file" : "109-photo-a-aldrin-ink-crosshatch-navy-1.png",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "name" : "Ink Wash, Black Ink, Medium",
+    "file" : "110-photo-a-aldrin-ink-ink-wash-black-1.png",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "file" : "111-photo-a-aldrin-ink-graphic-novel-black-1.png",
+    "font" : "",
+    "name" : "Graphic Novel, Black Ink, Medium"
+  },
+  {
+    "file" : "112-photo-a-aldrin-ink-screen-print-palette-1.png",
+    "family" : "Real photo: a-aldrin",
+    "name" : "Screen Print, Palette Ink, Medium",
+    "font" : ""
+  },
+  {
+    "font" : "",
+    "name" : "Stipple, Black Ink, Medium",
+    "file" : "113-photo-a-aldrin-ink-stipple-black-1.png",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "name" : "Linocut, Black Ink, Bold",
+    "font" : "",
+    "file" : "114-photo-a-aldrin-ink-linocut-black-2.png",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "file" : "115-photo-a-aldrin-ink-cyanotype-black-1.png",
+    "name" : "Cyanotype, Black Ink, Medium",
+    "family" : "Real photo: a-aldrin",
+    "font" : ""
+  },
+  {
+    "file" : "116-photo-a-aldrin-smudged.png",
+    "name" : "Smudged with the finger tool",
+    "family" : "Real photo: a-aldrin",
+    "font" : ""
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "file" : "117-photo-a-aldrin-style-window.png",
+    "name" : "Window to the Photo (title style)",
+    "font" : "Anton Regular"
+  },
+  {
+    "font" : "Cormorant Garamond SemiBold",
+    "file" : "118-photo-a-aldrin-style-fog.png",
+    "name" : "In the Fog (title style)",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "file" : "119-photo-a-aldrin-style-haunted.png",
+    "font" : "IM FELL English SC",
+    "name" : "Haunted (title style)"
+  },
+  {
+    "file" : "120-photo-a-aldrin-style-bloodrust.png",
+    "name" : "Blood Rust (title style)",
+    "font" : "Creepster",
+    "family" : "Real photo: a-aldrin"
+  },
+  {
+    "name" : "Painted On, Full (title style)",
+    "family" : "Real photo: a-aldrin",
+    "file" : "121-photo-a-aldrin-style-gen-photo-painted-on-full.png",
+    "font" : "Playfair Display Bold"
+  },
+  {
+    "name" : "Molten (title style)",
+    "file" : "122-photo-a-aldrin-style-molten.png",
+    "family" : "Real photo: a-aldrin",
+    "font" : "Anton Regular"
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "file" : "123-photo-a-aldrin-style-gilded.png",
+    "name" : "Gilded Bevel (title style)",
+    "font" : "Cinzel Bold"
+  },
+  {
+    "family" : "Real photo: a-aldrin",
+    "name" : "Frozen (title style)",
+    "file" : "124-photo-a-aldrin-style-frozen.png",
+    "font" : "Cinzel Bold"
+  },
+  {
+    "name" : "Original photo",
+    "file" : "125-photo-b-monalisa-original.png",
+    "font" : "",
+    "family" : "Real photo: b-monalisa"
+  },
+  {
+    "font" : "",
+    "name" : "Ink Drawing, Black Ink, Medium",
+    "family" : "Real photo: b-monalisa",
+    "file" : "126-photo-b-monalisa-ink-ink-drawing-black-1.png"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "font" : "",
+    "file" : "127-photo-b-monalisa-ink-engraving-sepia-1.png",
+    "name" : "Engraving, Sepia Ink, Medium"
+  },
+  {
+    "name" : "Pencil Sketch, Black Ink, Medium",
+    "font" : "",
+    "family" : "Real photo: b-monalisa",
+    "file" : "128-photo-b-monalisa-ink-pencil-sketch-black-1.png"
+  },
+  {
+    "file" : "129-photo-b-monalisa-ink-crosshatch-navy-1.png",
+    "name" : "Crosshatch, Navy Ink, Medium",
+    "family" : "Real photo: b-monalisa",
+    "font" : ""
+  },
+  {
+    "name" : "Ink Wash, Black Ink, Medium",
+    "font" : "",
+    "file" : "130-photo-b-monalisa-ink-ink-wash-black-1.png",
+    "family" : "Real photo: b-monalisa"
+  },
+  {
+    "font" : "",
+    "file" : "131-photo-b-monalisa-ink-graphic-novel-black-1.png",
+    "family" : "Real photo: b-monalisa",
+    "name" : "Graphic Novel, Black Ink, Medium"
+  },
+  {
+    "font" : "",
+    "file" : "132-photo-b-monalisa-ink-screen-print-palette-1.png",
+    "name" : "Screen Print, Palette Ink, Medium",
+    "family" : "Real photo: b-monalisa"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "font" : "",
+    "name" : "Stipple, Black Ink, Medium",
+    "file" : "133-photo-b-monalisa-ink-stipple-black-1.png"
+  },
+  {
+    "file" : "134-photo-b-monalisa-ink-linocut-black-2.png",
+    "font" : "",
+    "name" : "Linocut, Black Ink, Bold",
+    "family" : "Real photo: b-monalisa"
+  },
+  {
+    "file" : "135-photo-b-monalisa-ink-cyanotype-black-1.png",
+    "font" : "",
+    "family" : "Real photo: b-monalisa",
+    "name" : "Cyanotype, Black Ink, Medium"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "file" : "136-photo-b-monalisa-smudged.png",
+    "name" : "Smudged with the finger tool",
+    "font" : ""
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "file" : "137-photo-b-monalisa-style-window.png",
+    "name" : "Window to the Photo (title style)",
+    "font" : "Anton Regular"
+  },
+  {
+    "file" : "138-photo-b-monalisa-style-fog.png",
+    "font" : "Cormorant Garamond SemiBold",
+    "family" : "Real photo: b-monalisa",
+    "name" : "In the Fog (title style)"
+  },
+  {
+    "name" : "Haunted (title style)",
+    "family" : "Real photo: b-monalisa",
+    "font" : "IM FELL English SC",
+    "file" : "139-photo-b-monalisa-style-haunted.png"
+  },
+  {
+    "file" : "140-photo-b-monalisa-style-bloodrust.png",
+    "font" : "Creepster",
+    "name" : "Blood Rust (title style)",
+    "family" : "Real photo: b-monalisa"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "name" : "Painted On, Full (title style)",
+    "font" : "Playfair Display Bold",
+    "file" : "141-photo-b-monalisa-style-gen-photo-painted-on-full.png"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "name" : "Molten (title style)",
+    "file" : "142-photo-b-monalisa-style-molten.png",
+    "font" : "Anton Regular"
+  },
+  {
+    "file" : "143-photo-b-monalisa-style-gilded.png",
+    "family" : "Real photo: b-monalisa",
+    "name" : "Gilded Bevel (title style)",
+    "font" : "Cinzel Bold"
+  },
+  {
+    "family" : "Real photo: b-monalisa",
+    "name" : "Frozen (title style)",
+    "font" : "Cinzel Bold",
+    "file" : "144-photo-b-monalisa-style-frozen.png"
+  },
+  {
+    "family" : "Real photo: c-earth",
+    "font" : "",
+    "name" : "Original photo",
+    "file" : "145-photo-c-earth-original.png"
+  },
+  {
+    "font" : "",
+    "file" : "146-photo-c-earth-ink-ink-drawing-black-1.png",
+    "family" : "Real photo: c-earth",
+    "name" : "Ink Drawing, Black Ink, Medium"
+  },
+  {
+    "file" : "147-photo-c-earth-ink-engraving-sepia-1.png",
+    "font" : "",
+    "family" : "Real photo: c-earth",
+    "name" : "Engraving, Sepia Ink, Medium"
+  },
+  {
+    "font" : "Anton Regular",
+    "file" : "148-photo-c-earth-style-window.png",
+    "family" : "Real photo: c-earth",
+    "name" : "Window to the Photo (title style)"
+  },
+  {
+    "file" : "149-photo-c-earth-style-fog.png",
+    "family" : "Real photo: c-earth",
+    "name" : "In the Fog (title style)",
+    "font" : "Cormorant Garamond SemiBold"
+  },
+  {
+    "name" : "Haunted (title style)",
+    "file" : "150-photo-c-earth-style-haunted.png",
+    "family" : "Real photo: c-earth",
+    "font" : "IM FELL English SC"
+  },
+  {
+    "family" : "Real photo: c-earth",
+    "file" : "151-photo-c-earth-style-bloodrust.png",
+    "font" : "Creepster",
+    "name" : "Blood Rust (title style)"
+  },
+  {
+    "file" : "152-photo-c-earth-style-gen-photo-painted-on-full.png",
+    "font" : "Playfair Display Bold",
+    "family" : "Real photo: c-earth",
+    "name" : "Painted On, Full (title style)"
+  },
+  {
+    "font" : "Anton Regular",
+    "name" : "Molten (title style)",
+    "file" : "153-photo-c-earth-style-molten.png",
+    "family" : "Real photo: c-earth"
+  },
+  {
+    "file" : "154-photo-c-earth-style-gilded.png",
+    "name" : "Gilded Bevel (title style)",
+    "font" : "Cinzel Bold",
+    "family" : "Real photo: c-earth"
+  },
+  {
+    "font" : "Cinzel Bold",
+    "file" : "155-photo-c-earth-style-frozen.png",
+    "name" : "Frozen (title style)",
+    "family" : "Real photo: c-earth"
+  }
+]
