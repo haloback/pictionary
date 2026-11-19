@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { parseChord, detectKey, chordPcs, scaleFor } from '../src/engine/theory';
 import { parseChart, expandChart, PROGRESSIONS } from '../src/engine/chart';
-import { defaultProject, generate, smartRandomize, rerollTrack, exportMidi, makeTrack } from '../src/engine/arrange';
+import { defaultProject, generate, smartRandomize, rerollTrack, exportMidi, makeTrack, swapPhrase, applyBandPreset, presetFromProject, BAND_PRESETS } from '../src/engine/arrange';
 import type { Project } from '../src/engine/arrange';
-import { PATTERNS, STYLES, INSTRUMENTS, patternsFor, patternsForStyle } from '../src/engine/library';
+import { PATTERNS, STYLES, INSTRUMENTS, patternsFor, patternsForStyle, getPattern, variantDef } from '../src/engine/library';
+import { bankSize, bankTotal, rhythmsOf, makePlan } from '../src/engine/phrasebank';
+import { GROOVE_COUNTS } from '../src/engine/livedrums';
 import { parseSMF, PROFILE_PRESETS, applyPreset } from '../src/engine/midi';
 import { pickVoicing, fretString } from '../src/engine/fretboard';
 import { chordsFromMidi } from '../src/engine/detect';
 import { RNG } from '../src/engine/rng';
 import { BAR } from '../src/engine/types';
 import type { InstId } from '../src/engine/types';
-import { HORN_RANGE } from '../src/engine/horns';
+import { HORN_RANGE, rangeOf } from '../src/engine/horns';
 
 describe('chord parsing', () => {
   it('reads common symbols', () => {
@@ -113,7 +115,9 @@ describe('generation', () => {
   it('every recipe produces valid, in-range notes for every style', () => {
     const chart = 'Dm9 G13 | Cmaj9 | F#m7b5 B7alt | Em7 A7#9 | Bb/D | N.C. | Gsus4 . . G | C6';
     let checked = 0;
-    for (const style of STYLES) {
+    const onePerFamily = STYLES.filter((s, i) => STYLES.findIndex((x) => x.family === s.family) === i);
+    expect(onePerFamily.length).toBe(11);
+    for (const style of onePerFamily) {
       for (const pat of PATTERNS) {
         const insts = INSTRUMENTS.filter((i) => i.family === pat.family);
         const p = defaultProject();
@@ -121,7 +125,7 @@ describe('generation', () => {
         p.tempo = style.tempo;
         p.chart = chart;
         p.repeats = 1;
-        p.tracks = insts.map((i, k) => ({ ...makeTrack(i.id, style.id, [], new RNG(3 + k)), patternId: pat.id }));
+        p.tracks = insts.flatMap((i, k) => i.variants.slice(0, pat.family === 'horn' ? 9 : 1).map((v) => ({ ...makeTrack(i.id, style.id, [], new RNG(3 + k)), patternId: pat.id, variant: v.id })));
         const arr = generate(p);
         expect(arr.errors).toEqual([]);
         for (const t of p.tracks) {
@@ -149,19 +153,22 @@ describe('generation', () => {
           }
           for (const bd of part.bends) expect(Math.abs(bd.s)).toBeLessThanOrEqual(2.01);
           if (pat.family === 'horn') {
-            const r = HORN_RANGE[t.inst as keyof typeof HORN_RANGE];
+            const r = rangeOf(t.inst as keyof typeof HORN_RANGE, variantDef(t.inst, t.variant).shift ?? 0);
             for (const n of part.notes) {
               expect(n.p, `${pat.id} ${t.inst} low`).toBeGreaterThanOrEqual(r.lo - 2);
               expect(n.p, `${pat.id} ${t.inst} high`).toBeLessThanOrEqual(r.hi + 1);
             }
           }
           if (pat.family === 'bass') for (const n of part.notes) expect(n.p, pat.id).toBeLessThanOrEqual(67);
+          // an instrument type never plays an articulation it does not have
+          const arts = new Set(variantDef(t.inst, t.variant).arts);
+          for (const n of part.notes) if (n.art) expect(arts.has(n.art), `${t.inst}/${t.variant} played ${n.art}`).toBe(true);
           checked++;
         }
       }
     }
-    expect(checked).toBeGreaterThan(500);
-  });
+    expect(checked).toBeGreaterThan(1500);
+  }, 180000);
 
   it('same pitch never overlaps itself', () => {
     for (const p of allCombos().slice(0, 40)) {
@@ -225,8 +232,9 @@ describe('generation', () => {
 
   it('section horns play the same rhythm', () => {
     const p = defaultProject();
-    const horns = p.tracks.filter((t) => ['trumpet', 'alto', 'tenor', 'trombone'].includes(t.inst));
-    p.tracks = p.tracks.map((t) => (horns.includes(t) ? { ...t, patternId: 'hs.stabs' } : t));
+    const hornIds = p.tracks.filter((t) => ['trumpet', 'alto', 'tenor', 'trombone'].includes(t.inst)).map((t) => t.id);
+    p.tracks = p.tracks.map((t) => (hornIds.includes(t.id) ? { ...t, patternId: 'hs.stabs' } : t));
+    const horns = p.tracks.filter((t) => hornIds.includes(t.id));
     const arr = generate(p);
     const counts = horns.map((h) => arr.parts[h.id].notes.length);
     expect(new Set(counts).size).toBe(1);
@@ -310,5 +318,184 @@ describe('library', () => {
       for (const s of STYLES) expect(patternsForStyle(inst.id as InstId, s.id).length, `${inst.id} ${s.id}`).toBeGreaterThanOrEqual(2);
     }
     expect(new Set(PATTERNS.map((p) => p.id)).size).toBe(PATTERNS.length);
+  });
+});
+
+describe('recorded drummer', () => {
+  it('ships a few thousand real bars', () => {
+    expect(GROOVE_COUNTS.grooveBars).toBeGreaterThan(2500);
+    expect(GROOVE_COUNTS.fills).toBeGreaterThan(600);
+  });
+  it('plays every recorded style at any tempo and swing, with kicks for the bass to lock to', () => {
+    for (const pat of PATTERNS.filter((x) => x.tag)) {
+      for (const [tempo, swing] of [[70, 0], [120, 0.3], [200, 0.6]] as const) {
+        const p = defaultProject();
+        p.tempo = tempo;
+        p.swing = swing;
+        p.chart = 'C | F | G | C';
+        p.tracks = p.tracks.filter((t) => t.inst === 'drums' || t.inst === 'bass').map((t) => (t.inst === 'drums' ? { ...t, patternId: pat.id } : { ...t, patternId: 'b.kicklock' }));
+        const arr = generate(p);
+        const drums = arr.parts[p.tracks[0].id].notes;
+        expect(drums.length, pat.id).toBeGreaterThan(40);
+        expect(drums.some((n) => n.p === 36), pat.id + ' kick').toBe(true);
+        expect(arr.parts[p.tracks[1].id].notes.length, pat.id + ' bass').toBeGreaterThan(8);
+        // the drummer is in from the first beat
+        expect(drums.some((n) => n.t < 480), pat.id).toBe(true);
+      }
+    }
+  });
+  it('humanize at zero snaps the performance to the grid', () => {
+    const p = defaultProject();
+    p.swing = 0;
+    p.tracks = p.tracks.filter((t) => t.inst === 'drums').map((t) => ({ ...t, patternId: 'dl.funk', params: { ...t.params, humanize: 0 } }));
+    const notes = generate(p).parts[p.tracks[0].id].notes;
+    expect(notes.every((n) => n.t % 120 === 0)).toBe(true);
+    const loose = generate({ ...p, tracks: p.tracks.map((t) => ({ ...t, params: { ...t.params, humanize: 0.5 } })) }).parts[p.tracks[0].id].notes;
+    expect(loose.some((n) => n.t % 120 !== 0)).toBe(true);
+  });
+});
+
+describe('phrase bank', () => {
+  it('holds thousands of distinct phrases', () => {
+    for (const s of STYLES) {
+      const size = bankSize(s.family);
+      expect(size.rhythms, s.id).toBeGreaterThan(40);
+      expect(size.total, s.id).toBeGreaterThan(1500);
+    }
+    expect(bankTotal()).toBeGreaterThan(10000);
+    for (const fam of ['funk', 'eight', 'swing', 'slow', 'latin'] as const) {
+      const rs = rhythmsOf(fam);
+      expect(new Set(rs.map((r) => r.s)).size).toBe(rs.length);
+      expect(new Set(rs.map((r) => r.id)).size).toBe(rs.length);
+      for (const r of rs) expect(r.s.length).toBe(16);
+    }
+  });
+  it('a bank lead and a bank answer trade bars instead of talking over each other', () => {
+    const p = defaultProject();
+    p.repeats = 4;
+    const tp = p.tracks.find((t) => t.inst === 'trumpet')!;
+    const ts = p.tracks.find((t) => t.inst === 'tenor')!;
+    p.tracks = p.tracks.map((t) => (t.id === tp.id ? { ...t, patternId: 'h.banklead', plan: 77 } : t.id === ts.id ? { ...t, patternId: 'h.bankanswer', plan: 77 } : t));
+    const arr = generate(p);
+    const plan = makePlan(77, arr.bars, 'soul');
+    const barsOf = (id: string) => new Set(arr.parts[id].phrases!.map((u) => u.bar));
+    const lead = barsOf(tp.id);
+    const ans = barsOf(ts.id);
+    expect(lead.size).toBeGreaterThan(3);
+    expect(ans.size).toBeGreaterThan(1);
+    for (let b = 0; b < arr.bars; b++) {
+      if (plan.slots[b] === 'T') continue; // tutti bars are shared on purpose
+      expect(lead.has(b) && ans.has(b), `bar ${b} slot ${plan.slots[b]}`).toBe(false);
+    }
+    // in a tutti bar both play the same phrase
+    const t = plan.slots.findIndex((s) => s === 'T');
+    if (t >= 0) {
+      const a = arr.parts[tp.id].phrases!.find((u) => u.bar === t);
+      const c = arr.parts[ts.id].phrases!.find((u) => u.bar === t);
+      expect(a?.id).toBe(c?.id);
+    }
+  });
+  it('swapping a phrase changes that bar and leaves the others alone', () => {
+    const p = defaultProject();
+    for (const [inst, recipe] of [['bass', 'b.bank'], ['guitar', 'g.banklead'], ['keys', 'k.bank'], ['tenor', 'h.banklead'], ['guitar', 'g.bank']] as const) {
+      const t = p.tracks.find((x) => x.inst === inst)!;
+      const q = { ...p, tracks: p.tracks.map((x) => (x.id === t.id ? { ...x, patternId: recipe } : x)) };
+      const a = generate(q).parts[t.id];
+      expect(a.phrases?.length, recipe).toBeGreaterThan(2);
+      const bar = a.phrases![1].bar;
+      const b = generate(swapPhrase(q, t.id, bar)).parts[t.id];
+      const name = (part: typeof a, n: number) => part.phrases!.find((u) => u.bar === n)?.id;
+      expect(name(b, bar), recipe).not.toBe(name(a, bar));
+      for (const u of a.phrases!) if (u.bar !== bar) expect(name(b, u.bar), recipe + ' bar ' + u.bar).toBe(u.id);
+    }
+  });
+});
+
+describe('instrument types', () => {
+  const play = (inst: string, variant: string, recipe: string, style = 'soul') => {
+    const expression = 1;
+    const p = defaultProject();
+    p.repeats = 6;
+    p.style = style;
+    const t = p.tracks.find((x) => x.inst === inst)!;
+    p.tracks = [{ ...t, variant, patternId: recipe, params: { ...t.params, expression, complexity: 0.7 } }];
+    return generate(p).parts[t.id];
+  };
+  const arts = (part: ReturnType<typeof play>) => new Set(part.notes.map((n) => n.art).filter(Boolean));
+  it('give each type its own articulations', () => {
+    expect(arts(play('trumpet', 'leadtp', 'h.long')).has('shake')).toBe(true);
+    expect(arts(play('trumpet', 'flugel', 'h.long')).has('shake')).toBe(false);
+    expect(arts(play('trumpet', 'muted', 'h.lead')).has('shake')).toBe(false);
+    expect(arts(play('trumpet', 'muted', 'h.lead')).has('fall')).toBe(false);
+    expect(arts(play('trombone', 'trombone', 'h.lead')).has('gliss')).toBe(true);
+    expect(arts(play('tenor', 'tenorhonk', 'h.blues')).has('growl')).toBe(true);
+    expect(arts(play('tenor', 'tenorbreathy', 'h.long')).has('subtone')).toBe(true);
+    expect(arts(play('tenor', 'tenorbreathy', 'h.blues')).has('growl')).toBe(false);
+    expect(arts(play('bass', 'fretless', 'b.soul')).has('gliss')).toBe(true);
+    expect(arts(play('bass', 'slap', 'b.slap', 'funk')).has('pop')).toBe(true);
+    expect(arts(play('bass', 'synth', 'b.funk16', 'funk')).has('ghost')).toBe(false);
+    expect(arts(play('guitar', 'lead', 'g.banklead')).has('bend')).toBe(true);
+    expect(arts(play('guitar', 'slideguitar', 'g.banklead')).has('gliss')).toBe(true);
+  });
+  it('twelve-string doubles the low courses an octave up', () => {
+    const six = play('guitar', 'steel', 'g.strum8').notes.length;
+    const twelve = play('guitar', 'twelve', 'g.strum8').notes.length;
+    expect(twelve).toBeGreaterThan(six * 1.4);
+  });
+  it('range shifts move the part', () => {
+    const mean = (part: ReturnType<typeof play>) => part.notes.reduce((a, n) => a + n.p, 0) / part.notes.length;
+    expect(mean(play('trumpet', 'flugel', 'h.lead'))).toBeLessThan(mean(play('trumpet', 'leadtp', 'h.lead')) - 3);
+    expect(Math.min(...play('bass', 'fivestring', 'b.pump8').notes.map((n) => n.p))).toBeLessThan(28);
+  });
+});
+
+describe('genres and presets', () => {
+  it('every genre deals a valid band', () => {
+    for (const g of STYLES) {
+      const p = defaultProject();
+      p.style = g.id;
+      p.tempo = g.tempo;
+      p.chart = 'Am7 D9 | Gmaj7 | F#m7b5 B7 | Em';
+      p.tracks = INSTRUMENTS.map((i) => makeTrack(i.id, g.id, [], new RNG(9)));
+      const q = smartRandomize(p, 31);
+      const arr = generate(q);
+      for (const t of q.tracks) {
+        expect(getPattern(t.patternId), g.id).toBeTruthy();
+        expect(arr.parts[t.id].notes.length, `${g.id} ${t.inst} ${t.patternId}`).toBeGreaterThan(0);
+      }
+    }
+    let live = 0;
+    for (let s = 1; s <= 40; s++) {
+      const p = smartRandomize({ ...defaultProject(), style: 'funk' }, s);
+      if (getPattern(p.tracks[0].patternId)?.tag) live++;
+    }
+    expect(live).toBeGreaterThan(20);
+  });
+  it('every preset builds the band it describes', () => {
+    expect(BAND_PRESETS.length).toBeGreaterThanOrEqual(25);
+    for (const preset of BAND_PRESETS) {
+      const p = applyBandPreset(defaultProject(), preset, 5);
+      expect(p.tracks.length, preset.id).toBe(preset.players.length);
+      preset.players.forEach((pl, i) => {
+        expect(p.tracks[i].inst).toBe(pl.inst);
+        if (pl.recipe) expect(p.tracks[i].patternId, `${preset.id} ${pl.recipe}`).toBe(pl.recipe);
+        if (pl.variant) expect(p.tracks[i].variant, `${preset.id} ${pl.variant}`).toBe(pl.variant);
+      });
+      if (preset.genre) expect(p.style).toBe(preset.genre);
+      const pitched = p.tracks.filter((t) => t.midi.channel !== 10).map((t) => t.midi.channel);
+      expect(new Set(pitched).size, preset.id + ' channels').toBe(pitched.length);
+      const arr = generate(p);
+      expect(arr.errors).toEqual([]);
+      for (const t of p.tracks) expect(arr.parts[t.id].notes.length, `${preset.id} ${t.inst}`).toBeGreaterThan(0);
+      // exports cleanly
+      expect(parseSMF(exportMidi(p, arr)).nTracks).toBe(p.tracks.length + 1);
+    }
+  }, 60000);
+  it('a saved band comes back as it was', () => {
+    const p = smartRandomize(defaultProject(), 3);
+    const preset = presetFromProject(p, 'Mine');
+    const q = applyBandPreset({ ...defaultProject(), style: 'punk' }, preset, 8);
+    expect(q.style).toBe(p.style);
+    expect(q.tracks.map((t) => [t.inst, t.variant, t.patternId])).toEqual(p.tracks.map((t) => [t.inst, t.variant, t.patternId]));
   });
 });

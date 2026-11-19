@@ -9,6 +9,7 @@ import type { GenCtx } from './perf';
 import { chordPcs, clamp, mod12, nearestPitch, pitchAtOrAbove, roleInterval, scalePcsFor, scaleStep } from './theory';
 import type { PatternDef } from './patterns';
 import type { RNG } from './rng';
+import { bankBass, bassGate, rfamOf } from './phrasebank';
 
 const LO = 28; // E1
 const HI = 55; // G3
@@ -67,11 +68,13 @@ function realise(ctx: GenCtx, def: BassDef, barTpl: (bar: number, rng: RNG) => s
   // dead notes in the gaps for busier takes
   if (def.ghosts) {
     for (let i = 1; i < total - 1; i++) {
-      if (tok[i] === '.' && tok[i + 1] !== '.' && tok[i + 1] !== '-' && tok[i + 1] !== 'x' && rng.chance(cx * 0.3)) tok[i] = 'x';
+      if (tok[i] === '.' && tok[i + 1] !== '.' && tok[i + 1] !== '-' && tok[i + 1] !== 'x' && rng.chance(cx * 0.3 * ctx.traits.ghost)) tok[i] = 'x';
     }
   }
 
-  const base = (def.high ? 33 : LO) + clamp(ctx.params.octave, -1, 1) * 12;
+  const base = (def.high ? 33 : LO) + clamp(ctx.params.octave, -1, 1) * 12 + ctx.shift;
+  const tr = ctx.traits;
+  let prevEnd = -1e9;
   const rootOf = (ch: Chord, near: number): number => {
     let p = pitchAtOrAbove(ch.bass, base);
     if (p + 12 <= base + 15 && Math.abs(p + 12 - near) < Math.abs(p - near)) p += 12;
@@ -175,23 +178,30 @@ function realise(ctx: GenCtx, def: BassDef, barTpl: (bar: number, rng: RNG) => s
     const startAbs = b.w(t) + off;
 
     // slide up into important roots
-    if ((tk === 'R' || tk === 'n') && w >= 2 && (sp.change || antic.has(i)) && rng.chance(ex * 0.2 * (def.slide ?? 1))) {
+    if (tr.gliss > 0 && startAbs - prevEnd < b.ms(60) && p !== prev && Math.abs(p - prev) <= 5 && rng.chance(ex * 0.3 * tr.gliss)) {
+      // glide from the previous note (fretless, upright, synth portamento)
+      art = 'gliss';
+      const gl = b.ms(rng.range(60, 120));
+      b.bendRampAbs(startAbs - 2, startAbs + gl, clamp(prev - p, -2, 2), 0, 0.8);
+      b.bendAbs(startAbs + gl + 4, 0);
+    } else if ((tk === 'R' || tk === 'n') && w >= 2 && (sp.change || antic.has(i)) && rng.chance(ex * 0.2 * (def.slide ?? 1) * tr.slide)) {
       art = art ?? 'slide';
       const sl = b.ms(rng.range(55, 95));
       b.bendRampAbs(startAbs - 2, startAbs + sl, -2, 0, 0.7);
       b.bendAbs(startAbs + sl + 4, 0);
-    } else if (w >= 1 && tk !== 'r' && rng.chance(ex * cx * 0.16) && p - 2 >= LO) {
+    } else if (w >= 1 && tk !== 'r' && rng.chance(ex * cx * 0.16 * tr.grace) && p - 2 >= LO) {
       // hammer-on from the scale tone below
       const g = scaleStep(p, scalePcsFor(ch, ctx.key), -1);
       b.note(t, b.ms(48), g, v - 14, { abs: true, off: off - b.ms(38) });
       art = art ?? 'legato';
     }
     b.note(t, len * gate, p, v, { art, off });
+    prevEnd = b.w(t + len * gate) + off;
     // a touch of vibrato on long held notes
-    if (len >= BEAT * 3 && rng.chance(ex * 0.45)) {
+    if (len >= BEAT * 3 && rng.chance(Math.min(1, ex * 0.45 * tr.vib))) {
       const endAbs = b.w(t + len * gate) + off;
       b.cAbs('vib', startAbs + (endAbs - startAbs) * 0.45, 0);
-      b.rampAbs('vib', startAbs + (endAbs - startAbs) * 0.5, endAbs - 20, 0, 0.3 + ex * 0.25, 1, 60);
+      b.rampAbs('vib', startAbs + (endAbs - startAbs) * 0.5, endAbs - 20, 0, clamp((0.3 + ex * 0.25) * Math.min(1.6, tr.vib), 0, 1), 1, 60);
       b.cAbs('vib', endAbs, 0);
     }
     prev = p;
@@ -243,6 +253,15 @@ function kickLock(ctx: GenCtx): Part {
   });
 }
 
+/** Lines dealt from the phrase bank: a rhythm cell with a note-function scheme, bar by bar. */
+function bankPart(ctx: GenCtx): Part {
+  const bb = bankBass(ctx);
+  const fam = rfamOf(ctx.style);
+  const part = realise(ctx, { bars: [], gate: bassGate(ctx.style), lay: fam === 'funk' ? 2 : 4, ghosts: fam === 'funk' || fam === 'eight' }, (bar) => bb.bars[bar] ?? 'R---');
+  part.phrases = bb.uses;
+  return part;
+}
+
 /** Walking quarter notes (or a half-note two-feel) for swing. */
 function walking(ctx: GenCtx, twoFeel: boolean): Part {
   const b = new PB(ctx);
@@ -250,7 +269,7 @@ function walking(ctx: GenCtx, twoFeel: boolean): Part {
   const cx = ctx.params.complexity;
   const ex = ctx.params.expression;
   const segs = segments(ctx);
-  const lo = 28 + clamp(ctx.params.octave, -1, 1) * 12;
+  const lo = 28 + clamp(ctx.params.octave, -1, 1) * 12 + ctx.shift;
   const hi = lo + 22;
   let cur = lo + 9;
   const emit = (beat: number, lenBeats: number, p: number, accent: boolean) => {
@@ -345,6 +364,22 @@ const RECIPES: BassRecipe[] = [
     density: 2,
     desc: 'Follows the kick drum hit for hit, with approach notes into each change.',
     gen: kickLock,
+  },
+  {
+    id: 'b.bank',
+    name: 'Phrase bank: Bass lines',
+    styles: ['funk', 'soul', 'pop', 'rock', 'neosoul', 'afrobeat', 'reggae', 'bossa', 'ballad', 'blues', 'jazz'],
+    density: 2,
+    desc: 'Dealt bar by bar from the phrase bank: a rhythm cell combined with a way of moving through the chord. Swap any bar you do not like.',
+    gen: bankPart,
+  },
+  {
+    id: 'b.tumbao',
+    name: 'Tumbao',
+    styles: ['bossa', 'afrobeat'],
+    density: 2,
+    desc: 'The anticipated son bass: fifth on the and of two, next root on four, held across the bar line.',
+    def: { gate: 0.9, lay: 0, bars: ['R---|..5-|--..|n---', 'R-..|..5-|--..|n---', 'R---|..5-|--3-|n---'] },
   },
   {
     id: 'b.pump8',
@@ -552,5 +587,6 @@ export const BASS_PATTERNS: PatternDef[] = RECIPES.map((r) => ({
   role: 'groove',
   desc: r.desc,
   variant: r.variant,
+  bank: r.id === 'b.bank',
   gen: r.gen ?? fromBars(r.def!),
 }));

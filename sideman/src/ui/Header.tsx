@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -12,6 +12,8 @@ import {
   GearSix,
   ListMagnifyingGlass,
   Play,
+  Trash,
+  UsersThree,
   Repeat,
   Stop,
 } from '@phosphor-icons/react';
@@ -20,8 +22,10 @@ import { IconBtn, NumberBox, Popover, Toggle } from './bits';
 import { STYLES, styleDef } from '../engine/library';
 import { PROGRESSIONS } from '../engine/chart';
 import { keyName, pcName } from '../engine/theory';
-import type { StyleId } from '../engine/types';
 import { desktop, dragOut, isMac } from '../platform';
+import { BAND_PRESETS } from '../engine/arrange';
+import { GROOVE_COUNTS } from '../engine/livedrums';
+import { bankTotal } from '../engine/phrasebank';
 
 export function Toolbar() {
   const s = useApp();
@@ -156,7 +160,23 @@ function Settings() {
               : 'No MIDI ports found. On a Mac, enable the IAC Driver in Audio MIDI Setup to route into your DAW.')}
         </p>
       </div>
-      <Toggle label="Mute built-in sounds" hint="Use when your own synths are playing" checked={s.previewMuted} onChange={s.setPreviewMuted} />
+      <div className="field">
+        <div className="field-head">
+          <label htmlFor="engine">Preview sound</label>
+        </div>
+        <select id="engine" value={s.engine} onChange={(e) => s.setEngine(e.target.value as 'sampled' | 'sketch')}>
+          <option value="sampled">Sampled instruments</option>
+          <option value="sketch">Built-in synth</option>
+        </select>
+        <p className="hint">
+          {s.engine === 'sampled'
+            ? s.sampledState === 'missing'
+              ? 'The sound bank is not installed in this build, so the built-in synth is playing instead.'
+              : 'A General MIDI sound bank plays the performance exactly as the exported file carries it: expression, vibrato, bends and pedal.'
+            : 'A light synthesised sketch of each instrument.'}
+        </p>
+      </div>
+      <Toggle label="Mute preview sound" hint="Use when your own synths are playing" checked={s.previewMuted} onChange={s.setPreviewMuted} />
       <div className="field">
         <div className="field-head">
           <label htmlFor="theme">Appearance</label>
@@ -166,6 +186,72 @@ function Settings() {
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
+      </div>
+      <p className="hint">
+        The library holds {bankTotal().toLocaleString('en-US')} combinable phrases and {(GROOVE_COUNTS.grooveBars + GROOVE_COUNTS.fills).toLocaleString('en-US')} recorded drum bars. Recorded drumming comes from the Groove MIDI Dataset (Gillick et al., 2019), used under CC BY 4.0.
+      </p>
+    </div>
+  );
+}
+
+function Bands({ close }: { close: () => void }) {
+  const s = useApp();
+  const [name, setName] = useState('');
+  return (
+    <div className="bands">
+      <form
+        className="bands-save"
+        onSubmit={(e) => {
+          e.preventDefault();
+          s.saveBand(name);
+          setName('');
+        }}
+      >
+        <input aria-label="Name for the current band" placeholder="Name the current band" value={name} onChange={(e) => setName(e.target.value)} />
+        <button type="submit" className="btn">
+          Save
+        </button>
+      </form>
+      <div className="menu-scroll">
+        {s.bands.map((b) => (
+          <div key={b.id} className="take">
+            <button
+              type="button"
+              role="menuitem"
+              className="menu-item is-tall"
+              onClick={() => {
+                close();
+                s.applyBand(b);
+              }}
+            >
+              <span>
+                {b.name}
+                <small>{b.desc}</small>
+              </span>
+            </button>
+            <button type="button" className="icon-btn" aria-label={`Delete ${b.name}`} title={`Delete ${b.name}`} onClick={() => s.deleteBand(b.id)}>
+              <Trash size={14} />
+            </button>
+          </div>
+        ))}
+        {s.bands.length > 0 && <hr />}
+        {BAND_PRESETS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            role="menuitem"
+            className="menu-item is-tall"
+            onClick={() => {
+              close();
+              s.applyBand(b);
+            }}
+          >
+            <span>
+              {b.name}
+              <small>{b.desc}</small>
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -198,6 +284,17 @@ export function SongBar() {
             placeholder="Dm7 G7 | Cmaj7 | Am7 . . D7 | %"
             onChange={(e) => s.setChart(e.target.value)}
           />
+          <Popover
+            align="right"
+            button={(open, toggle) => (
+              <button type="button" className={`btn ${open ? 'is-on' : ''}`} onClick={toggle} aria-haspopup="menu" aria-expanded={open} title="Ready-made bands for each genre">
+                <UsersThree size={16} />
+                Bands
+              </button>
+            )}
+          >
+            {(close) => <Bands close={close} />}
+          </Popover>
           <Popover
             align="right"
             button={(open, toggle) => (
@@ -238,13 +335,17 @@ export function SongBar() {
       <div className="song-fields">
         <div className="field">
           <div className="field-head">
-            <label htmlFor="style">Style</label>
+            <label htmlFor="style">Genre</label>
           </div>
-          <select id="style" value={p.style} onChange={(e) => s.setStyle(e.target.value as StyleId)}>
-            {STYLES.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.name}
-              </option>
+          <select id="style" value={p.style} onChange={(e) => s.setStyle(e.target.value)} title={style.desc}>
+            {[...new Set(STYLES.map((st) => st.group))].map((group) => (
+              <optgroup key={group} label={group}>
+                {STYLES.filter((st) => st.group === group).map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

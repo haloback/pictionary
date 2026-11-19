@@ -3,7 +3,7 @@
 // dynamics curve, delayed vibrato, scoops, falls, slurs and tongued attacks.
 
 import { BAR, BEAT, S16 } from './types';
-import type { Chord, Part, StyleId } from './types';
+import type { Chord, Note, Part, PhraseUse, StyleId } from './types';
 import { PB, chordAt, isPhraseEnd, nextChange, segments, steps } from './perf';
 import type { GenCtx } from './perf';
 import { clamp, mod12, nearestPitch, roleInterval, scalePcsFor, scaleStep } from './theory';
@@ -11,6 +11,8 @@ import { colorIntervals } from './voicing';
 import { cellFamily, guideLine, riffLine, soloLine } from './lines';
 import type { LineNote } from './lines';
 import type { PatternDef, SectionPlayer } from './patterns';
+import { bankLine } from './phrasebank';
+import type { LineRole } from './phrasebank';
 
 type HornId = SectionPlayer['inst'];
 
@@ -20,8 +22,16 @@ export const HORN_RANGE: Record<HornId, { lo: number; hi: number; cLo: number; c
   tenor: { lo: 44, hi: 75, cLo: 46, cHi: 70, lead: 62 },
   trombone: { lo: 40, hi: 72, cLo: 43, cHi: 67, lead: 58 },
   bari: { lo: 36, hi: 65, cLo: 37, cHi: 60, lead: 50 },
+  flute: { lo: 60, hi: 96, cLo: 62, cHi: 91, lead: 79 },
 };
-const ORDER: HornId[] = ['trumpet', 'alto', 'tenor', 'trombone', 'bari'];
+const ORDER: HornId[] = ['flute', 'trumpet', 'alto', 'tenor', 'trombone', 'bari'];
+/** which octave each horn takes when the section plays one line together */
+const OCT: Record<HornId, number> = { flute: 12, trumpet: 0, alto: 0, tenor: -12, trombone: -12, bari: -24 };
+/** an instrument's range, moved by its type (flugelhorn sits lower, lead trumpet higher) */
+export function rangeOf(inst: HornId, shift = 0) {
+  const r = HORN_RANGE[inst] ?? HORN_RANGE.tenor;
+  return { lo: r.lo + shift, hi: r.hi + shift, cLo: r.cLo + shift, cHi: r.cHi + shift, lead: r.lead + shift };
+}
 
 type Shape = 'natural' | 'swell' | 'fp' | 'hairpin' | 'dim';
 interface HornEv {
@@ -41,10 +51,12 @@ interface RenderOpts {
   lead: boolean;
   /** section parts play tighter and with less individual ornament */
   section: boolean;
+  /** notes at or below this pitch are in the instrument's breathy low register */
+  low: number;
 }
 
-function fit(p: number, inst: HornId, comfy = true): number {
-  const r = HORN_RANGE[inst];
+function fit(p: number, inst: HornId, comfy = true, shift = 0): number {
+  const r = rangeOf(inst, shift);
   const lo = comfy ? r.cLo : r.lo;
   const hi = comfy ? r.cHi : r.hi;
   while (p > hi) p -= 12;
@@ -58,13 +70,16 @@ function renderHorn(b: PB, evs: HornEv[], o: RenderOpts): void {
   const rng = ctx.rng.fork('horn-perf');
   const ex = ctx.params.expression;
   const cx = ctx.params.complexity;
+  const tr = ctx.traits;
   const dynScale = 0.55 + ctx.params.dynamics * 0.5;
   const jazzy = ctx.style === 'jazz' || ctx.style === 'blues' || ctx.style === 'funk' || ctx.style === 'soul' || ctx.style === 'neosoul';
   const bias = b.ms(rng.range(-4, 5));
   const sorted = evs.slice().sort((a, c) => a.t - c.t);
   let prevEndAbs = -1e9;
+  let prevPitch = -1;
   let prevSlurred = false;
   const D = (v: number) => clamp(v * dynScale, 0.05, 1);
+  const solo = o.lead ? 1 : 0.35;
 
   sorted.forEach((e, i) => {
     const next = sorted[i + 1];
@@ -74,9 +89,11 @@ function renderHorn(b: PB, evs: HornEv[], o: RenderOpts): void {
     const pitchLift = clamp((e.p - 60) / 60, -0.1, 0.15);
     const isShort = e.kind === 'stab' || (e.d <= S16 * 2 && gapNext >= S16);
     const isLong = e.d >= BEAT && e.kind !== 'stab';
+    // the instrument type decides how readily it falls off a note
+    const fall = (!!e.fall && rng.chance(Math.min(1, tr.fall))) || (!e.fall && !!e.end && !!e.acc && !isShort && e.d >= S16 * 3 && gapNext >= BEAT && rng.chance(Math.max(0, tr.fall - 1) * 0.3));
     let vel: number;
     let dur: number;
-    let art: 'staccato' | 'marcato' | 'legato' | 'fall' | undefined;
+    let art: Note['art'];
 
     if (isShort) {
       dur = e.kind === 'stab' && e.d > S16 * 2 ? e.d * 0.7 : Math.min(e.d, S16 * 2) * (e.acc ? 0.62 : 0.5);
@@ -94,26 +111,42 @@ function renderHorn(b: PB, evs: HornEv[], o: RenderOpts): void {
       else if (e.acc && !isLong) art = 'marcato';
       prevSlurred = slurNext;
     }
-    if (e.fall) art = 'fall';
+    if (fall) art = 'fall';
     const endAbs = startAbs + (b.w(e.t + dur) - b.w(e.t));
     const durAbs = endAbs - startAbs;
 
     // grace note from below (solo players, tongued notes on the beat)
-    if (!o.section && !isShort && art !== 'legato' && Math.round(e.t / S16) % 4 === 0 && rng.chance(ex * cx * 0.14) && startAbs - prevEndAbs > b.ms(60)) {
+    if (!o.section && !isShort && art !== 'legato' && Math.round(e.t / S16) % 4 === 0 && rng.chance(ex * cx * 0.14 * tr.grace) && startAbs - prevEndAbs > b.ms(60)) {
       const g = scaleStep(e.p, scalePcsFor(chordAt(ctx, e.t).chord, ctx.key), -1);
       b.note(e.t, b.ms(46), g, vel - 14, { abs: true, off: off - b.ms(36), raw: false });
       art = 'legato';
     }
-    b.note(e.t, dur, e.p, vel, { art, off });
+    const nn = b.note(e.t, dur, e.p, vel, { art, off });
 
-    // scoop into the note
-    const canBend = startAbs - prevEndAbs > b.ms(25);
-    if (canBend && !isShort && (e.start || e.acc || isLong) && rng.chance(ex * (jazzy ? 0.3 : 0.14) * (o.lead ? 1 : 0.4))) {
-      const depth = rng.range(0.5, 1.1);
-      const sl = b.ms(rng.range(55, 105));
-      b.bendRampAbs(startAbs - 3, startAbs + Math.min(sl, durAbs * 0.5), -depth, 0, 0.6);
-      b.bendAbs(startAbs + Math.min(sl, durAbs * 0.5) + 3, 0);
+    const free = startAbs - prevEndAbs > b.ms(25);
+    let bent = false;
+    if (tr.gliss > 0 && !isShort && prevPitch >= 0 && startAbs - prevEndAbs < b.ms(130) && prevPitch !== e.p && Math.abs(prevPitch - e.p) <= 5 && rng.chance(Math.min(1, ex * 0.4 * tr.gliss))) {
+      // slide from the previous note (trombone, plunger)
+      const gl = Math.min(b.ms(rng.range(60, 120)), durAbs * 0.5);
+      b.bendRampAbs(startAbs - 2, startAbs + gl, clamp(prevPitch - e.p, -2, 2), 0, 0.8);
+      b.bendAbs(startAbs + gl + 3, 0);
+      if (!fall) nn.art = 'gliss';
+      bent = true;
+    } else if (free && !isShort && (e.start || e.acc || isLong) && rng.chance(Math.min(1, ex * (jazzy ? 0.3 : 0.14) * solo * tr.scoop))) {
+      // scoop into the note; some types make it a slow, deliberate bend
+      const slow = tr.bend > 0 && rng.chance(Math.min(0.8, 0.3 * tr.bend));
+      const depth = slow ? rng.range(1, 2) : rng.range(0.5, 1.1);
+      const sl = Math.min(b.ms(slow ? rng.range(130, 210) : rng.range(55, 105)), durAbs * 0.5);
+      b.bendRampAbs(startAbs - 3, startAbs + sl, -depth, 0, 0.6);
+      b.bendAbs(startAbs + sl + 3, 0);
+      if (slow && !nn.art) nn.art = 'bend';
+      bent = true;
     }
+
+    // a shake: a lip trill through the back of a long, loud note
+    const shake = isLong && !fall && tr.shake > 0 && durAbs > b.ms(380) && (e.acc || e.shape === 'fp' || (!!e.end && tr.shake > 1)) && rng.chance(Math.min(1, ex * 0.4 * tr.shake * solo));
+    // a doit: rip upward off the end
+    const doit = !fall && !shake && !isShort && tr.doit > 0 && !!e.end && gapNext >= BEAT / 2 && rng.chance(Math.min(1, ex * 0.22 * tr.doit * solo));
 
     if (!isShort) {
       const shape: Shape = e.shape ?? 'natural';
@@ -141,8 +174,8 @@ function renderHorn(b: PB, evs: HornEv[], o: RenderOpts): void {
         b.rampAbs('dyn', settle + 20, endAbs - 6, peak * 0.84, clamp(peak * 0.84 * lean, 0.05, 1), 1.2, 50);
       }
       // vibrato arrives late on held notes
-      const vibDepth = (o.lead ? 0.35 + ex * 0.5 : ex * 0.25) * (ctx.style === 'ballad' || ctx.style === 'bossa' ? 1.15 : 1);
-      if (isLong && vibDepth > 0.08 && durAbs > b.ms(380) && !e.fall && rng.chance(o.lead ? 0.9 : 0.5)) {
+      const vibDepth = (o.lead ? 0.35 + ex * 0.5 : ex * 0.25) * (ctx.style === 'ballad' || ctx.style === 'bossa' ? 1.15 : 1) * tr.vib;
+      if (isLong && !shake && vibDepth > 0.08 && durAbs > b.ms(380) && !fall && rng.chance(o.lead ? 0.9 : 0.5)) {
         const vs = startAbs + Math.max(durAbs * 0.38, b.ms(220));
         if (vs < endAbs - b.ms(80)) {
           b.cAbs('vib', startAbs, 0);
@@ -152,15 +185,40 @@ function renderHorn(b: PB, evs: HornEv[], o: RenderOpts): void {
       }
     }
 
-    // fall-off: pitch and air drop away together
-    if (e.fall) {
+    if (shake) {
+      const ss = startAbs + durAbs * 0.4;
+      const step = b.ms(62);
+      let up = false;
+      for (let t = ss; t < endAbs - step; t += step) {
+        up = !up;
+        b.bendAbs(t, up ? 1.7 : 0);
+      }
+      b.bendAbs(endAbs + 4, 0);
+      nn.art = 'shake';
+    } else if (doit) {
+      const dl = Math.min(b.ms(rng.range(120, 180)), durAbs * 0.45);
+      b.bendRampAbs(endAbs - dl, endAbs, 0, 2, 1.4);
+      b.rampAbs('dyn', endAbs - dl, endAbs, D(0.9), D(0.3), 1.6, 20);
+      b.bendAbs(endAbs + 14, 0);
+      nn.art = 'doit';
+    } else if (fall) {
+      // fall-off: pitch and air drop away together
       const fl = Math.min(b.ms(rng.range(140, 230)), durAbs * 0.55);
       const fs = endAbs - fl;
       b.bendRampAbs(fs, endAbs, 0, -2, 1.5);
       b.rampAbs('dyn', fs, endAbs, D(0.85), D(0.15), 1.2, 20);
       b.bendAbs(endAbs + 14, 0);
     }
+    // tone colours that are a matter of the player's reed and air
+    if ((!nn.art || nn.art === 'marcato') && !bent && tr.growl > 0 && !!e.acc && rng.chance(Math.min(1, 0.4 * tr.growl * (0.4 + ex)))) {
+      nn.art = 'growl';
+      nn.v = clamp(nn.v + 5, 1, 127);
+    } else if (!nn.art && tr.subtone > 0 && vel < 96 && e.p <= o.low + Math.max(0, tr.subtone - 1) * 6 && rng.chance(Math.min(1, 0.45 * tr.subtone))) {
+      nn.art = 'subtone';
+      nn.v = clamp(nn.v - 9, 1, 127);
+    }
     prevEndAbs = endAbs;
+    prevPitch = e.p;
   });
 }
 
@@ -239,7 +297,7 @@ function sortPlayers(players: SectionPlayer[]): SectionPlayer[] {
   return players.slice().sort((a, b) => ORDER.indexOf(a.inst) - ORDER.indexOf(b.inst));
 }
 
-type SectionWriter = (ctx: GenCtx, lead: HornId) => { evs: HornEv[]; mode: 'close' | 'drop2' | 'spread' | 'octaves' };
+type SectionWriter = (ctx: GenCtx, lead: HornId, leadShift: number) => { evs: HornEv[]; mode: 'close' | 'drop2' | 'spread' | 'octaves'; uses?: PhraseUse[] };
 
 /** Build a section recipe from a lead-line writer. */
 function section(writer: SectionWriter) {
@@ -247,25 +305,26 @@ function section(writer: SectionWriter) {
     const order = sortPlayers(players);
     if (!order.length) return [];
     const leadInst = order[0].inst;
-    const { evs, mode } = writer(ctx, leadInst);
+    const { evs, mode, uses } = writer(ctx, leadInst, order[0].ctx.shift);
     const parts = new Map<SectionPlayer, Part>();
     order.forEach((pl, idx) => {
       const b = new PB(pl.ctx);
       const oct = pl.ctx.params.octave * 12;
+      const sh = pl.ctx.shift;
       const mine: HornEv[] = evs.map((e) => {
         const ch = harmony(ctx, e.t, e.d);
         let p: number;
-        if (mode === 'octaves') {
-          const drop = idx === 0 ? 0 : pl.inst === 'alto' && order[0].inst === 'trumpet' ? 0 : pl.inst === 'bari' ? 24 : 12;
-          p = fit(e.p - (order[0].inst === pl.inst ? 0 : drop), pl.inst);
-        } else {
+        if (mode === 'octaves') p = fit(e.p + OCT[pl.inst] - OCT[leadInst], pl.inst, true, sh);
+        else {
           const v = voiceBelow(e.p, ch, ctx, order.length, mode);
-          p = fit(v[Math.min(idx, v.length - 1)], pl.inst, false);
+          p = fit(v[Math.min(idx, v.length - 1)], pl.inst, false, sh);
         }
         return { ...e, p: p + oct };
       });
-      renderHorn(b, mine, { lead: idx === 0, section: true });
-      parts.set(pl, b.part());
+      renderHorn(b, mine, { lead: idx === 0, section: true, low: rangeOf(pl.inst, sh).cLo + 9 + oct });
+      const part = b.part();
+      if (uses) part.phrases = uses;
+      parts.set(pl, part);
     });
     return players.map((pl) => parts.get(pl)!);
   };
@@ -295,11 +354,11 @@ const STAB_ENDS = {
   slow: ['S...|....|L---|----'],
 };
 
-const stabs: SectionWriter = (ctx, lead) => {
+const stabs: SectionWriter = (ctx, lead, ls) => {
   const rng = ctx.rng.fork('stabs');
   const fam = cellFamily(ctx.style);
   const cx = ctx.params.complexity;
-  const center = HORN_RANGE[lead].lead + 2;
+  const center = rangeOf(lead, ls).lead + 2;
   const a = rng.pick(STAB_CELLS[fam]);
   const c2 = rng.pick(STAB_CELLS[fam].filter((c) => c !== a));
   const evs: HornEv[] = [];
@@ -336,9 +395,9 @@ const stabs: SectionWriter = (ctx, lead) => {
   return { evs, mode: 'close' };
 };
 
-const offbeats: SectionWriter = (ctx, lead) => {
+const offbeats: SectionWriter = (ctx, lead, ls) => {
   const rng = ctx.rng.fork('off');
-  const center = HORN_RANGE[lead].lead;
+  const center = rangeOf(lead, ls).lead;
   const evs: HornEv[] = [];
   let prev = center;
   const cells = ['..s.|..s.|..s.|..s.', '..s.|..s.|..s.|..S.', '..s.|..S.|..s.|..s.'];
@@ -361,9 +420,9 @@ const offbeats: SectionWriter = (ctx, lead) => {
   return { evs, mode: 'close' };
 };
 
-const pads: SectionWriter = (ctx, lead) => {
+const pads: SectionWriter = (ctx, lead, ls) => {
   const rng = ctx.rng.fork('pads');
-  const center = HORN_RANGE[lead].lead - 2;
+  const center = rangeOf(lead, ls).lead - 2;
   const evs: HornEv[] = [];
   let prev = center;
   let k = 0;
@@ -389,10 +448,10 @@ const pads: SectionWriter = (ctx, lead) => {
   return { evs, mode: rng.chance(0.5) ? 'drop2' : 'spread' };
 };
 
-const swellHit: SectionWriter = (ctx, lead) => {
+const swellHit: SectionWriter = (ctx, lead, ls) => {
   const rng = ctx.rng.fork('swell');
   const cx = ctx.params.complexity;
-  const center = HORN_RANGE[lead].lead + 1;
+  const center = rangeOf(lead, ls).lead + 1;
   const evs: HornEv[] = [];
   let prev = center;
   const every = cx > 0.6 ? 1 : 2;
@@ -436,18 +495,55 @@ const swellHit: SectionWriter = (ctx, lead) => {
 
 const riff =
   (opts: { answer?: boolean; harm?: boolean }): SectionWriter =>
-  (ctx, lead) => {
+  (ctx, lead, ls) => {
     const rng = ctx.rng.fork('riffsec');
-    const r = HORN_RANGE[lead];
+    const r = rangeOf(lead, ls);
     const line = riffLine(ctx, { center: r.lead, lo: r.cLo + 4, hi: r.cHi, answer: opts.answer });
     return { evs: lineToEvs(line, 0.3 + ctx.params.expression * 0.4, rng), mode: opts.harm ? 'close' : 'octaves' };
   };
 
-const soli: SectionWriter = (ctx, lead) => {
+const soli: SectionWriter = (ctx, lead, ls) => {
   const rng = ctx.rng.fork('soli');
-  const r = HORN_RANGE[lead];
+  const r = rangeOf(lead, ls);
   const line = soloLine(ctx, { lo: r.cLo + 5, hi: r.cHi, center: r.lead + 2, space: 0.2 });
   return { evs: lineToEvs(line, 0.2 + ctx.params.expression * 0.3, rng), mode: 'close' };
+};
+
+/** A section line dealt from the phrase bank, in octaves or harmonised. */
+const bankSection =
+  (role: LineRole, harm: boolean): SectionWriter =>
+  (ctx, lead, ls) => {
+    const rng = ctx.rng.fork('banksec');
+    const r = rangeOf(lead, ls);
+    const got = bankLine(ctx, role, { lo: r.cLo + 4, hi: r.cHi, center: r.lead });
+    return { evs: lineToEvs(got.notes, 0.3 + ctx.params.expression * 0.4, rng), mode: harm ? 'close' : 'octaves', uses: got.uses };
+  };
+
+/** The whole section on the band's shared accent figure, with the comping players. */
+const bandHits: SectionWriter = (ctx, lead, ls) => {
+  const rng = ctx.rng.fork('hits');
+  const center = rangeOf(lead, ls).lead + 2;
+  const evs: HornEv[] = [];
+  let prev = center;
+  for (let bar = 0; bar < ctx.bars; bar++) {
+    const r = rng.fork('b' + bar);
+    const st = steps(ctx.plan.accents[bar % 2]);
+    const last = st.map((c, i) => (c === 'x' || c === 'X' ? i : -1)).filter((i) => i >= 0).pop();
+    for (let i = 0; i < 16; i++) {
+      if (st[i] !== 'x' && st[i] !== 'X') continue;
+      let n = 1;
+      while (i + n < 16 && st[i + n] === '-') n++;
+      const t = bar * BAR + i * S16;
+      const long = n >= 3;
+      const d = long ? n * S16 : S16 * 2;
+      const ch = harmony(ctx, t, d);
+      if (ch.nc) continue;
+      prev = topNote(ch, ctx, prev, center, r, 0.3);
+      const closing = isPhraseEnd(ctx, bar) && i === last;
+      evs.push({ t, d, p: prev, kind: long ? 'long' : 'stab', acc: st[i] === 'X' || closing, shape: long ? 'fp' : undefined, end: closing, fall: closing && long && r.chance(0.5) });
+    }
+  }
+  return { evs, mode: 'close' };
 };
 
 /** Two interleaved guide-tone lines shared out among the players. */
@@ -455,7 +551,7 @@ function guideSection(ctx: GenCtx, players: SectionPlayer[]): Part[] {
   const order = sortPlayers(players);
   const parts = new Map<SectionPlayer, Part>();
   order.forEach((pl, idx) => {
-    const r = HORN_RANGE[pl.inst];
+    const r = rangeOf(pl.inst, pl.ctx.shift);
     const b = new PB(pl.ctx);
     const rng = pl.ctx.rng.fork('guide');
     const oct = pl.ctx.params.octave * 12;
@@ -469,7 +565,7 @@ function guideSection(ctx: GenCtx, players: SectionPlayer[]): Part[] {
       start: true,
       end: i % 2 === 1,
     }));
-    renderHorn(b, evs, { lead: idx === 0, section: true });
+    renderHorn(b, evs, { lead: idx === 0, section: true, low: r.cLo + 9 + oct });
     parts.set(pl, b.part());
   });
   return players.map((pl) => parts.get(pl)!);
@@ -477,15 +573,20 @@ function guideSection(ctx: GenCtx, players: SectionPlayer[]): Part[] {
 
 // ------------------------------------------------------------------ solo recipes
 
-function solo(kind: 'lead' | 'fills' | 'answer' | 'blues' | 'long') {
+function solo(kind: 'lead' | 'fills' | 'answer' | 'blues' | 'long' | 'bank', role: LineRole = 'lead') {
   return (ctx: GenCtx): Part => {
     const inst = ctx.inst as HornId;
-    const r = HORN_RANGE[inst] ?? HORN_RANGE.tenor;
+    const r = rangeOf(inst, ctx.shift);
     const oct = ctx.params.octave * 12;
     const b = new PB(ctx);
     const rng = ctx.rng.fork('solo-ev');
     let evs: HornEv[];
-    if (kind === 'long') {
+    let uses: PhraseUse[] | undefined;
+    if (kind === 'bank') {
+      const got = bankLine(ctx, role, { lo: r.cLo + 2 + oct, hi: r.cHi + 3 + oct, center: r.lead + oct });
+      evs = lineToEvs(got.notes, 0.25 + ctx.params.expression * 0.35, rng);
+      uses = got.uses;
+    } else if (kind === 'long') {
       const line = guideLine(ctx, r.lead + oct, r.cLo + oct, r.cHi + oct, rng.chance(0.5) ? '3' : '7');
       evs = line.map((n, i) => ({
         t: n.t,
@@ -508,8 +609,10 @@ function solo(kind: 'lead' | 'fills' | 'answer' | 'blues' | 'long') {
       });
       evs = lineToEvs(line, 0.25 + ctx.params.expression * 0.35, rng);
     }
-    renderHorn(b, evs, { lead: true, section: false });
-    return b.part();
+    renderHorn(b, evs, { lead: true, section: false, low: r.cLo + 9 + oct });
+    const part = b.part();
+    if (uses) part.phrases = uses;
+    return part;
   };
 }
 
@@ -607,6 +710,82 @@ export const HORN_PATTERNS: PatternDef[] = [
     role: 'line',
     desc: 'An improvised line with the whole section harmonised underneath.',
     section: section(soli),
+  },
+  {
+    id: 'hs.hits',
+    name: 'Section: Band Hits',
+    family: 'horn',
+    styles: ['funk', 'soul', 'pop', 'rock', 'jazz', 'bossa', 'afrobeat', 'blues', 'neosoul', 'reggae'],
+    density: 2,
+    role: 'rhythm',
+    desc: 'The section lands on the accent figure the whole band shares, so horns, guitar and keys punch together.',
+    section: section(bandHits),
+  },
+  {
+    id: 'hs.bank',
+    name: 'Section: Phrase bank riffs',
+    family: 'horn',
+    styles: ALL,
+    density: 3,
+    role: 'line',
+    bank: true,
+    desc: 'A riff built from bank phrases, played by the whole section in octaves. Swap any bar.',
+    section: section(bankSection('riff', false)),
+  },
+  {
+    id: 'hs.bankharm',
+    name: 'Section: Phrase bank, harmonised',
+    family: 'horn',
+    styles: ALL,
+    density: 3,
+    role: 'line',
+    bank: true,
+    desc: 'Bank phrases voiced in close harmony under the lead horn.',
+    section: section(bankSection('riff', true)),
+  },
+  {
+    id: 'hs.bankanswer',
+    name: 'Section: Phrase bank answers',
+    family: 'horn',
+    styles: ALL,
+    density: 1,
+    role: 'line',
+    bank: true,
+    desc: 'The section replies in the bars the band plan leaves for answers, and joins the tutti bars.',
+    section: section(bankSection('answer', true)),
+  },
+  {
+    id: 'h.banklead',
+    name: 'Solo: Phrase bank lead',
+    family: 'horn',
+    styles: ALL,
+    density: 3,
+    role: 'line',
+    bank: true,
+    desc: 'Lead phrases dealt from the bank: statement, variation, contrast, tag. Speaks in the lead bars of the band plan.',
+    gen: solo('bank', 'lead'),
+  },
+  {
+    id: 'h.bankanswer',
+    name: 'Solo: Phrase bank answers',
+    family: 'horn',
+    styles: ALL,
+    density: 1,
+    role: 'line',
+    bank: true,
+    desc: 'Replies from the bank in the bars a lead player leaves open.',
+    gen: solo('bank', 'answer'),
+  },
+  {
+    id: 'h.bankfills',
+    name: 'Solo: Phrase bank fills',
+    family: 'horn',
+    styles: ALL,
+    density: 1,
+    role: 'line',
+    bank: true,
+    desc: 'Pickup phrases from the bank in the gaps.',
+    gen: solo('bank', 'fills'),
   },
   {
     id: 'h.lead',

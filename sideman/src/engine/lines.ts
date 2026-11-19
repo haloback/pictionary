@@ -128,6 +128,8 @@ export function soloLine(ctx: GenCtx, o: SoloOpts): LineNote[] {
     const bCell = prng.pick(CELLS[fam].filter((c) => c !== a));
     const form = prng.pick(['aaba', 'abab', 'aabc', 'abac']);
     let dir = ph % 2 === 0 ? 1 : -1;
+    // each new phrase starts back towards the middle of the instrument
+    cur = Math.round(cur * 0.45 + o.center * 0.55);
     let phraseNotes: Attack[] = [];
     const flush = () => {
       if (!phraseNotes.length) return;

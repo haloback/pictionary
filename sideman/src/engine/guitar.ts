@@ -3,6 +3,7 @@
 
 import { BAR, BEAT, S16 } from './types';
 import type { Art, Note, Part, StyleId } from './types';
+
 import { PB, chordAt, isPhraseEnd, nextChange, steps } from './perf';
 import type { GenCtx } from './perf';
 import { lerp, mod12, roleInterval } from './theory';
@@ -10,6 +11,9 @@ import { pickVoicing } from './fretboard';
 import type { Voicing, VoicingKind } from './fretboard';
 import type { PatternDef } from './patterns';
 import { riffLine } from './lines';
+import type { LineNote } from './lines';
+import { bankComp, bankLine, guitarTokens, rfamOf } from './phrasebank';
+import type { LineRole } from './phrasebank';
 
 interface GtrDef {
   kind: VoicingKind;
@@ -26,6 +30,8 @@ interface GtrDef {
   slideIn?: number;
   /** slower, wider strums */
   lazy?: boolean;
+  /** supply each bar's template directly (phrase bank) */
+  tpl?: (bar: number) => string;
 }
 
 /*
@@ -46,8 +52,10 @@ function runGuitar(ctx: GenCtx, def: GtrDef): Part {
   const tok: string[] = [];
   for (let bar = 0; bar < ctx.bars; bar++) {
     const r = rng.fork('bar' + bar);
-    let tpl = def.bars[bar % def.bars.length];
-    if (def.fills && isPhraseEnd(ctx, bar) && r.chance(0.4 + cx * 0.4)) tpl = r.pick(def.fills);
+    let tpl = def.tpl ? def.tpl(bar) : def.bars[bar % def.bars.length];
+    if (def.tpl) {
+      /* dealt bar by bar */
+    } else if (def.fills && isPhraseEnd(ctx, bar) && r.chance(0.4 + cx * 0.4)) tpl = r.pick(def.fills);
     else if (def.bars.length > 1 && r.chance(cx * 0.2)) tpl = r.pick(def.bars);
     tok.push(...steps(tpl));
   }
@@ -66,6 +74,7 @@ function runGuitar(ctx: GenCtx, def: GtrDef): Part {
     else if (tok[c] === '-') tok[c] = /[1-6]/.test(tok.join('')) ? '1' : 'f';
   }
 
+  const twelve = ctx.variant === 'twelve';
   const ringing: (Note | null)[] = [null, null, null, null, null, null];
   const cutString = (s: number, at: number) => {
     const n = ringing[s];
@@ -81,6 +90,8 @@ function runGuitar(ctx: GenCtx, def: GtrDef): Part {
     cutString(s, startAbs);
     const n = b.note(t, dur, vo.pitches[k] + ctx.params.octave * 12, v, { art, off });
     if (art !== 'ghost' && art !== 'staccato' && art !== 'mute') ringing[s] = n;
+    // twelve-string: the four lower courses carry an octave string, struck a hair later
+    if (twelve && s <= 3) b.note(t, dur, vo.pitches[k] + 12 + ctx.params.octave * 12, v * 0.82, { art, off: off + b.ms(7) });
   };
 
   let voicing: Voicing | null = null;
@@ -164,7 +175,7 @@ function runGuitar(ctx: GenCtx, def: GtrDef): Part {
         cutAll(b.w(t) + lay - b.ms(10));
         const idx = n > 5 ? top(5) : all;
         const startAbs = b.w(t) + lay;
-        if (def.slideIn && acc && rng.chance(ex * def.slideIn * 0.3)) {
+        if (def.slideIn && acc && rng.chance(ex * def.slideIn * 0.3 * ctx.traits.slide)) {
           b.bendRampAbs(startAbs - b.ms(12), startAbs + b.ms(42), -1, 0, 0.8);
           b.bendAbs(startAbs + b.ms(48), 0);
         }
@@ -207,36 +218,86 @@ function runGuitar(ctx: GenCtx, def: GtrDef): Part {
   return b.part();
 }
 
-/** Muted single-note line: a pentatonic riff picked with the palm on the bridge. */
-function mutedLine(ctx: GenCtx, opts: { answer?: boolean; open?: boolean }): Part {
+/** Play a single-note line: muted and percussive, or open and singing with bends, slides and vibrato. */
+function renderLine(ctx: GenCtx, line: LineNote[], opts: { open?: boolean }): Part {
   const b = new PB(ctx);
   const rng = ctx.rng.fork('gline');
   const ex = ctx.params.expression;
-  const oct = ctx.params.octave * 12;
-  const line = riffLine(ctx, { center: 62 + oct, lo: 52 + oct, hi: 76 + oct, answer: opts.answer });
+  const tr = ctx.traits;
+  let prevP = -1;
+  let prevEnd = -1e9;
   line.forEach((n, i) => {
     const next = line[i + 1];
     const short = n.d <= S16 * 2;
     const off = b.jit(4);
     const startAbs = b.w(n.t) + off;
     const open = opts.open || (!short && !n.acc ? false : n.acc);
-    if (n.acc && rng.chance(ex * 0.3)) {
+    let art: Art | undefined = open ? undefined : 'mute';
+    // hammer-on feel: consecutive stepwise notes are slurred
+    const slur = !!next && next.t - (n.t + n.d) < 10 && Math.abs(next.p - n.p) <= 2 && rng.chance(0.3 + ex * 0.3);
+    if (open && slur) art = 'legato';
+    if (open && tr.gliss > 0 && prevP >= 0 && startAbs - prevEnd < b.ms(70) && prevP !== n.p && Math.abs(prevP - n.p) <= 5 && rng.chance(Math.min(1, ex * 0.5 * tr.gliss))) {
+      // slide from the previous note
+      const gl = b.ms(rng.range(70, 130));
+      b.bendRampAbs(startAbs - 2, startAbs + gl, Math.max(-2, Math.min(2, prevP - n.p)), 0, 0.8);
+      b.bendAbs(startAbs + gl + 4, 0);
+      art = 'gliss';
+    } else if (open && n.d >= S16 * 2 && tr.bend > 0 && rng.chance(Math.min(1, ex * (n.d >= S16 * 3 ? 0.32 : 0.14) * tr.bend))) {
+      // bend up into the note from a fret or two below
+      const bl = b.ms(rng.range(110, 190));
+      b.bendRampAbs(startAbs - 2, startAbs + bl, rng.chance(0.5) ? -2 : -1, 0, 0.7);
+      b.bendAbs(startAbs + bl + 4, 0);
+      art = 'bend';
+    } else if (n.acc && rng.chance(ex * 0.3 * tr.slide)) {
       b.bendRampAbs(startAbs - 2, startAbs + b.ms(50), -1, 0, 0.7);
       b.bendAbs(startAbs + b.ms(56), 0);
+      if (open) art = 'slide';
     }
-    // hammer-on feel: consecutive stepwise notes are slurred
-    const slur = next && next.t - (n.t + n.d) < 10 && Math.abs(next.p - n.p) <= 2 && rng.chance(0.3 + ex * 0.3);
     const d = open ? n.d * (slur ? 1.02 : 0.85) : Math.min(n.d, S16 * 2) * 0.5;
-    b.note(n.t, d, n.p, n.acc ? 100 : 82 + (Math.round(n.t / S16) % 4 === 0 ? 5 : 0), { art: open ? (slur ? 'legato' : undefined) : 'mute', off });
-    if (open && n.d >= BEAT && rng.chance(ex * 0.6)) {
-      const end = b.w(n.t + d) + off;
+    b.note(n.t, d, n.p, n.acc ? 100 : 82 + (Math.round(n.t / S16) % 4 === 0 ? 5 : 0), { art, off });
+    const end = b.w(n.t + d) + off;
+    if (open && n.d >= BEAT && rng.chance(Math.min(1, ex * 0.6 * tr.vib))) {
       b.cAbs('vib', startAbs + (end - startAbs) * 0.4, 0);
-      b.rampAbs('vib', startAbs + (end - startAbs) * 0.45, end - 10, 0, 0.6, 1, 50);
+      b.rampAbs('vib', startAbs + (end - startAbs) * 0.45, end - 10, 0, Math.min(1, 0.6 * Math.min(1.6, tr.vib)), 1, 50);
       b.cAbs('vib', end, 0);
     }
+    prevP = n.p;
+    prevEnd = end;
   });
   void BAR;
   return b.part();
+}
+
+function lineRange(ctx: GenCtx) {
+  const oct = ctx.params.octave * 12;
+  return { center: 62 + oct, lo: 52 + oct, hi: 76 + oct };
+}
+/** Muted single-note line: a pentatonic riff picked with the palm on the bridge. */
+function mutedLine(ctx: GenCtx, opts: { answer?: boolean; open?: boolean }): Part {
+  return renderLine(ctx, riffLine(ctx, { ...lineRange(ctx), answer: opts.answer }), opts);
+}
+/** A line dealt from the phrase bank in the given role. */
+function bankLinePart(ctx: GenCtx, role: LineRole): Part {
+  const got = bankLine(ctx, role, lineRange(ctx));
+  const part = renderLine(ctx, got.notes, { open: role !== 'riff' });
+  part.phrases = got.uses;
+  return part;
+}
+/** Comping dealt from the phrase bank, sharing accents with the rest of the band. */
+function bankCompPart(ctx: GenCtx): Part {
+  const fam = rfamOf(ctx.style);
+  const got = bankComp(ctx, 'guitar');
+  const sixteenths = fam === 'funk';
+  const part = runGuitar(ctx, {
+    kind: fam === 'swing' ? 'shell' : fam === 'funk' || fam === 'latin' ? 'top4' : 'full',
+    sub: sixteenths ? 16 : 8,
+    antic: true,
+    slideIn: 1,
+    bars: [],
+    tpl: (bar) => guitarTokens(got.rhythms[bar], got.shapes[bar], sixteenths),
+  });
+  part.phrases = got.uses;
+  return part;
 }
 
 interface GtrRecipe {
@@ -266,6 +327,46 @@ const RECIPES: GtrRecipe[] = [
       bars: ['F---|F-f-|--f-|F-f-', 'F---|F-f-|--f-|f-f-', 'F---|f-f-|--f-|F-f-'],
       fills: ['F---|F-f-|F-f-|F-F-'],
     },
+  },
+  {
+    id: 'g.bank',
+    name: 'Phrase bank: Comping',
+    styles: ['funk', 'soul', 'pop', 'rock', 'neosoul', 'afrobeat', 'reggae', 'bossa', 'jazz', 'blues', 'ballad'],
+    density: 2,
+    role: 'rhythm',
+    variant: 'clean',
+    desc: 'Comping figures dealt from the phrase bank. Every other bar joins the band on its shared accents; the bars between stay out of their way.',
+    gen: bankCompPart,
+  },
+  {
+    id: 'g.banklead',
+    name: 'Phrase bank: Lead lines',
+    styles: ['funk', 'soul', 'pop', 'rock', 'neosoul', 'afrobeat', 'reggae', 'bossa', 'jazz', 'blues', 'ballad'],
+    density: 3,
+    role: 'line',
+    variant: 'overdrive',
+    desc: 'Lead phrases from the bank. Speaks in the bars the band plan gives to the lead, and joins the tutti bars.',
+    gen: (ctx) => bankLinePart(ctx, 'lead'),
+  },
+  {
+    id: 'g.bankanswer',
+    name: 'Phrase bank: Answers',
+    styles: ['funk', 'soul', 'pop', 'rock', 'neosoul', 'afrobeat', 'reggae', 'bossa', 'jazz', 'blues', 'ballad'],
+    density: 1,
+    role: 'line',
+    variant: 'clean',
+    desc: 'Replies from the bank in the bars a lead player leaves open.',
+    gen: (ctx) => bankLinePart(ctx, 'answer'),
+  },
+  {
+    id: 'g.bankriff',
+    name: 'Phrase bank: Riffs',
+    styles: ['funk', 'afrobeat', 'rock', 'soul', 'reggae', 'pop', 'blues', 'neosoul'],
+    density: 2,
+    role: 'line',
+    variant: 'muted',
+    desc: 'A two-bar riff built from two bank phrases, with a tag to close each four bars.',
+    gen: (ctx) => bankLinePart(ctx, 'riff'),
   },
   {
     id: 'g.strum16',
@@ -485,5 +586,6 @@ export const GUITAR_PATTERNS: PatternDef[] = RECIPES.map((r) => ({
   role: r.role,
   desc: r.desc,
   variant: r.variant,
+  bank: r.id.startsWith('g.bank'),
   gen: r.gen ?? ((ctx) => runGuitar(ctx, r.def!)),
 }));

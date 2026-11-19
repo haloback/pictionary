@@ -27,6 +27,7 @@ const FORMANTS: Record<string, { f: number[]; odd: number; tilt: number; noise: 
   tenor: { f: [650, 1750], odd: 0.7, tilt: 1.15, noise: 0.06, cutoff: 4300 },
   trombone: { f: [520, 1500], odd: 1, tilt: 1.05, noise: 0, cutoff: 4000 },
   bari: { f: [380, 1150], odd: 0.65, tilt: 1.1, noise: 0.06, cutoff: 3200 },
+  flute: { f: [900, 1800], odd: 1, tilt: 2.1, noise: 0.09, cutoff: 5200 },
 };
 
 export class Synth {
@@ -86,6 +87,11 @@ export class Synth {
     this.ready = true;
   }
 
+  /** the mix bus (before the output compressor); other engines can join it */
+  get bus(): AudioNode {
+    return this.master;
+  }
+
   setMaster(v: number): void {
     if (this.ready) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.02);
   }
@@ -94,7 +100,11 @@ export class Synth {
     if (inst === 'drums' || inst === 'perc') return 'drums';
     if (inst === 'bass') return 'bass';
     if (inst === 'guitar') return 'pluck';
-    if (inst === 'keys') return variant === 'organ' ? 'organ' : variant === 'clav' ? 'clav' : variant === 'grand' ? 'piano' : 'ep';
+    if (inst === 'keys') {
+      if (['organ', 'rockorgan', 'strings', 'pad'].includes(variant)) return 'organ';
+      if (variant === 'clav') return 'clav';
+      return variant === 'grand' || variant === 'upright' ? 'piano' : 'ep';
+    }
     return 'horn';
   }
 

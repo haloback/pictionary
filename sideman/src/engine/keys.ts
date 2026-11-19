@@ -8,6 +8,7 @@ import type { GenCtx } from './perf';
 import { clamp, mod12, pitchAtOrAbove, roleInterval, scalePcsFor, scaleStep } from './theory';
 import { chordVoicing } from './voicing';
 import type { PatternDef } from './patterns';
+import { bankComp, keysTokens, rfamOf } from './phrasebank';
 
 interface KeysDef {
   rh: string[];
@@ -25,6 +26,8 @@ interface KeysDef {
   organ?: boolean;
   /** gate for held chords */
   gate?: number;
+  /** supply each bar's templates directly (phrase bank) */
+  tpl?: (bar: number) => { rh: string; lh: string };
 }
 
 /*
@@ -46,6 +49,12 @@ function runKeys(ctx: GenCtx, def: KeysDef): Part {
   const lh: string[] = [];
   for (let bar = 0; bar < ctx.bars; bar++) {
     const r = rng.fork('bar' + bar);
+    if (def.tpl) {
+      const got = def.tpl(bar);
+      rh.push(...steps(got.rh));
+      lh.push(...steps(got.lh));
+      continue;
+    }
     let idx = bar % def.rh.length;
     if (def.rh.length > 1 && r.chance(cx * 0.3)) idx = r.int(0, def.rh.length - 1);
     let tpl = def.rh[idx];
@@ -245,6 +254,25 @@ function runKeys(ctx: GenCtx, def: KeysDef): Part {
   return b.part();
 }
 
+/** Comping dealt from the phrase bank, interlocking with the guitar on the band's accents. */
+function bankKeys(ctx: GenCtx): Part {
+  const fam = rfamOf(ctx.style);
+  const got = bankComp(ctx, 'keys');
+  const part = runKeys(ctx, {
+    rich: fam === 'swing' || fam === 'latin' ? 2 : 1,
+    antic: true,
+    pedal: fam === 'slow',
+    roll: fam === 'slow' ? 24 : 0,
+    rh: [],
+    tpl: (bar) => {
+      const t = keysTokens(got.rhythms[bar], got.shapes[bar]);
+      return fam === 'swing' ? { rh: t.rh, lh: '' } : t;
+    },
+  });
+  part.phrases = got.uses;
+  return part;
+}
+
 interface KeysRecipe {
   id: string;
   name: string;
@@ -253,10 +281,20 @@ interface KeysRecipe {
   role: 'rhythm' | 'pad';
   desc: string;
   variant?: string;
-  def: KeysDef;
+  def?: KeysDef;
+  gen?: (ctx: GenCtx) => Part;
 }
 
 const RECIPES: KeysRecipe[] = [
+  {
+    id: 'k.bank',
+    name: 'Phrase bank: Comping',
+    styles: ['funk', 'soul', 'pop', 'rock', 'neosoul', 'afrobeat', 'reggae', 'bossa', 'jazz', 'blues', 'ballad'],
+    density: 2,
+    role: 'rhythm',
+    desc: 'Chord figures dealt from the phrase bank. Trades the band accents with the guitar bar by bar so the two interlock.',
+    gen: bankKeys,
+  },
   {
     id: 'k.pop8',
     name: 'Pop Eighths',
@@ -489,5 +527,6 @@ export const KEYS_PATTERNS: PatternDef[] = RECIPES.map((r) => ({
   role: r.role,
   desc: r.desc,
   variant: r.variant,
-  gen: (ctx) => runKeys(ctx, r.def),
+  bank: r.id === 'k.bank',
+  gen: r.gen ?? ((ctx) => runKeys(ctx, r.def!)),
 }));

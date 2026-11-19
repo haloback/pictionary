@@ -2,8 +2,8 @@ import { ArrowsClockwise, DiceFive, DownloadSimple, Star, Trash, X } from '@phos
 import { useApp } from './store';
 import type { Tab } from './store';
 import { IconBtn, NumberBox, Slider, TRACK_COLORS, Toggle } from './bits';
-import { getPattern, instDef, patternsFor, styleDef } from '../engine/library';
-import { fitsStyle } from '../engine/patterns';
+import { familyOf, fitsGenre, getPattern, instDef, patternsFor, styleDef, variantDef } from '../engine/library';
+import { bankSize } from '../engine/phrasebank';
 import type { PatternDef } from '../engine/patterns';
 import { ALL_ARTS, ART_LABEL, DEFAULT_KS, PROFILE_PRESETS } from '../engine/midi';
 import type { ProfileId, VibTarget } from '../engine/midi';
@@ -56,6 +56,7 @@ export function Inspector() {
             ))}
           </select>
         )}
+        {variantDef(t.inst, t.variant).note && <p className="hint type-note">{variantDef(t.inst, t.variant).note}</p>}
         <div className="tabs" role="tablist">
           {TABS.map((tab) => (
             <button key={tab.id} type="button" role="tab" aria-selected={s.tab === tab.id} className={s.tab === tab.id ? 'is-on' : ''} onClick={() => s.setTab(tab.id)}>
@@ -77,8 +78,13 @@ function PartTab({ t }: { t: Track }) {
   const s = useApp();
   const style = s.project.style;
   const all = patternsFor(t.inst);
-  const fit = all.filter((p) => fitsStyle(p, style));
-  const rest = all.filter((p) => !fitsStyle(p, style));
+  const fit = all.filter((p) => fitsGenre(p, style));
+  const rest = all.filter((p) => !fitsGenre(p, style));
+  const current = getPattern(t.patternId);
+  const phrases = s.arr.parts[t.id]?.phrases ?? [];
+  const size = bankSize(familyOf(style));
+  const fam = instDef(t.inst).family;
+  const bankCount = fam === 'bass' ? size.bass : fam === 'keys' || (fam === 'guitar' && t.patternId === 'g.bank') ? size.comp : size.lines;
   const takes = s.takes.filter((k) => k.inst === t.inst && getPattern(k.patternId));
   const section = isSectionPattern(t.patternId);
 
@@ -110,6 +116,28 @@ function PartTab({ t }: { t: Track }) {
         </button>
       </div>
       {section && <p className="note">Horns on the same section recipe are voiced together and share one take, so they phrase and breathe as a section.</p>}
+
+      {current?.bank && phrases.length > 0 && (
+        <>
+          <h3>Phrases in this take</h3>
+          <p className="note">
+            Dealt from {bankCount.toLocaleString('en-US')} phrases that suit {styleDef(style).name}. Swap any bar for a different one; the rest stay as they are.
+          </p>
+          <ol className="phrases">
+            {phrases.map((u) => (
+              <li key={u.bar}>
+                <span className="phrase-bar">{u.bar + 1}</span>
+                <span className="phrase-name" title={u.name}>
+                  {u.name}
+                </span>
+                <IconBtn label={`Swap the phrase in bar ${u.bar + 1}`} onClick={() => s.swapPhrase(t.id, u.bar)}>
+                  <ArrowsClockwise size={13} />
+                </IconBtn>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
 
       <h3>Fits {styleDef(style).name}</h3>
       <div className="recipes">{fit.map(row)}</div>
@@ -159,8 +187,25 @@ function FeelTab({ t }: { t: Track }) {
             ? 'Crushed grace notes and organ swell depth.'
             : 'Not used by this instrument.';
   const set = (key: keyof typeof p) => (v: number) => s.setParams(t.id, { [key]: v }, 'param' + t.id + key);
+  const type = variantDef(t.inst, t.variant);
+  const used = new Set((s.arr.parts[t.id]?.notes ?? []).map((n) => n.art ?? 'sustain'));
   return (
     <>
+      {fam !== 'drums' && fam !== 'perc' && (
+        <div className="field">
+          <div className="field-head">
+            <label>{type.name}: articulations</label>
+          </div>
+          <div className="arts">
+            {type.arts.map((a) => (
+              <span key={a} className={used.has(a) ? 'is-used' : ''} title={used.has(a) ? 'Played in this take' : 'Available, not played in this take'}>
+                {ART_LABEL[a]}
+              </span>
+            ))}
+          </div>
+          <p className="hint">Highlighted ones are played in this take. Each instrument type has its own set and its own habits.</p>
+        </div>
+      )}
       <Slider id="p-cx" label="Complexity" value={p.complexity} onChange={set('complexity')} hint="How busy the part is: fills, ghost notes, variations between bars." />
       <Slider id="p-dy" label="Dynamics" value={p.dynamics} onChange={set('dynamics')} hint="Overall intensity: note velocities and the level of the dynamics curve." />
       <Slider id="p-hu" label="Humanize" value={p.humanize} onChange={set('humanize')} hint="Looseness of timing and touch. At zero the part sits exactly on the grid." />
@@ -306,7 +351,7 @@ function MidiTab({ t }: { t: Track }) {
           <Toggle label="Send keyswitches" hint="A short note before each change of articulation" checked={m.keyswitch} onChange={(v) => s.setMidi(t.id, { keyswitch: v })} />
           {m.keyswitch && (
             <div className="ks">
-              {ALL_ARTS.map((a) => {
+              {ALL_ARTS.filter((a) => variantDef(t.inst, t.variant).arts.includes(a)).map((a) => {
                 const val = m.ksMap[a] ?? DEFAULT_KS[a];
                 return (
                   <div key={a} className="ks-row">

@@ -17,9 +17,15 @@ export type Art =
   | 'slide'
   | 'fall'
   | 'slap'
-  | 'pop';
+  | 'pop'
+  | 'doit' // upward rip off the end of a note
+  | 'shake' // lip trill
+  | 'gliss' // portamento from the previous note
+  | 'growl'
+  | 'subtone' // breathy low-register tone
+  | 'bend'; // slow bend up into the note
 
-export const ALL_ARTS: Art[] = ['sustain', 'staccato', 'marcato', 'legato', 'mute', 'ghost', 'slide', 'fall', 'slap', 'pop'];
+export const ALL_ARTS: Art[] = ['sustain', 'staccato', 'marcato', 'legato', 'mute', 'ghost', 'slide', 'fall', 'slap', 'pop', 'doit', 'shake', 'gliss', 'growl', 'subtone', 'bend'];
 
 export interface Note {
   t: number; // start tick
@@ -43,10 +49,19 @@ export interface Bend {
   s: number;
 }
 
+/** One bar's worth of a phrase-bank take, for display and per-bar swapping. */
+export interface PhraseUse {
+  bar: number;
+  id: string;
+  name: string;
+}
+
 export interface Part {
   notes: Note[];
   ctrl: Ctrl[];
   bends: Bend[];
+  /** phrases used, when the part was built from the phrase bank */
+  phrases?: PhraseUse[];
 }
 
 export type InstId =
@@ -59,7 +74,8 @@ export type InstId =
   | 'alto'
   | 'tenor'
   | 'trombone'
-  | 'bari';
+  | 'bari'
+  | 'flute';
 
 export type Family = 'drums' | 'bass' | 'guitar' | 'keys' | 'horn';
 
@@ -103,6 +119,26 @@ export interface ChordSpan {
   /** true when this span starts a different chord than the previous span */
   change: boolean;
 }
+
+/**
+ * How strongly an instrument type leans on each expressive device.
+ * 1 = normal, 0 = never, 2 = twice as often.
+ */
+export interface Traits {
+  scoop: number;
+  fall: number;
+  doit: number;
+  shake: number;
+  gliss: number;
+  vib: number;
+  growl: number;
+  subtone: number;
+  slide: number;
+  ghost: number;
+  bend: number;
+  grace: number;
+}
+export const NEUTRAL_TRAITS: Traits = { scoop: 1, fall: 1, doit: 0, shake: 0, gliss: 0, vib: 1, growl: 0, subtone: 0, slide: 1, ghost: 1, bend: 0, grace: 1 };
 
 export interface TrackParams {
   /** 0..1 – how busy / ornamented the part is */

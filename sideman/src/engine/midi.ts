@@ -43,6 +43,12 @@ export const DEFAULT_KS: Record<Art, number> = {
   fall: 36,
   slap: 38,
   pop: 40,
+  doit: 41,
+  shake: 43,
+  gliss: 45,
+  growl: 47,
+  subtone: 48,
+  bend: 50,
 };
 
 export interface ProfilePreset {
@@ -425,5 +431,11 @@ export const ART_LABEL: Record<Art, string> = {
   fall: 'Fall',
   slap: 'Slap',
   pop: 'Pop',
+  doit: 'Doit',
+  shake: 'Shake',
+  gliss: 'Glissando',
+  growl: 'Growl',
+  subtone: 'Subtone',
+  bend: 'Bend up',
 };
 export { ALL_ARTS };

@@ -12,6 +12,7 @@ export const TRACK_COLORS: Record<string, string> = {
   tenor: '#a98ddb',
   trombone: '#cf9160',
   bari: '#7f93e0',
+  flute: '#b6c468',
 };
 
 export function IconBtn(props: {

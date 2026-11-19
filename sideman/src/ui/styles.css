@@ -1067,6 +1067,91 @@ input[type='range']::-moz-range-thumb {
   color: var(--dim);
 }
 
+.type-note {
+  margin-top: -4px;
+}
+.phrases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.phrases li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 6px;
+  padding-left: 9px;
+  border-radius: var(--r);
+}
+.phrases li:hover {
+  background: var(--hover);
+}
+.phrase-bar {
+  font: 500 11px var(--mono);
+  color: var(--faint);
+}
+.phrase-name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.arts span {
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-tag);
+  color: var(--faint);
+}
+.arts span.is-used {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.bands {
+  width: 380px;
+}
+.bands-save {
+  display: flex;
+  gap: 6px;
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 5px;
+}
+.bands-save input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--sunk);
+  font-size: 12.5px;
+}
+.bands-save input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.bands .menu-item.is-tall {
+  white-space: normal;
+}
+.bands .menu-item small {
+  font-family: var(--font);
+  white-space: normal;
+  max-width: none;
+  line-height: 1.35;
+}
+.bands .menu-scroll {
+  max-height: 440px;
+}
+
 /* ---------- overlays */
 .drop-overlay {
   position: fixed;

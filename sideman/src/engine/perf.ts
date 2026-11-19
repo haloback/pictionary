@@ -1,7 +1,7 @@
 // Shared performance helpers: generation context, swing warp, humanised part builder.
 
 import { BAR, PPQ } from './types';
-import type { Art, Bend, ChordSpan, Ctrl, CtrlKind, InstId, Key, Note, Part, StyleId, TrackParams } from './types';
+import type { Art, Bend, ChordSpan, Ctrl, CtrlKind, InstId, Key, Note, Part, StyleId, TrackParams, Traits } from './types';
 import { RNG } from './rng';
 import { clamp } from './theory';
 
@@ -36,6 +36,23 @@ export interface GenCtx {
   variant: string;
   /** bars per phrase (fills, breaths and crashes follow this) */
   phrase: number;
+  /** expressive leanings of the chosen instrument type */
+  traits: Traits;
+  /** semitones the instrument type moves the playing range */
+  shift: number;
+  /** how the band shares the bar: who leads, who answers, where everyone hits */
+  plan: BandPlan;
+  /** per-bar "give me a different phrase here" counters */
+  swaps: Record<number, number>;
+}
+
+export type Slot = 'L' | 'A' | 'T' | '-';
+export interface BandPlan {
+  seed: number;
+  /** per bar: L lead speaks, A answer speaks, T everyone together, - space */
+  slots: Slot[];
+  /** two-bar accent figure the band hits together (16-step strings) */
+  accents: [string, string];
 }
 
 export function chordAt(ctx: { spans: ChordSpan[] }, t: number): ChordSpan {
@@ -74,6 +91,19 @@ export function makeWarp(feel: Feel): (t: number) => number {
     const base = Math.floor(t / unit) * unit;
     const x = t - base;
     return base + (x < half ? (x * (half + shift)) / half : half + shift + ((x - half) * (half - shift)) / half);
+  };
+}
+
+/** Inverse of makeWarp: where a swung time sits on the straight grid. */
+export function makeUnwarp(feel: Feel): (t: number) => number {
+  if (feel.swing <= 0.001) return (t) => t;
+  const unit = feel.grid === 8 ? PPQ : PPQ / 2;
+  const half = unit / 2;
+  const shift = (feel.swing * unit) / 6;
+  return (t: number) => {
+    const base = Math.floor(t / unit) * unit;
+    const x = t - base;
+    return base + (x < half + shift ? (x * half) / (half + shift) : half + ((x - half - shift) * half) / (half - shift));
   };
 }
 
@@ -206,7 +236,7 @@ export function finalize(part: Part, len: number): Part {
   const bends = part.bends
     .map((b) => ({ ...b, t: clampT(b.t) }))
     .sort((a, b) => a.t - b.t);
-  return { notes, ctrl, bends };
+  return part.phrases ? { notes, ctrl, bends, phrases: part.phrases } : { notes, ctrl, bends };
 }
 
 /** Parse a 16-step pattern string; "|" and spaces are cosmetic. */

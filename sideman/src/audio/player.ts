@@ -3,8 +3,9 @@
 
 import { PPQ } from '../engine/types';
 import type { Arrangement, Project } from '../engine/arrange';
-import { renderEvents } from '../engine/midi';
+import { applyPreset, renderEvents } from '../engine/midi';
 import { Synth } from './synth';
+import { SfSynth } from './sfsynth';
 
 interface Ev {
   /** seconds from the top of the loop */
@@ -15,10 +16,14 @@ interface Ev {
 const LOOKAHEAD = 0.16;
 const TICK_MS = 25;
 
-const PAN: Record<string, number> = { drums: 0, perc: 0.3, bass: 0, guitar: -0.35, keys: 0.3, trumpet: 0.2, alto: -0.15, tenor: 0.12, trombone: -0.25, bari: 0.05 };
+const PAN: Record<string, number> = { drums: 0, perc: 0.3, bass: 0, guitar: -0.35, keys: 0.3, trumpet: 0.2, alto: -0.15, tenor: 0.12, trombone: -0.25, bari: 0.05, flute: -0.1 };
 
 export class Player {
   synth = new Synth();
+  /** sampled General MIDI instruments; used instead of the sketch synth when loaded */
+  sf = new SfSynth();
+  /** which preview engine the user wants */
+  engine: 'sampled' | 'sketch' = 'sampled';
   private evs: Ev[] = [];
   private idx = 0;
   private loopN = 0;
@@ -60,19 +65,34 @@ export class Player {
       for (const t of project.tracks) synth.channel(t.id, t.inst, t.variant, this.previewMuted ? 0 : gains.get(t.id)!, PAN[t.inst] ?? 0);
     }
     this.channels = new Set(project.tracks.map((t) => t.midi.channel - 1));
+    const sampled = this.sampled();
     for (const t of project.tracks) {
       const part = arr.parts[t.id];
       if (!part) continue;
       const id = t.id;
+      if (sampled) {
+        // the sampled preview hears a General MIDI rendering of the part, whatever mapping the export uses
+        const gain = this.previewMuted ? 0 : gains.get(id)!;
+        const ch = t.midi.channel - 1;
+        evs.push({ time: 0, fire: (when) => this.sf.send([0xb0 | ch, 7, Math.round(Math.sqrt(gain) * 118)], when) });
+        if (gain > 0) {
+          for (const e of renderEvents(part, { ...applyPreset(t.midi, 'gm'), velMin: 1, velMax: 127 }, project.tempo)) {
+            const bytes = e.b;
+            evs.push({ time: e.t * spt + e.o * 1e-5 + 1e-4, fire: (when) => this.sf.send(bytes, when) });
+          }
+        }
+      } else
       for (const n of part.notes) {
         const dur = n.d * spt;
         evs.push({ time: n.t * spt, fire: (when) => synth.note(id, when, n.p, n.v, dur, n.art) });
       }
-      for (const c of part.ctrl) {
-        if (c.k === 'dyn') evs.push({ time: c.t * spt, fire: (when) => synth.dyn(id, when, c.v) });
-        else if (c.k === 'vib') evs.push({ time: c.t * spt, fire: (when) => synth.vib(id, when, c.v) });
+      if (!sampled) {
+        for (const c of part.ctrl) {
+          if (c.k === 'dyn') evs.push({ time: c.t * spt, fire: (when) => synth.dyn(id, when, c.v) });
+          else if (c.k === 'vib') evs.push({ time: c.t * spt, fire: (when) => synth.vib(id, when, c.v) });
+        }
+        for (const b of part.bends) evs.push({ time: b.t * spt, fire: (when) => synth.bend(id, when, b.s) });
       }
-      for (const b of part.bends) evs.push({ time: b.t * spt, fire: (when) => synth.bend(id, when, b.s) });
       // live MIDI goes out exactly as the exported file would
       if (gains.get(id)! > 0) {
         for (const e of renderEvents(part, t.midi, project.tempo)) {
@@ -120,15 +140,36 @@ export class Player {
     return lo;
   }
 
+  /** Is the sampled engine the one sounding? */
+  sampled(): boolean {
+    return this.engine === 'sampled' && this.sf.ready;
+  }
+
   applyMix(project: Project): void {
     if (!this.synth.ready) return;
     const gains = this.gains(project);
-    for (const t of project.tracks) this.synth.setGain(t.id, this.previewMuted ? 0 : gains.get(t.id)!);
+    for (const t of project.tracks) {
+      const g = this.previewMuted ? 0 : gains.get(t.id)!;
+      if (this.sampled()) {
+        const ch = t.midi.channel - 1;
+        this.sf.now([0xb0 | ch, 7, Math.round(Math.sqrt(g) * 118)]);
+        if (g === 0) this.sf.now([0xb0 | ch, 123, 0]);
+      } else this.synth.setGain(t.id, g);
+    }
+  }
+
+  /** Bring up the sampled instruments if they are wanted. Returns true when they are sounding. */
+  async prepare(): Promise<boolean> {
+    this.synth.init();
+    if (this.engine !== 'sampled' || this.sf.failed) return false;
+    if (!this.sf.ready) await this.sf.init(this.synth.ctx, this.synth.bus);
+    return this.sf.ready;
   }
 
   async play(project: Project, arr: Arrangement, fromTick = 0): Promise<void> {
     this.synth.init();
     if (this.synth.ctx.state === 'suspended') await this.synth.ctx.resume();
+    await this.prepare();
     this.stop(false);
     this.playing = false;
     this.load(project, arr);
@@ -177,6 +218,15 @@ export class Player {
     this.playing = false;
     if (panic && was) {
       this.synth.panic();
+      if (this.sf.ready) {
+        this.sf.silence();
+        for (const ch of this.channels) {
+          this.sf.now([0xb0 | ch, 64, 0]);
+          this.sf.now([0xe0 | ch, 0, 64]);
+          this.sf.now([0xb0 | ch, 1, 0]);
+          this.sf.now([0xb0 | ch, 11, 127]);
+        }
+      }
       this.silenceMidi();
     }
   }

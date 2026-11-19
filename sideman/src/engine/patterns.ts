@@ -4,7 +4,7 @@ import type { GenCtx } from './perf';
 export type PatternRole = 'groove' | 'pad' | 'rhythm' | 'line';
 
 export interface SectionPlayer {
-  inst: 'trumpet' | 'alto' | 'tenor' | 'trombone' | 'bari';
+  inst: 'trumpet' | 'alto' | 'tenor' | 'trombone' | 'bari' | 'flute';
   /** per-player context (own rng, params) */
   ctx: GenCtx;
 }
@@ -21,6 +21,10 @@ export interface PatternDef {
   desc: string;
   /** suggested instrument variant when this recipe is picked by the randomiser */
   variant?: string;
+  /** recorded-drummer recipes: the dataset style they draw from */
+  tag?: string;
+  /** built from the phrase bank (supports per-bar swapping) */
+  bank?: boolean;
   gen?: (ctx: GenCtx) => Part;
   /** horn section recipes voice all players at once */
   section?: (ctx: GenCtx, players: SectionPlayer[]) => Part[];

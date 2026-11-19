@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { defaultProject, exportMidi, fileSafe, generate, makeTrack, rerollTrack, smartRandomize, trackLabel } from '../engine/arrange';
-import type { Arrangement, Project, Track } from '../engine/arrange';
-import type { InstId, StyleId, TrackParams } from '../engine/types';
-import { getPattern, instDef, patternsFor, styleDef } from '../engine/library';
+import { applyBandPreset, defaultProject, exportMidi, fileSafe, generate, makeTrack, presetFromProject, rerollTrack, smartRandomize, swapPhrase, trackLabel } from '../engine/arrange';
+import type { Arrangement, BandPreset, Project, Track } from '../engine/arrange';
+import type { InstId, TrackParams } from '../engine/types';
+import { STYLES, getPattern, instDef, patternsFor, styleDef } from '../engine/library';
 import { applyPreset } from '../engine/midi';
 import type { MidiProfile, ProfileId } from '../engine/midi';
 import { chordsFromMidi } from '../engine/detect';
@@ -21,7 +21,7 @@ export interface SavedTake {
   sectionSeed: number;
   variant: string;
   params: TrackParams;
-  style: StyleId;
+  style: string;
 }
 
 export type Theme = 'auto' | 'light' | 'dark';
@@ -42,6 +42,11 @@ interface State {
   midiOutputs: { id: string; name: string }[];
   midiError: string | null;
   previewMuted: boolean;
+  /** preview sound: sampled instruments or the built-in sketch synth */
+  engine: 'sampled' | 'sketch';
+  /** what the sampled engine is doing */
+  sampledState: 'idle' | 'loading' | 'ready' | 'missing';
+  setEngine: (e: 'sampled' | 'sketch') => void;
   theme: Theme;
   toast: { msg: string; id: number } | null;
 
@@ -51,7 +56,12 @@ interface State {
   select: (id: string | null, tab?: Tab) => void;
   setTab: (t: Tab) => void;
   setChart: (text: string) => void;
-  setStyle: (s: StyleId) => void;
+  setStyle: (s: string) => void;
+  swapPhrase: (id: string, bar: number) => void;
+  bands: BandPreset[];
+  applyBand: (preset: BandPreset) => void;
+  saveBand: (name: string) => void;
+  deleteBand: (id: string) => void;
   loadPreset: (pr: { text: string; style?: string; tempo?: number }) => void;
   randomizeAll: () => void;
   reroll: (id: string, mode: 'recipe' | 'take') => void;
@@ -87,7 +97,7 @@ interface State {
   setTheme: (t: Theme) => void;
 }
 
-const LS = { project: 'sideman.project.v1', takes: 'sideman.takes.v1', settings: 'sideman.settings.v1' };
+const LS = { project: 'sideman.project.v1', takes: 'sideman.takes.v1', settings: 'sideman.settings.v1', bands: 'sideman.bands.v1' };
 function load<T>(key: string): T | null {
   try {
     const s = localStorage.getItem(key);
@@ -112,11 +122,14 @@ function validProject(p: unknown): p is Project {
 function repair(p: Project): Project {
   return {
     ...p,
+    style: STYLES.some((s) => s.id === p.style) ? p.style : 'soul',
     tracks: p.tracks.map((t) => {
       const pats = patternsFor(t.inst);
       const def = instDef(t.inst);
       return {
         ...t,
+        // sessions saved before band plans existed share one plan
+        plan: typeof t.plan === 'number' ? t.plan : p.sectionSeed || 1,
         patternId: pats.some((x) => x.id === t.patternId) ? t.patternId : pats[0].id,
         variant: def.variants.some((v) => v.id === t.variant) ? t.variant : def.variants[0].id,
       };
@@ -126,7 +139,8 @@ function repair(p: Project): Project {
 
 const saved = load<Project>(LS.project);
 const initial = validProject(saved) ? repair(saved) : defaultProject();
-const settings = load<{ theme: Theme; loop: boolean; useTakes: boolean; previewMuted: boolean }>(LS.settings);
+const settings = load<{ theme: Theme; loop: boolean; useTakes: boolean; previewMuted: boolean; engine?: 'sampled' | 'sketch' }>(LS.settings);
+player.engine = settings?.engine ?? 'sampled';
 let lastCoalesce = '';
 let lastCoalesceAt = 0;
 let toastId = 0;
@@ -147,7 +161,7 @@ export const useApp = create<State>((set, get) => {
   };
   const saveSettings = () => {
     const s = get();
-    store(LS.settings, { theme: s.theme, loop: s.loop, useTakes: s.useTakes, previewMuted: s.previewMuted });
+    store(LS.settings, { theme: s.theme, loop: s.loop, useTakes: s.useTakes, previewMuted: s.previewMuted, engine: s.engine });
   };
 
   return {
@@ -160,11 +174,14 @@ export const useApp = create<State>((set, get) => {
     playing: false,
     loop: settings?.loop ?? true,
     takes: load<SavedTake[]>(LS.takes) ?? [],
+    bands: (load<BandPreset[]>(LS.bands) ?? []).filter((b) => !!b && Array.isArray(b.players)),
     useTakes: settings?.useTakes ?? false,
     midiOutId: null,
     midiOutputs: [],
     midiError: null,
     previewMuted: settings?.previewMuted ?? false,
+    engine: settings?.engine ?? 'sampled',
+    sampledState: 'idle',
     theme: settings?.theme ?? 'auto',
     toast: null,
 
@@ -204,7 +221,7 @@ export const useApp = create<State>((set, get) => {
     loadPreset: (pr) =>
       get().update((p) => {
         let next: Project = { ...p, chart: pr.text };
-        if (pr.style && pr.style !== p.style) next = smartRandomize({ ...next, style: pr.style as StyleId, swing: null });
+        if (pr.style && pr.style !== p.style) next = smartRandomize({ ...next, style: pr.style, swing: null });
         if (pr.tempo) next = { ...next, tempo: pr.tempo };
         return next;
       }),
@@ -221,7 +238,9 @@ export const useApp = create<State>((set, get) => {
               const mine = takes.filter((k) => k.inst === t.inst && getPattern(k.patternId));
               if (!mine.length || Math.random() > 0.45) return t;
               const k = mine[Math.floor(Math.random() * mine.length)];
-              return { ...t, patternId: k.patternId, seed: k.seed, variant: k.variant, params: { ...k.params } };
+              const next = { ...t, patternId: k.patternId, seed: k.seed, variant: k.variant, params: { ...k.params } };
+              delete next.swaps;
+              return next;
             }),
           };
         }
@@ -229,6 +248,25 @@ export const useApp = create<State>((set, get) => {
       });
     },
     reroll: (id, mode) => get().update((p) => rerollTrack(p, id, mode)),
+    swapPhrase: (id, bar) => get().update((p) => swapPhrase(p, id, bar)),
+    applyBand: (preset) => {
+      get().update((p) => applyBandPreset(p, preset));
+      set({ selected: get().project.tracks[0]?.id ?? null });
+      get().notify(`${preset.name} is on stage`);
+    },
+    saveBand: (name) => {
+      const s = get();
+      const preset = presetFromProject(s.project, name.trim() || 'My band');
+      const bands = [preset, ...s.bands];
+      set({ bands });
+      store(LS.bands, bands);
+      s.notify(`Saved "${preset.name}" to your bands`);
+    },
+    deleteBand: (id) => {
+      const bands = get().bands.filter((b) => b.id !== id);
+      set({ bands });
+      store(LS.bands, bands);
+    },
     setTrack: (id, patch, coalesce) =>
       get().update((p) => ({ ...p, tracks: p.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }), coalesce),
     setParams: (id, patch, coalesce) =>
@@ -248,7 +286,9 @@ export const useApp = create<State>((set, get) => {
           if (t.id !== id) return t;
           const def = instDef(t.inst);
           const variant = pat.variant && def.variants.some((v) => v.id === pat.variant) ? pat.variant : t.variant;
-          return { ...t, patternId, variant, midi: { ...t.midi, program: def.variants.find((v) => v.id === variant)!.program } };
+          const next = { ...t, patternId, variant, midi: { ...t.midi, program: def.variants.find((v) => v.id === variant)!.program } };
+          delete next.swaps;
+          return next;
         }),
       }));
     },
@@ -264,7 +304,7 @@ export const useApp = create<State>((set, get) => {
     addTrack: (inst) => {
       let id = '';
       get().update((p) => {
-        const t = makeTrack(inst, p.style, p.tracks);
+        const t = makeTrack(inst, p.style, p.tracks, undefined, p.tracks[0]?.plan ?? p.sectionSeed);
         // a new horn joins the section that is already playing
         const mate = p.tracks.find((x) => instDef(x.inst).family === 'horn' && isSectionPattern(x.patternId));
         if (mate && instDef(inst).family === 'horn') t.patternId = mate.patternId;
@@ -284,7 +324,17 @@ export const useApp = create<State>((set, get) => {
       player.loop = s.loop;
       player.previewMuted = s.previewMuted;
       player.onEnd = () => set({ playing: false });
-      void player.play(s.project, s.arr, fromTick ?? 0).then(() => set({ playing: player.playing }));
+      player.engine = s.engine;
+      const first = s.engine === 'sampled' && s.sampledState === 'idle';
+      if (first) {
+        set({ sampledState: 'loading' });
+        s.notify('Loading the sampled instruments…');
+      }
+      void player.play(s.project, s.arr, fromTick ?? 0).then(() => {
+        const st = get();
+        set({ playing: player.playing, sampledState: player.sf.ready ? 'ready' : player.sf.failed ? 'missing' : st.sampledState === 'loading' ? 'idle' : st.sampledState });
+        if (first && player.sf.failed) st.notify('Sampled instruments are not installed; using the built-in synth');
+      });
     },
     stop: () => {
       player.stop();
@@ -326,7 +376,9 @@ export const useApp = create<State>((set, get) => {
           if (t.id !== trackId || !getPattern(take.patternId)) return t;
           const def = instDef(t.inst);
           const variant = def.variants.some((v) => v.id === take.variant) ? take.variant : t.variant;
-          return { ...t, patternId: take.patternId, seed: take.seed, variant, params: { ...take.params }, midi: { ...t.midi, program: def.variants.find((v) => v.id === variant)!.program } };
+          const next = { ...t, patternId: take.patternId, seed: take.seed, variant, params: { ...take.params }, midi: { ...t.midi, program: def.variants.find((v) => v.id === variant)!.program } };
+          delete next.swaps;
+          return next;
         }),
       })),
     deleteTake: (id) => {
@@ -458,6 +510,13 @@ export const useApp = create<State>((set, get) => {
       player.applyMix(get().project);
       set({ previewMuted: v });
       saveSettings();
+    },
+    setEngine: (engine) => {
+      player.engine = engine;
+      set({ engine });
+      saveSettings();
+      const s = get();
+      if (s.playing) s.togglePlay(Math.max(0, Math.floor(player.position())));
     },
     setTheme: (theme) => {
       set({ theme });
