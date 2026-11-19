@@ -1,0 +1,39 @@
+# Builds the Sideman macOS app and attaches the disk images to the run.
+name: Sideman macOS build
+
+on:
+  push:
+    branches: ['claude/chord-midi-band-arranger-96lx9q']
+    paths: ['sideman/**', '.github/workflows/sideman-mac.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sideman-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: sideman
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sideman/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sideman-macOS
+          path: sideman/release/*.dmg
+          if-no-files-found: error
+          retention-days: 14

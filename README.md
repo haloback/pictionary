@@ -121,3 +121,7 @@ This is a private repository. Please contact the owner for contribution guidelin
 ---
 
 Built with ❤️ using React and TypeScript
+
+## Sideman (macOS app)
+
+This branch also contains **Sideman**, a separate macOS app that turns a chord progression into realistic MIDI band parts. It lives in [`sideman/`](sideman/) and has its own README, dependencies and build.

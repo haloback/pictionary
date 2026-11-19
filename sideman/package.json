@@ -1,0 +1,77 @@
+{
+  "name": "sideman",
+  "productName": "Sideman",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn a chord progression into realistic, expressive MIDI band parts.",
+  "author": "Sideman",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "app": "npm run build && electron .",
+    "app:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && SIDEMAN_DEV=1 electron .\"",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "demo": "tsx scripts/demo.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@fontsource-variable/geist": "^5.1.0",
+    "@fontsource-variable/geist-mono": "^5.1.0",
+    "@phosphor-icons/react": "^2.1.7",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.5",
+    "wait-on": "^8.0.1",
+    "zustand": "^5.0.1"
+  },
+  "build": {
+    "appId": "app.sideman.desktop",
+    "productName": "Sideman",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "identity": null
+    },
+    "fileAssociations": [
+      {
+        "ext": "sideman",
+        "name": "Sideman Project",
+        "role": "Editor"
+      }
+    ],
+    "asar": true,
+    "afterPack": "build/adhoc-sign.cjs",
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  }
+}
