@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+/*
+  Hamfist design tokens.
+  One neutral family (zinc), one accent (vermilion), used for "this is you".
+  Shape rule: panels 14px, controls 8px, key caps 6px, toggles full pill.
+  Layering: stage canvas 0, panels 1, popovers 20, toast 30.
+*/
+:root {
+  color-scheme: light dark;
+  --bg: #ededef;
+  --panel: #f8f8f9;
+  --raise: #ffffff;
+  --sunk: #e4e4e7;
+  --line: rgb(0 0 0 / 0.09);
+  --line-strong: rgb(0 0 0 / 0.2);
+  --ink: #17171b;
+  --ink-2: #4c4c56;
+  --ink-3: #6c6c77;
+  --accent: #f0531f;
+  --accent-soft: rgb(240 83 31 / 0.14);
+  --accent-ink: #1c0a03;
+  --shadow: 0 1px 2px rgb(24 24 32 / 0.06), 0 8px 24px rgb(24 24 32 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0b0d;
+    --panel: #131316;
+    --raise: #1c1c20;
+    --sunk: #08080a;
+    --line: rgb(255 255 255 / 0.08);
+    --line-strong: rgb(255 255 255 / 0.22);
+    --ink: #ececf0;
+    --ink-2: #a5a5b0;
+    --ink-3: #80808c;
+    --accent: #ff6a3d;
+    --accent-soft: rgb(255 106 61 / 0.16);
+    --accent-ink: #1c0a03;
+    --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px rgb(0 0 0 / 0.5);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raise: var(--raise);
+  --color-sunk: var(--sunk);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-panel: 14px;
+  --radius-ctl: 8px;
+  --radius-key: 6px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Window chrome: the top bar drags the window, controls inside it do not. */
+.drag {
+  -webkit-app-region: drag;
+}
+.drag button,
+.drag input,
+.drag select,
+.drag label,
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+.mac-app .traffic-gap {
+  padding-left: 84px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Range input: thin track, the filled part is drawn with a gradient stop. */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--fill, var(--ink-2)) var(--pos, 50%), var(--line-strong) var(--pos, 50%));
+}
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: var(--ink);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  transition: transform 0.15s var(--ease-out);
+}
+input[type="range"].slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+input[type="range"].slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--fill, var(--ink-2)) var(--pos, 50%), var(--line-strong) var(--pos, 50%));
+}
+input[type="range"].slider::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  border: 2px solid var(--panel);
+}
+
+select.pick {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23808088' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* Key caps are toggled straight from key events, without a React render. */
+.cap {
+  transition:
+    transform 0.12s var(--ease-out),
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease;
+}
+.cap[data-on="1"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  transform: translateY(1px) scale(0.97);
+  transition-duration: 0.03s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

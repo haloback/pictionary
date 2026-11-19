@@ -1,0 +1,31 @@
+appId: app.hamfist.desktop
+productName: Hamfist
+copyright: MIT licensed
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - electron/**
+  - package.json
+  - "!**/node_modules/@julusian/midi/prebuilds/midi-win32*/**"
+  - "!**/node_modules/@julusian/midi/prebuilds/midi-linux*/**"
+  - "!**/node_modules/@julusian/midi/{src,vendor,build}/**"
+# @julusian/midi ships N-API prebuilds for both Mac architectures, so nothing
+# needs compiling against Electron's headers.
+npmRebuild: false
+asarUnpack:
+  - "**/node_modules/@julusian/midi/**"
+mac:
+  category: public.app-category.music
+  icon: build/icon.png
+  target:
+    - dmg
+    - zip
+  # Ad-hoc signature: runs on Apple Silicon without a paid developer ID.
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  darkModeSupport: true
+dmg:
+  title: Hamfist

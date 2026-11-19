@@ -1,0 +1,45 @@
+{
+  "name": "hamfist",
+  "productName": "Hamfist",
+  "version": "0.1.0",
+  "description": "Smash keys, get music. A polyphonic performance instrument for macOS that turns keyboard mashing into genre-aware MIDI.",
+  "private": true,
+  "author": "Hamfist contributors",
+  "license": "MIT",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env HAMFIST_DEV=1 electron .\"",
+    "dev:web": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "start": "electron .",
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --x64 --publish never"
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "cross-env": "^10.1.0",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "motion": "^14.14.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.5",
+    "tonal": "^6.7.1",
+    "tone": "^15.1.22",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "wait-on": "^9.5.1",
+    "zustand": "^5.1.0"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.9.0"
+  }
+}
