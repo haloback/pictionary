@@ -1,0 +1,32 @@
+name: Hamfist macOS build
+
+on:
+  push:
+    paths:
+      - "hamfist/**"
+      - ".github/workflows/hamfist-mac.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: hamfist
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hamfist/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hamfist-macOS
+          path: |
+            hamfist/release/*.dmg
+            hamfist/release/*.zip
+          if-no-files-found: error

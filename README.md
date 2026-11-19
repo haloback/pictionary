@@ -121,3 +121,7 @@ This is a private repository. Please contact the owner for contribution guidelin
 ---
 
 Built with ❤️ using React and TypeScript
+
+## Also in this repository
+
+[`hamfist/`](hamfist/README.md) is a separate macOS app that turns key smashing on a computer keyboard or MIDI controller into genre-aware, polyphonic MIDI. It shares no code with the Pictionary app.
