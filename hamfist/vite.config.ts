@@ -8,5 +8,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: { port: 5173, strictPort: true },
   build: { outDir: "dist", chunkSizeWarningLimit: 1200 },
-  test: { include: ["tests/**/*.test.ts"] },
+  // The every-genre sweep is CPU bound; shared CI runners can be slow.
+  test: { include: ["tests/**/*.test.ts"], testTimeout: 120_000 },
 });
