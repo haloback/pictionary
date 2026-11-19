@@ -174,7 +174,9 @@ function Settings() {
 export function SongBar() {
   const s = useApp();
   const p = s.project;
-  const errors = s.arr.errors;
+  // an empty chart is a starting point, not a mistake
+  const blank = !p.chart.trim();
+  const errors = blank ? [] : s.arr.errors;
   const style = styleDef(p.style);
   const swing = p.swing ?? style.swing;
   return (
@@ -183,7 +185,7 @@ export function SongBar() {
         <div className="field-head">
           <label htmlFor="chart">Chord progression</label>
           <span className={`chart-status ${errors.length ? 'is-error' : ''}`} role={errors.length ? 'alert' : undefined}>
-            {errors.length ? errors[0] : `${s.arr.bars / Math.max(1, p.repeats)} bars, played ${p.repeats} time${p.repeats === 1 ? '' : 's'} in ${keyName(s.arr.key)}`}
+            {blank ? 'Waiting for chords' : errors.length ? errors[0] : `${s.arr.bars / Math.max(1, p.repeats)} bars, played ${p.repeats} time${p.repeats === 1 ? '' : 's'} in ${keyName(s.arr.key)}`}
           </span>
         </div>
         <div className="chart-row">

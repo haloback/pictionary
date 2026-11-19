@@ -113,6 +113,13 @@ export function Tracks() {
           <TrackRow key={t.id} track={t} part={arr.parts[t.id]} len={arr.len} laneW={laneW} selected={t.id === selected} theme={theme + scheme} anySolo={project.tracks.some((x) => x.solo)} />
         ))}
 
+        {project.tracks.length > 0 && !arr.len && (
+          <div className="empty is-over" style={{ left: HEAD_W, width: Math.max(200, viewW - HEAD_W) }}>
+            <strong>No chords yet</strong>
+            <p>Type a progression above, pick one from Progressions, or drop a MIDI file to read its chords.</p>
+          </div>
+        )}
+
         {!project.tracks.length && (
           <div className="empty" style={{ width: viewW }}>
             <strong>The stage is empty</strong>

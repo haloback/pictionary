@@ -47,7 +47,7 @@ export class Synth {
     this.ctx = new Ctx({ latencyHint: 'interactive' });
     const c = this.ctx;
     this.master = c.createGain();
-    this.master.gain.value = 0.8;
+    this.master.gain.value = 0.7;
     const comp = c.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 3;
@@ -155,7 +155,7 @@ export class Synth {
   dyn(id: string, when: number, v: number): void {
     const ch = this.chans.get(id);
     if (!ch) return;
-    ch.dyn.gain.setTargetAtTime(0.12 + 0.88 * v * v, when, 0.012);
+    ch.dyn.gain.setTargetAtTime(0.18 + 0.82 * Math.pow(v, 1.6), when, 0.012);
     if (ch.filter) {
       const f = FORMANTS[ch.inst] ?? FORMANTS.tenor;
       ch.filter.frequency.setTargetAtTime(500 + Math.pow(v, 1.6) * f.cutoff, when, 0.015);
@@ -355,7 +355,7 @@ export class Synth {
     o.frequency.value = mtof(pitch);
     this.wire(ch, o.detune);
     const g = c.createGain();
-    const amp = 0.07 + v * 0.02;
+    const amp = 0.11 + v * 0.03;
     g.gain.setValueAtTime(0, when);
     g.gain.linearRampToValueAtTime(amp * 1.3, when + 0.004);
     g.gain.setTargetAtTime(amp, when + 0.01, 0.02);
@@ -390,7 +390,7 @@ export class Synth {
     const g = c.createGain();
     const legato = art === 'legato';
     const hard = art === 'marcato' || art === 'staccato';
-    const amp = 0.16 * (0.35 + v * 0.75);
+    const amp = 0.4 * (0.35 + v * 0.75);
     const atk = legato ? 0.012 : hard ? 0.016 : 0.03;
     g.gain.setValueAtTime(0, when);
     g.gain.linearRampToValueAtTime(amp * (hard ? 1.25 : 1), when + atk);

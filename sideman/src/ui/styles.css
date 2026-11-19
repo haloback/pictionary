@@ -895,6 +895,11 @@ input[type='range']::-moz-range-thumb {
   position: sticky;
   left: 0;
 }
+.empty.is-over {
+  position: absolute;
+  top: 46px;
+  pointer-events: none;
+}
 .empty strong {
   display: block;
   color: var(--text);
