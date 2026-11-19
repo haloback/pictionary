@@ -28,6 +28,9 @@ declare global {
 
 export const VIRTUAL_ID = "hamfist-virtual";
 
+/** Our own virtual port shows up as a system MIDI source; never treat it as a device. */
+const isSelf = (name: string | null) => !!name && name.includes("Hamfist");
+
 export class Midi implements Sink {
   private access: MIDIAccess | null = null;
   private out: MIDIOutput | null = null;
@@ -62,7 +65,10 @@ export class Midi implements Sink {
     if (!this.access) return;
     for (const input of this.access.inputs.values()) {
       // Never listen to our own virtual port: that would feed back.
-      if (input.name === "Hamfist") continue;
+      if (isSelf(input.name)) {
+        input.onmidimessage = null;
+        continue;
+      }
       input.onmidimessage = (e) => this.receive(input.id, e.data);
     }
     if (this.outId && this.outId !== VIRTUAL_ID) this.out = this.access.outputs.get(this.outId) ?? null;
@@ -74,8 +80,8 @@ export class Midi implements Sink {
     const outs: PortInfo[] = [];
     if (this.virtual) outs.push({ id: VIRTUAL_ID, name: "Hamfist (virtual port)" });
     if (this.access) {
-      for (const i of this.access.inputs.values()) if (i.name !== "Hamfist") ins.push({ id: i.id, name: i.name ?? "MIDI input" });
-      for (const o of this.access.outputs.values()) if (o.name !== "Hamfist") outs.push({ id: o.id, name: o.name ?? "MIDI output" });
+      for (const i of this.access.inputs.values()) if (!isSelf(i.name)) ins.push({ id: i.id, name: i.name ?? "MIDI input" });
+      for (const o of this.access.outputs.values()) if (!isSelf(o.name)) outs.push({ id: o.id, name: o.name ?? "MIDI output" });
     }
     this.onPorts(ins, outs);
   }
