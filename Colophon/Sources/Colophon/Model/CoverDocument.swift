@@ -753,6 +753,14 @@ struct Adjustments: Codable, Hashable {
     var fade: Double = 0
     var grain: Double = 0
     var vignette: Double = 0
+    /// Detail: midtone local contrast (0...1), fine detail (0...1), dehaze (0...1), noise reduction (0...1).
+    var clarity: Double = 0
+    var texture: Double = 0
+    var dehaze: Double = 0
+    var denoise: Double = 0
+    /// Highlight recovery (0...1 pulls bright areas back) and shadow lift (-1...1).
+    var highlights: Double = 0
+    var shadows: Double = 0
 
     var isIdentity: Bool { self == Adjustments() }
 }
@@ -777,6 +785,12 @@ extension Adjustments {
         fade = try c.decodeIfPresent(Double.self, forKey: .fade) ?? 0
         grain = try c.decodeIfPresent(Double.self, forKey: .grain) ?? 0
         vignette = try c.decodeIfPresent(Double.self, forKey: .vignette) ?? 0
+        clarity = try c.decodeIfPresent(Double.self, forKey: .clarity) ?? 0
+        texture = try c.decodeIfPresent(Double.self, forKey: .texture) ?? 0
+        dehaze = try c.decodeIfPresent(Double.self, forKey: .dehaze) ?? 0
+        denoise = try c.decodeIfPresent(Double.self, forKey: .denoise) ?? 0
+        highlights = try c.decodeIfPresent(Double.self, forKey: .highlights) ?? 0
+        shadows = try c.decodeIfPresent(Double.self, forKey: .shadows) ?? 0
     }
 }
 

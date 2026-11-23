@@ -906,6 +906,14 @@ private struct AdjustSection: View {
             ValueSlider(label: "Grain", value: $layer.adjust.grain, range: 0...1)
             ValueSlider(label: "Vignette", value: $layer.adjust.vignette, range: 0...1)
             Divider()
+            Text("Detail").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            ValueSlider(label: "Clarity", value: $layer.adjust.clarity, range: 0...1)
+            ValueSlider(label: "Texture", value: $layer.adjust.texture, range: 0...1)
+            ValueSlider(label: "Dehaze", value: $layer.adjust.dehaze, range: 0...1)
+            ValueSlider(label: "Noise reduction", value: $layer.adjust.denoise, range: 0...1)
+            ValueSlider(label: "Highlights", value: $layer.adjust.highlights, range: 0...1)
+            ValueSlider(label: "Shadows", value: $layer.adjust.shadows, range: -1...1, format: signed)
+            Divider()
             Toggle("Shadow tint", isOn: Binding(get: { layer.adjust.shadowTint != nil }, set: { on in
                 layer.adjust.shadowTint = on ? PaletteRoles(model.document.palette).dark.withLightness(0.3) : nil
             })).controlSize(.small)

@@ -334,6 +334,36 @@ final class CoverRenderer {
             ])
             ci = FX.fromPerceptual(t)
         }
+        // Detail: the way a photo editor's clarity/texture/dehaze/recovery sliders work.
+        if a.denoise > 0 {
+            ci = ci.applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": 0.004 + 0.04 * a.denoise.clamped01, "inputSharpness": 0.4])
+        }
+        if a.highlights > 0 || a.shadows != 0 {
+            ci = ci.applyingFilter("CIHighlightShadowAdjust", parameters: [
+                "inputHighlightAmount": 1 - 0.7 * a.highlights.clamped01,
+                "inputShadowAmount": a.shadows.clamped(-1, 1),
+                "inputRadius": max(1, 12 * scale)
+            ])
+        }
+        if a.dehaze > 0 {
+            // Haze is lifted blacks and flat midtones: pull the blacks down and add a little contrast and saturation.
+            let d = a.dehaze.clamped01
+            let t = FX.toPerceptual(ci).applyingFilter("CIColorPolynomial", parameters: [
+                "inputRedCoefficients": CIVector(x: -0.12 * d, y: 1 + 0.12 * d, z: 0, w: 0),
+                "inputGreenCoefficients": CIVector(x: -0.12 * d, y: 1 + 0.12 * d, z: 0, w: 0),
+                "inputBlueCoefficients": CIVector(x: -0.12 * d, y: 1 + 0.12 * d, z: 0, w: 0),
+                "inputAlphaCoefficients": CIVector(x: 0, y: 1, z: 0, w: 0)
+            ])
+            ci = FX.controls(FX.fromPerceptual(t), saturation: 1 + 0.15 * d, contrast: 1 + 0.1 * d)
+        }
+        if a.clarity > 0 {
+            // Local contrast in the midtones: a wide-radius unsharp mask, gentle amount.
+            ci = ci.applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(2, 25 * scale), "inputIntensity": 0.9 * a.clarity.clamped01])
+        }
+        if a.texture > 0 {
+            // Fine detail: a tight unsharp mask that stops short of halos.
+            ci = ci.applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(1, 3 * scale), "inputIntensity": 1.2 * a.texture.clamped01])
+        }
         if a.sharpness > 0 {
             ci = ci.applyingFilter("CISharpenLuminance", parameters: ["inputSharpness": a.sharpness * 1.5])
         } else if a.sharpness < 0 {

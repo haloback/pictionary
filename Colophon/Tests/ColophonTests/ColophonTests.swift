@@ -227,6 +227,24 @@ final class FeatureTests: XCTestCase {
         l.adjust = Adjustments(exposure: 0.4, contrast: 0.3, saturation: -0.5, warmth: 0.6, sharpness: 0.5, blur: 0.2)
         doc.layers = [l]
         XCTAssertNotNil(CoverRenderer.shared.render(doc, size: CGSize(width: 100, height: 160)))
+        // The detail controls change pixels and never fail.
+        var detail = l
+        detail.adjust = Adjustments()
+        detail.adjust.clarity = 0.8; detail.adjust.texture = 0.6; detail.adjust.dehaze = 0.5; detail.adjust.denoise = 0.4
+        detail.adjust.highlights = 0.6; detail.adjust.shadows = 0.5
+        var plain = l
+        plain.adjust = Adjustments()
+        var docA = CoverDocument(); docA.layers = [plain]
+        var docB = CoverDocument(); docB.layers = [detail]
+        let before = CoverRenderer.shared.render(docA, size: CGSize(width: 100, height: 160))
+        let after = CoverRenderer.shared.render(docB, size: CGSize(width: 100, height: 160))
+        XCTAssertNotNil(after)
+        if let before, let after {
+            let a = PixelSampler.pixels(before, maxSide: 100), b = PixelSampler.pixels(after, maxSide: 100)
+            var diff = 0
+            for i in stride(from: 0, to: min(a.data.count, b.data.count), by: 4) where abs(Int(a.data[i]) - Int(b.data[i])) > 2 { diff += 1 }
+            XCTAssertGreaterThan(diff, 50, "detail sliders should change the picture")
+        }
     }
 
     func testOlderProjectsStillOpen() throws {
