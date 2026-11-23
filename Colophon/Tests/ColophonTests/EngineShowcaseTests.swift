@@ -368,6 +368,43 @@ extension SampleRenderTests {
         sheet(imgs, cols: 6, cell: cell, labels: labels, to: out.appendingPathComponent("13-improve.png"))
         manifest.append(["file": "13-improve.png", "name": "Make it a 90: repairs, then targeted edits kept only when the score rises", "family": "Critic"])
 
+        // 16. Detail sliders, and Enlarge for print (when the model is published).
+        imgs = []; labels = []
+        if let portrait, let small = AssetStore.decode(portrait, maxPixel: 420) {
+            // A crop of the face, so the difference is visible at sheet size.
+            func faceCrop(_ img: CGImage) -> CGImage? {
+                let w = CGFloat(img.width), h = CGFloat(img.height)
+                return img.cropping(to: CGRect(x: w * 0.25, y: h * 0.18, width: w * 0.5, height: h * 0.4))
+            }
+            func adjusted(_ tune: (inout Adjustments) -> Void) -> CGImage? {
+                var d = CoverDocument()
+                d.canvas = CanvasSpec(width: small.width * 2, height: small.height * 2)
+                guard let data = AssetStore.encode(small) else { return nil }
+                let id = d.addAsset(data)
+                var l = Layer.image(id, frame: .full)
+                tune(&l.adjust)
+                d.layers = [l]
+                return CoverRenderer.shared.render(d, size: CGSize(width: small.width * 2, height: small.height * 2), quality: .full)
+            }
+            if let i = adjusted({ _ in }).flatMap(faceCrop) { imgs.append(i); labels.append("Small photo (420 px), as is") }
+            if let i = adjusted({ $0.clarity = 0.7; $0.texture = 0.6 }).flatMap(faceCrop) { imgs.append(i); labels.append("Clarity 70, Texture 60") }
+            if let i = adjusted({ $0.dehaze = 0.7; $0.highlights = 0.5; $0.shadows = 0.4 }).flatMap(faceCrop) { imgs.append(i); labels.append("Dehaze, highlights and shadows") }
+            if ProcessInfo.processInfo.environment["COLOPHON_TASTE"] != nil && !Upscaler.shared.isReady {
+                try? await Upscaler.shared.install()
+            }
+            if Upscaler.shared.isReady {
+                let t0 = Date()
+                if let big = Upscaler.shared.upscale(small), let c = faceCrop(big) {
+                    imgs.append(c)
+                    labels.append(String(format: "Enlarge for print 4x: %d x %d px in %.1f s", big.width, big.height, Date().timeIntervalSince(t0)))
+                }
+            }
+        }
+        if !imgs.isEmpty {
+            sheet(imgs, cols: 4, cell: CGSize(width: 420, height: 540), labels: labels, to: out.appendingPathComponent("16-detail.png"))
+            manifest.append(["file": "16-detail.png", "name": "Detail: clarity, texture, dehaze and recovery sliders, and the 4x enlarger for print", "family": "Image"])
+        }
+
         // 11. Where readers look first.
         imgs = []; labels = []
         for id in ["literary-the-grid", "thriller-brand-name", "memoir-close", "fantasy-the-gate"] {
