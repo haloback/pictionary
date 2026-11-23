@@ -28,6 +28,9 @@ struct EditorView: View {
         .sheet(isPresented: $model.showStockPhotos) {
             StockPhotoBrowserSheet()
         }
+        .sheet(isPresented: $model.showComfy) {
+            ComfySheet()
+        }
         .onAppear {
             model.scheduleRender()
             model.scheduleInsights()
