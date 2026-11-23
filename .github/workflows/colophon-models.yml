@@ -6,6 +6,7 @@ on:
     paths:
       - scripts/convert_clip.py
       - scripts/train_genre_head.py
+      - scripts/convert_upscaler.py
       - .github/workflows/colophon-models.yml
 
 jobs:
@@ -24,6 +25,9 @@ jobs:
           python -m pip install "torch==2.4.1" "transformers==4.45.2" "coremltools==8.1" "numpy<2" pillow
       - name: Convert CLIP ViT-B/32 to Core ML
         run: python scripts/convert_clip.py --out build/models
+      - name: Convert Real-ESRGAN x4plus to Core ML
+        continue-on-error: true
+        run: python scripts/convert_upscaler.py --out build/models
       - name: Train the genre head on real covers (Open Library)
         continue-on-error: true
         run: |
@@ -43,6 +47,7 @@ jobs:
           files="clip-vit-b32-image.mlpackage.zip clip-vit-b32-text.mlpackage.zip clip-tokenizer.zip tokenizer-reference.json manifest.json"
           [ -f aesthetic-vit-b32.json ] && files="$files aesthetic-vit-b32.json"
           [ -f genre-head-vit-b32.json ] && files="$files genre-head-vit-b32.json"
+          [ -f realesrgan-x4plus.mlpackage.zip ] && files="$files realesrgan-x4plus.mlpackage.zip upscaler-manifest.json"
           if gh release view models-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload models-v1 $files --clobber --repo "$GITHUB_REPOSITORY"
           else
