@@ -358,11 +358,14 @@ final class CoverRenderer {
         }
         if a.clarity > 0 {
             // Local contrast in the midtones: a wide-radius unsharp mask, gentle amount.
-            ci = ci.applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(2, 25 * scale), "inputIntensity": 0.9 * a.clarity.clamped01])
+            // On gamma-encoded values, so it lifts midtone contrast without crushing shadows or clipping highlights.
+            let t = FX.toPerceptual(ci).applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(2, 22 * scale), "inputIntensity": 0.4 * a.clarity.clamped01])
+            ci = FX.fromPerceptual(t)
         }
         if a.texture > 0 {
             // Fine detail: a tight unsharp mask that stops short of halos.
-            ci = ci.applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(1, 3 * scale), "inputIntensity": 1.2 * a.texture.clamped01])
+            let t = FX.toPerceptual(ci).applyingFilter("CIUnsharpMask", parameters: ["inputRadius": max(0.8, 2 * scale), "inputIntensity": 0.7 * a.texture.clamped01])
+            ci = FX.fromPerceptual(t)
         }
         if a.sharpness > 0 {
             ci = ci.applyingFilter("CISharpenLuminance", parameters: ["inputSharpness": a.sharpness * 1.5])
