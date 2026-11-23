@@ -488,7 +488,7 @@ enum PrintWrap {
             let inchesPerPixel = max(frameW / Double(size.width), frameH / Double(size.height)) * max(1, img.zoom)
             let ppi = 1 / inchesPerPixel
             if ppi < 250 {
-                out.append(String(format: "\"%@\" prints at about %.0f ppi on the front; 300 is ideal and under 250 may look soft.", layer.name, ppi))
+                out.append(String(format: "\"%@\" prints at about %.0f ppi on the front; 300 is ideal and under 250 may look soft. Use Enlarge for print in the Picture panel.", layer.name, ppi))
             }
         }
         if s.category.trimmingCharacters(in: .whitespaces).isEmpty {

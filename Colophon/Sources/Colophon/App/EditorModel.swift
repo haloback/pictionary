@@ -124,6 +124,8 @@ final class EditorModel {
     var removalLayerID: UUID?
     /// True while an object removal is being computed.
     var isRemoving = false
+    /// Tile progress (0...1) while "Enlarge for print" runs; nil when idle.
+    var upscaleProgress: Double?
     var isRemix = false
 
     var showShelfTest = false
@@ -159,6 +161,9 @@ final class EditorModel {
     var showStockPhotos = false
     var showTemplates = false
     var showFonts = false
+    var showComfy = false
+    /// Live status while a photo is away at the ComfyUI server; nil when idle.
+    var comfyStatus: String?
     var copiedTextStyle: TextContent?
     /// Snapshots of everything tried this session, for the Versions strip.
     let versions = VersionHistory()
@@ -349,6 +354,62 @@ final class EditorModel {
                 toast = "Taste model: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Downloads the print enlarger model (Real-ESRGAN x4, once).
+    func installUpscaler() {
+        Task { @MainActor in
+            do {
+                try await Upscaler.shared.install()
+                toast = "Enlarger ready"
+            } catch {
+                toast = "Enlarger: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Enlarges the layer's photo 4x with the on-device super-resolution model and swaps the layer's
+    /// picture for the result (a new asset, so undo brings the original back).
+    func enlargePhoto(_ id: UUID) {
+        guard upscaleProgress == nil, Upscaler.shared.isReady, let ic = document.layer(id)?.imageContent,
+              let data = document.assetData(ic.assetID) else { return }
+        upscaleProgress = 0
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var encoded: Data?
+            var size: (w: Int, h: Int) = (0, 0)
+            if let small = AssetStore.decode(data, maxPixel: Upscaler.maxInputSide),
+               let big = Upscaler.shared.upscale(small, progress: { p in
+                   Task { @MainActor in self?.upscaleProgress = p }
+               }) {
+                size = (big.width, big.height)
+                encoded = AssetStore.encode(big, quality: 0.95)
+            }
+            let out = encoded
+            let s = size
+            await self?.finishEnlarge(id, data: out, width: s.w, height: s.h)
+        }
+    }
+
+    private func finishEnlarge(_ id: UUID, data: Data?, width: Int, height: Int) {
+        upscaleProgress = nil
+        guard let data else {
+            toast = "Couldn't enlarge that picture"
+            return
+        }
+        var newID: UUID?
+        mutate { d in
+            let nid = d.addAsset(data)
+            if let i = d.index(of: id) {
+                d.layers[i].imageContent?.assetID = nid
+                // Instance indices belong to the old picture.
+                d.layers[i].imageContent?.keptSubjects = nil
+            }
+            newID = nid
+        }
+        if let newID {
+            Task.detached(priority: .utility) { AssetStore.shared.warm(newID, data: data) }
+        }
+        toast = "Enlarged to \(width) × \(height)"
     }
 
     /// The mood the brief gives off, for palette and genre hints in the Book panel.
@@ -1056,6 +1117,49 @@ final class EditorModel {
                 encoded = AssetStore.encode(out)
             }
             await self?.finishRemoval(id, data: encoded, what: "Subject removed from the photo")
+        }
+    }
+
+    // MARK: ComfyUI bridge
+
+    /// Sends the layer's picture to the configured ComfyUI workflow (an upscaler, restorer, anything)
+    /// and swaps the layer's picture for the result as a new asset, so undo brings the original back.
+    func sendToComfy(_ id: UUID) {
+        guard comfyStatus == nil, let ic = document.layer(id)?.imageContent,
+              let data = document.assetData(ic.assetID) else { return }
+        comfyStatus = "Preparing…"
+        Task { @MainActor [weak self] in
+            do {
+                let raw = try await ComfyBridge.shared.process(data) { status in
+                    Task { @MainActor in self?.comfyStatus = status }
+                }
+                let encoded: Data? = await Task.detached(priority: .userInitiated) {
+                    guard let img = AssetStore.decode(raw, maxPixel: AssetStore.Resolution.full.rawValue) else { return nil }
+                    return AssetStore.encode(img)
+                }.value
+                guard let self else { return }
+                self.comfyStatus = nil
+                guard let encoded else {
+                    self.toast = "ComfyUI sent back something that isn't an image"
+                    return
+                }
+                var newID: UUID?
+                self.mutate { d in
+                    let nid = d.addAsset(encoded)
+                    if let i = d.index(of: id) {
+                        d.layers[i].imageContent?.assetID = nid
+                        d.layers[i].imageContent?.keptSubjects = nil
+                    }
+                    newID = nid
+                }
+                if let newID {
+                    Task.detached(priority: .utility) { AssetStore.shared.warm(newID, data: encoded) }
+                }
+                self.toast = "Picture replaced with the ComfyUI result"
+            } catch {
+                self?.comfyStatus = nil
+                self?.toast = "ComfyUI: \(error.localizedDescription)"
+            }
         }
     }
 

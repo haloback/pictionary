@@ -396,6 +396,8 @@ private struct ImageSection: View {
                 Text("\(faceCount) \(faceCount == 1 ? "face" : "faces") found · title keeps clear of \(faceCount == 1 ? "it" : "them")")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            printSizeRow
+            enlargeControl
         }
         PanelSection("Refine Cutout") {
             Text(ic.wrappedValue.cutout == .none
@@ -466,6 +468,20 @@ private struct ImageSection: View {
             }
             .controlSize(.small)
         }
+        PanelSection("ComfyUI") {
+            Text("Send this picture through a ComfyUI workflow you run yourself: SeedVR2, any upscaler or restorer. The result replaces the picture; Undo brings the original back.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Button { model.showComfy = true } label: { Label("Send to ComfyUI…", systemImage: "paperplane") }
+                    .help("Open the ComfyUI bridge: server address, workflow file and the send button")
+                Spacer()
+                if let status = model.comfyStatus {
+                    ProgressView().controlSize(.small)
+                    Text(status).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .controlSize(.small)
+        }
     }
 
     private func subjectTile(_ s: SubjectSegmentation.Subject) -> some View {
@@ -526,6 +542,55 @@ private struct ImageSection: View {
     private var insight: ImageInsight {
         let id = ic.wrappedValue.assetID
         return AssetStore.shared.insight(id, data: model.document.assetData(id))
+    }
+
+    /// The picture's pixel size, read from the asset header.
+    private var pixelSize: CGSize? {
+        let id = ic.wrappedValue.assetID
+        let data = model.document.assetData(id)
+        return PrintWrap.sourcePixelSize(data) ?? AssetStore.shared.imageSize(id, data: data)
+    }
+
+    /// Pixel size and the ppi it gives on a 6-inch-wide front cover; red under 250.
+    @ViewBuilder private var printSizeRow: some View {
+        if let size = pixelSize {
+            let ppi = size.width / 6
+            FieldRow("Print size") {
+                HStack(spacing: 6) {
+                    Text("\(Int(size.width)) × \(Int(size.height)) px").font(.system(size: 11).monospacedDigit())
+                    Text("· \(Int(ppi.rounded())) ppi at 6 in wide")
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundStyle(ppi < 250 ? Color.red : Color.secondary)
+                }
+            }
+            .help("How sharp the picture prints if it spans the whole front cover; 300 ppi is ideal, under 250 may look soft")
+        }
+    }
+
+    /// "Enlarge for print (4×)": installs the model when needed, otherwise runs it on this layer's picture.
+    @ViewBuilder private var enlargeControl: some View {
+        let engine = Upscaler.shared
+        if let p = model.upscaleProgress {
+            ProgressView(value: p) { Text("Enlarging… \(Int(p * 100))%").font(.system(size: 11)) }
+        } else {
+            switch engine.status {
+            case .downloading(let p):
+                ProgressView(value: p) { Text("Downloading the enlarger model… \(Int(p * 100))%").font(.system(size: 11)) }
+            case .installing:
+                ProgressView { Text("Compiling the enlarger for this Mac…").font(.system(size: 11)) }
+            case .failed(let why):
+                Text("Couldn't install the enlarger: \(why)").font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                Button("Try again") { model.installUpscaler() }.controlSize(.small)
+            case .ready:
+                Button { model.enlargePhoto(layer.id) } label: { Label("Enlarge for print (4×)", systemImage: "arrow.up.left.and.arrow.down.right") }
+                    .controlSize(.small)
+                    .help("Quadruple the picture's resolution with an on-device super-resolution model (Real-ESRGAN). Undo brings the original back.")
+            case .notInstalled:
+                Button { model.installUpscaler() } label: { Label("Enlarge for print (4×)", systemImage: "arrow.up.left.and.arrow.down.right") }
+                    .controlSize(.small)
+                    .help("Downloads the Real-ESRGAN super-resolution model once (about 65 MB), then enlarges pictures on this Mac")
+            }
+        }
     }
 
     private func focusOnSubject() {
